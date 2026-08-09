@@ -1,4 +1,7 @@
 "use client";
+import { Database } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 /**
  * Binds /customers to the active prediction run (spec §2.0/§2.2):
  * run selector → fetchRunOutputs → CustomersView. Owns loading/empty/error
@@ -10,9 +13,6 @@
  * filter change refetches instead.
  */
 import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
-import { Database } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useActiveRun } from "@/components/run-selector";
 import { EmptyState, Skeleton } from "@/components/ui";
 import {
@@ -22,11 +22,11 @@ import {
   type OutputsQuery,
 } from "@/lib/ml-api";
 import {
-  CustomersView,
   type CustomerFilters,
   type CustomerSort,
   type CustomerSortDirection,
   type CustomerSortKey,
+  CustomersView,
 } from "./customers-view";
 
 // Server-side sort keeps the most important customers in the fetched page;
@@ -52,15 +52,18 @@ const SORT_KEYS = [
   "days_since_last_activity",
   "ai_status",
 ] as const satisfies readonly CustomerSortKey[];
-const SORT_DIRECTIONS = ["asc", "desc"] as const satisfies readonly CustomerSortDirection[];
+const SORT_DIRECTIONS = [
+  "asc",
+  "desc",
+] as const satisfies readonly CustomerSortDirection[];
 
 function filtersFromSearchParams(sp: URLSearchParams): CustomerFilters {
   return {
-    lifecycle_stage: sp.get("lifecycle_stage") || "",
-    search: sp.get("search") || "",
-    customer_value_tier: sp.get("customer_value_tier") || "",
     churn_risk_level: sp.get("churn_risk_level") || "",
     credit_urgency_level: sp.get("credit_urgency_level") || "",
+    customer_value_tier: sp.get("customer_value_tier") || "",
+    lifecycle_stage: sp.get("lifecycle_stage") || "",
+    search: sp.get("search") || "",
   };
 }
 
@@ -74,7 +77,10 @@ function sortFromSearchParams(sp: URLSearchParams): CustomerSort | null {
     SORT_KEYS.includes(key as CustomerSortKey) &&
     SORT_DIRECTIONS.includes(direction as CustomerSortDirection)
   ) {
-    return { key: key as CustomerSortKey, direction: direction as CustomerSortDirection };
+    return {
+      direction: direction as CustomerSortDirection,
+      key: key as CustomerSortKey,
+    };
   }
   return null;
 }
@@ -126,7 +132,9 @@ function CustomersClientInner() {
     const nextFilters = filtersFromSearchParams(params);
     const nextSort = sortFromSearchParams(params);
     const nextPage = pageFromSearchParams(params);
-    setFilters((current) => (filtersEqual(current, nextFilters) ? current : nextFilters));
+    setFilters((current) =>
+      filtersEqual(current, nextFilters) ? current : nextFilters
+    );
     setSort((current) => (sortsEqual(current, nextSort) ? current : nextSort));
     setPageNumber((current) => (current === nextPage ? current : nextPage));
   }, [sp]);
@@ -147,7 +155,9 @@ function CustomersClientInner() {
     params.delete("page");
 
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
   };
 
   const updateSort = (nextSort: CustomerSort | null) => {
@@ -163,12 +173,17 @@ function CustomersClientInner() {
     params.delete("page");
 
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
   };
 
   /** Preset click: filters + sort in ONE router.replace (two sequential updates
    *  would each rebuild from the stale URL and drop the other's params). */
-  const applyPreset = (nextFilters: CustomerFilters, nextSort: CustomerSort | null) => {
+  const applyPreset = (
+    nextFilters: CustomerFilters,
+    nextSort: CustomerSort | null
+  ) => {
     setFilters(nextFilters);
     setSort(nextSort);
     setPageNumber(1);
@@ -190,7 +205,9 @@ function CustomersClientInner() {
     params.delete("page");
 
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
   };
 
   const updatePage = (nextPage: number) => {
@@ -205,33 +222,45 @@ function CustomersClientInner() {
     }
 
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
   };
 
   useEffect(() => {
-    if (!requestedRunId || runsLoading) return;
+    if (!requestedRunId || runsLoading) {
+      return;
+    }
     if (runs.some((candidate) => candidate.id === requestedRunId)) {
       setRunId(requestedRunId);
     }
   }, [requestedRunId, runs, runsLoading, setRunId]);
 
   useEffect(() => {
-    if (!effectiveRunId) return;
+    if (!effectiveRunId) {
+      return;
+    }
     let alive = true;
     setPending(true);
     setError(null);
     fetchRunOutputs(effectiveRunId, {
+      churn_risk_level:
+        filters.churn_risk_level as OutputsQuery["churn_risk_level"],
+      credit_urgency_level:
+        filters.credit_urgency_level as OutputsQuery["credit_urgency_level"],
+      customer_value_tier:
+        filters.customer_value_tier as OutputsQuery["customer_value_tier"],
+      lifecycle_stage:
+        filters.lifecycle_stage as OutputsQuery["lifecycle_stage"],
       page: pageNumber,
       page_size: PAGE_SIZE,
-      sort: sort ? `${sort.key}:${sort.direction}` : undefined,
       search: debouncedSearch,
-      lifecycle_stage: filters.lifecycle_stage as OutputsQuery["lifecycle_stage"],
-      customer_value_tier: filters.customer_value_tier as OutputsQuery["customer_value_tier"],
-      churn_risk_level: filters.churn_risk_level as OutputsQuery["churn_risk_level"],
-      credit_urgency_level: filters.credit_urgency_level as OutputsQuery["credit_urgency_level"],
+      sort: sort ? `${sort.key}:${sort.direction}` : undefined,
     })
       .then((result) => {
-        if (!alive) return;
+        if (!alive) {
+          return;
+        }
         const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
         if (pageNumber > totalPages) {
           updatePage(totalPages);
@@ -239,8 +268,10 @@ function CustomersClientInner() {
         }
         setPage(result);
       })
-      .catch((e: unknown) =>
-        alive && setError(e instanceof Error ? e.message : "โหลดข้อมูลลูกค้าไม่สำเร็จ")
+      .catch(
+        (e: unknown) =>
+          alive &&
+          setError(e instanceof Error ? e.message : "โหลดข้อมูลลูกค้าไม่สำเร็จ")
       )
       .finally(() => alive && setPending(false));
     return () => {
@@ -257,21 +288,21 @@ function CustomersClientInner() {
     sort,
   ]);
 
-  if (!runsLoading && !run) {
+  if (!(runsLoading || run)) {
     return (
       <div className="px-8 py-10">
         <EmptyState
-          icon={Database}
-          title="ยังไม่มี prediction run ที่เสร็จสมบูรณ์"
-          hint="import ข้อมูล predict แล้วสร้าง run ก่อน — รายชื่อลูกค้าทั้งหมดมาจากผลของ run"
           action={
             <Link
+              className="inline-flex h-9 items-center rounded-lg bg-[color:var(--moby-600)] px-4 font-medium text-[13px] text-white hover:bg-[color:var(--moby-700)]"
               href="/runs"
-              className="inline-flex h-9 items-center rounded-lg bg-[color:var(--moby-600)] px-4 text-[13px] font-medium text-white hover:bg-[color:var(--moby-700)]"
             >
               ไปหน้า Prediction Runs
             </Link>
           }
+          hint="import ข้อมูล predict แล้วสร้าง run ก่อน — รายชื่อลูกค้าทั้งหมดมาจากผลของ run"
+          icon={Database}
+          title="ยังไม่มี prediction run ที่เสร็จสมบูรณ์"
         />
       </div>
     );
@@ -280,7 +311,7 @@ function CustomersClientInner() {
   if (error) {
     return (
       <div className="px-8 py-6">
-        <EmptyState title="โหลดข้อมูลลูกค้าไม่สำเร็จ" hint={error} />
+        <EmptyState hint={error} title="โหลดข้อมูลลูกค้าไม่สำเร็จ" />
       </div>
     );
   }
@@ -288,25 +319,40 @@ function CustomersClientInner() {
   if (runsLoading || !page) {
     return (
       <div className="space-y-3 px-8 py-5">
-        {[...Array(8)].map((_, i) => (
-          <Skeleton key={i} className="h-14" />
+        {[...new Array(8)].map((_, i) => (
+          <Skeleton className="h-14" key={i} />
         ))}
       </div>
     );
   }
 
-  const handleGenerateAi = async (accId: number, options?: { force?: boolean }) => {
-    if (!effectiveRunId) return;
+  const handleGenerateAi = async (
+    accId: number,
+    options?: { force?: boolean }
+  ) => {
+    if (!effectiveRunId) {
+      return;
+    }
     setAiError(null);
     try {
-      const result = await generateCustomerAiExplanation(effectiveRunId, accId, options);
+      const result = await generateCustomerAiExplanation(
+        effectiveRunId,
+        accId,
+        options
+      );
       setPage((current) => {
-        if (!current) return current;
+        if (!current) {
+          return current;
+        }
         return {
           ...current,
           data: current.data.map((row) =>
             row.acc_id === accId
-              ? { ...row, ai_status: result.ai_status, ai_explanation: result.ai_explanation }
+              ? {
+                  ...row,
+                  ai_explanation: result.ai_explanation,
+                  ai_status: result.ai_status,
+                }
               : row
           ),
         };
@@ -318,27 +364,29 @@ function CustomersClientInner() {
 
   return (
     <CustomersView
-      rows={page.data}
-      total={page.total}
+      aiError={aiError}
+      filters={filters}
+      onFiltersChange={updateFilters}
+      onGenerateAi={handleGenerateAi}
+      onPageChange={updatePage}
+      onPresetApply={applyPreset}
+      onSortChange={updateSort}
       page={page.page}
       pageSize={page.page_size}
       pending={pending}
+      rows={page.data}
       runId={effectiveRunId}
-      filters={filters}
       sort={sort}
-      onFiltersChange={updateFilters}
-      onSortChange={updateSort}
-      onPresetApply={applyPreset}
-      onPageChange={updatePage}
-      onGenerateAi={handleGenerateAi}
-      aiError={aiError}
+      total={page.total}
     />
   );
 }
 
 export function CustomersClient() {
   return (
-    <Suspense fallback={<div className="p-8 text-[color:var(--ink-5)]">Loading…</div>}>
+    <Suspense
+      fallback={<div className="p-8 text-[color:var(--ink-5)]">Loading…</div>}
+    >
       <CustomersClientInner />
     </Suspense>
   );

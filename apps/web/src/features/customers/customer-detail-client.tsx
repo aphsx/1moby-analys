@@ -1,19 +1,23 @@
 "use client";
+import { Database } from "lucide-react";
+import Link from "next/link";
 /**
  * Binds /customers/[id] to the URL-selected or active prediction run (spec §2.0/§2.3):
  * run selector → fetchRunOutput + fetchCustomerUsageMonthly →
  * CustomerDetailView. No mock fallback — empty state links to /runs.
  */
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Database } from "lucide-react";
 import { useActiveRun } from "@/components/run-selector";
 import { EmptyState, Skeleton } from "@/components/ui";
-import { fetchCustomerPayments, fetchCustomerUsageMonthly, fetchRunOutput } from "@/lib/ml-api";
 import type { PaymentEvent } from "@/lib/ml-api";
 import {
-  CustomerDetailView,
+  fetchCustomerPayments,
+  fetchCustomerUsageMonthly,
+  fetchRunOutput,
+} from "@/lib/ml-api";
+import {
   type CustomerDetail,
+  CustomerDetailView,
   type UsageTrendPoint,
 } from "./customer-detail-view";
 
@@ -37,14 +41,18 @@ export function CustomerDetailClient({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!requestedRunId || runsLoading) return;
+    if (!requestedRunId || runsLoading) {
+      return;
+    }
     if (runs.some((candidate) => candidate.id === requestedRunId)) {
       setRunId(requestedRunId);
     }
   }, [requestedRunId, runs, runsLoading, setRunId]);
 
   useEffect(() => {
-    if (!effectiveRunId) return;
+    if (!effectiveRunId) {
+      return;
+    }
     let alive = true;
     setCustomer(null);
     setUsageTrend([]);
@@ -56,36 +64,41 @@ export function CustomerDetailClient({
       fetchCustomerPayments(effectiveRunId, accId),
     ])
       .then(([output, usage, paymentEvents]) => {
-        if (!alive) return;
+        if (!alive) {
+          return;
+        }
         setCustomer(output);
         setUsageTrend(usage);
         setPayments(paymentEvents);
       })
-      .catch((e: unknown) =>
-        alive && setError(e instanceof Error ? e.message : "โหลดข้อมูลลูกค้าไม่สำเร็จ")
+      .catch(
+        (e: unknown) =>
+          alive &&
+          setError(e instanceof Error ? e.message : "โหลดข้อมูลลูกค้าไม่สำเร็จ")
       );
     return () => {
       alive = false;
     };
   }, [effectiveRunId, accId]);
 
-  const effectiveRun = runs.find((candidate) => candidate.id === effectiveRunId) ?? run;
+  const effectiveRun =
+    runs.find((candidate) => candidate.id === effectiveRunId) ?? run;
 
-  if (!runsLoading && !effectiveRun) {
+  if (!(runsLoading || effectiveRun)) {
     return (
       <div className="px-8 py-10">
         <EmptyState
-          icon={Database}
-          title="ยังไม่มี prediction run ที่เสร็จสมบูรณ์"
-          hint="import ข้อมูล predict แล้วสร้าง run ก่อน — ข้อมูลลูกค้ารายคนมาจากผลของ run"
           action={
             <Link
+              className="inline-flex h-9 items-center rounded-lg bg-[color:var(--moby-600)] px-4 font-medium text-[13px] text-white hover:bg-[color:var(--moby-700)]"
               href="/runs"
-              className="inline-flex h-9 items-center rounded-lg bg-[color:var(--moby-600)] px-4 text-[13px] font-medium text-white hover:bg-[color:var(--moby-700)]"
             >
               ไปหน้า Prediction Runs
             </Link>
           }
+          hint="import ข้อมูล predict แล้วสร้าง run ก่อน — ข้อมูลลูกค้ารายคนมาจากผลของ run"
+          icon={Database}
+          title="ยังไม่มี prediction run ที่เสร็จสมบูรณ์"
         />
       </div>
     );
@@ -94,7 +107,7 @@ export function CustomerDetailClient({
   if (error) {
     return (
       <div className="px-8 py-6">
-        <EmptyState title={`โหลดข้อมูล account ${accId} ไม่สำเร็จ`} hint={error} />
+        <EmptyState hint={error} title={`โหลดข้อมูล account ${accId} ไม่สำเร็จ`} />
       </div>
     );
   }
@@ -105,7 +118,7 @@ export function CustomerDetailClient({
         <Skeleton className="h-10 w-48 rounded-xl" />
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-72 rounded-[26px]" />
+            <Skeleton className="h-72 rounded-[26px]" key={i} />
           ))}
         </div>
       </div>
@@ -116,10 +129,10 @@ export function CustomerDetailClient({
     <CustomerDetailView
       accId={accId}
       customer={customer}
-      usageTrend={usageTrend}
+      customersHref={customersHref}
       payments={payments}
       runId={effectiveRun?.id}
-      customersHref={customersHref}
+      usageTrend={usageTrend}
     />
   );
 }

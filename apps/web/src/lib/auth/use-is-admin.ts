@@ -14,10 +14,10 @@ import { useSession } from "./client";
 export interface RoleInfo {
   /** True when the signed-in user has the admin role. */
   isAdmin: boolean;
-  /** Signed-in user id (null while loading / signed out). */
-  userId: string | null;
   /** True while the session is still resolving — keep actions enabled-neutral. */
   loading: boolean;
+  /** Signed-in user id (null while loading / signed out). */
+  userId: string | null;
 }
 
 export function useIsAdmin(): RoleInfo {
@@ -25,8 +25,8 @@ export function useIsAdmin(): RoleInfo {
   const user = data?.user ?? null;
   return {
     isAdmin: user?.role === USER_ROLE.ADMIN,
-    userId: user?.id ?? null,
     loading: isPending,
+    userId: user?.id ?? null,
   };
 }
 
@@ -36,7 +36,9 @@ export function canMutateAsCreator(
   userId: string | null,
   createdBy: string | null | undefined
 ): boolean {
-  if (isAdmin) return true;
+  if (isAdmin) {
+    return true;
+  }
   return Boolean(userId && createdBy && userId === createdBy);
 }
 

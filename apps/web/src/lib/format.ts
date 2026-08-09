@@ -8,18 +8,26 @@ export function formatNumber(value: number): string {
 }
 
 export function formatCurrency(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M ฿`;
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M ฿`;
+  }
   return `${Math.round(value).toLocaleString()} ฿`;
 }
 
 export function formatCompactCurrency(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1000) {
+    return `${Math.round(value / 1000)}K`;
+  }
   return value.toLocaleString();
 }
 
 export function formatCredits(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M credits`;
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M credits`;
+  }
   return `${value.toLocaleString()} credits`;
 }
 
@@ -34,7 +42,20 @@ export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString("th-TH", TIME_FORMAT);
 }
 
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 /** "2026-06" → "Jun" */
 export function formatMonth(value: string): string {

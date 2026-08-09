@@ -13,7 +13,6 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  opacity: 0;
   background:
     radial-gradient(rgba(7, 29, 126, 0.608) 0%, transparent 40%),
     url(/assets/intro/about_bg.webp),
@@ -27,8 +26,15 @@
       #fc4c02 90%
     );
   background-repeat: no-repeat;
-  background-size: 160% 100%, 200%, 100%;
-  background-position: 50%, left 60% top 0, top;
+  background-position:
+    50%,
+    left 60% top 0,
+    top;
+  background-size:
+    160% 100%,
+    200%,
+    100%;
+  opacity: 0;
 }
 
 @media screen and (min-width: 768px) {
@@ -45,7 +51,10 @@
         #ffa400 90%,
         #fc4c02
       );
-    background-size: 100% 100%, cover, 100%;
+    background-size:
+      100% 100%,
+      cover,
+      100%;
   }
 }
 
@@ -58,12 +67,10 @@
   inset: 0;
   top: 100%;
   z-index: 10;
-  background:
-    url(/assets/intro/intro_sm_bg.webp),
-    #006bff;
-  background-size: 95%;
-  background-position: center 0;
+  background: url(/assets/intro/intro_sm_bg.webp), #006bff;
   background-repeat: no-repeat;
+  background-position: center 0;
+  background-size: 95%;
 }
 
 .logo {

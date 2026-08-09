@@ -1,4 +1,5 @@
 "use client";
+
 /**
  * Train card (redesigned). One card does the whole job:
  *   pick (or upload) a Ready dataset → Train.
@@ -7,7 +8,6 @@
  * the dataset picker — there is no separate dataset table anymore.
  */
 
-import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   FileSpreadsheet,
@@ -18,12 +18,17 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { SectionCard } from "@/components/ui";
 import type { TrainDataSource } from "@/lib/api";
 import { ADMIN_ONLY_TITLE, useIsAdmin } from "@/lib/auth";
 import { ProgressCard } from "./progress-card";
-import { formatFileSize, getCleanCounts, PRIMARY_BUTTON_CLS } from "./training-utils";
 import { DEFAULT_HORIZON_DAYS } from "./training-run-utils";
+import {
+  formatFileSize,
+  getCleanCounts,
+  PRIMARY_BUTTON_CLS,
+} from "./training-utils";
 
 const fieldCls =
   "mt-1.5 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3.5 text-[13px] text-[color:var(--ink-2)] shadow-[var(--shadow-1)] outline-none transition-colors focus:border-[color:var(--moby-500)] disabled:opacity-50";
@@ -67,7 +72,7 @@ export function TrainPanel({
   const uploadRef = useRef<HTMLInputElement>(null);
   // Import / training / dataset deletion are admin-only (the API returns 403).
   const { isAdmin, loading: roleLoading } = useIsAdmin();
-  const adminLocked = !roleLoading && !isAdmin;
+  const adminLocked = !(roleLoading || isAdmin);
 
   useEffect(() => {
     setCutoffDate("");
@@ -75,28 +80,39 @@ export function TrainPanel({
   }, [selectedSource?.id]);
 
   useEffect(() => {
-    if (suggestedCutoff) setCutoffDate(suggestedCutoff);
+    if (suggestedCutoff) {
+      setCutoffDate(suggestedCutoff);
+    }
   }, [suggestedCutoff]);
 
   const horizonValid = Number.isInteger(horizonDays) && horizonDays > 0;
   const canTrain =
-    Boolean(selectedSource) && Boolean(cutoffDate) && horizonValid && !creating && !adminLocked;
+    Boolean(selectedSource) &&
+    Boolean(cutoffDate) &&
+    horizonValid &&
+    !creating &&
+    !adminLocked;
   const counts = selectedSource ? getCleanCounts(selectedSource) : null;
 
   return (
     <SectionCard
       eyebrow="Training"
-      title="เริ่มเทรน"
       hint="เลือก dataset แล้วกดเทรน — ระบบจัดการ cutoff, leakage และเลือกโมเดลที่ดีที่สุดให้อัตโนมัติ"
       right={
         <button
-          type="button"
-          disabled={!canTrain}
-          title={adminLocked ? ADMIN_ONLY_TITLE : undefined}
-          onClick={() => onTrain({ cutoff_date: cutoffDate, horizon_days: horizonDays })}
           className={`${PRIMARY_BUTTON_CLS} sm:min-w-[140px]`}
+          disabled={!canTrain}
+          onClick={() =>
+            onTrain({ cutoff_date: cutoffDate, horizon_days: horizonDays })
+          }
+          title={adminLocked ? ADMIN_ONLY_TITLE : undefined}
+          type="button"
         >
-          {creating ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
+          {creating ? (
+            <RefreshCw className="animate-spin" size={16} />
+          ) : (
+            <Play size={16} />
+          )}
           {creating ? "กำลังเริ่ม…" : "เทรน"}
         </button>
       }
@@ -105,12 +121,14 @@ export function TrainPanel({
         <span className="type-label">dataset</span>
         <div className="mt-1.5 flex items-center gap-2">
           <select
-            value={selectedSource?.id ?? ""}
-            onChange={(e) => onSelect(e.target.value)}
-            disabled={creating || readySources.length === 0}
             className="h-11 min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white px-3.5 text-[13px] text-[color:var(--ink-2)] shadow-[var(--shadow-1)] outline-none transition-colors focus:border-[color:var(--moby-500)] disabled:opacity-50"
+            disabled={creating || readySources.length === 0}
+            onChange={(e) => onSelect(e.target.value)}
+            value={selectedSource?.id ?? ""}
           >
-            {readySources.length === 0 && <option value="">ยังไม่มี dataset ที่ ready</option>}
+            {readySources.length === 0 && (
+              <option value="">ยังไม่มี dataset ที่ ready</option>
+            )}
             {readySources.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -120,21 +138,21 @@ export function TrainPanel({
           </select>
           {selectedSource && (
             <button
-              type="button"
-              onClick={() => onDeleteSource(selectedSource)}
-              disabled={adminLocked}
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[color:var(--ink-4)] shadow-[var(--shadow-1)] hover:border-[color:var(--danger)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-45"
+              disabled={adminLocked}
+              onClick={() => onDeleteSource(selectedSource)}
               title={adminLocked ? ADMIN_ONLY_TITLE : "ลบ dataset นี้"}
+              type="button"
             >
               <Trash2 size={15} />
             </button>
           )}
           <button
-            type="button"
-            onClick={() => setShowUpload((v) => !v)}
+            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 font-semibold text-[12.5px] text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
             disabled={adminLocked}
+            onClick={() => setShowUpload((v) => !v)}
             title={adminLocked ? ADMIN_ONLY_TITLE : undefined}
-            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
+            type="button"
           >
             <UploadCloud size={14} />
             upload ใหม่
@@ -144,7 +162,9 @@ export function TrainPanel({
         <p className="mt-2 text-[12px] text-[color:var(--ink-5)]">
           {selectedSource
             ? `${counts ? `${counts.customers.toLocaleString()} แถว · ` : ""}${
-                selectedSource.created_by_name ? `นำเข้าโดย ${selectedSource.created_by_name} · ` : ""
+                selectedSource.created_by_name
+                  ? `นำเข้าโดย ${selectedSource.created_by_name} · `
+                  : ""
               }cutoff ${
                 cutoffDate || "—"
               } (อัตโนมัติ${latestDataDate ? `, ข้อมูลล่าสุด ${latestDataDate}` : ""}) · horizon ${horizonDays} วัน`
@@ -153,32 +173,32 @@ export function TrainPanel({
 
         {showUpload && (
           <UploadForm
-            uploadRef={uploadRef}
             importing={importing}
             onClose={() => setShowUpload(false)}
             onUpload={onUpload}
+            uploadRef={uploadRef}
           />
         )}
       </div>
 
       {importing && (
         <ProgressCard
-          training={false}
+          phase={importPhase}
           progress={importProgress}
           step={importStep}
-          phase={importPhase}
+          training={false}
         />
       )}
 
-      <div className="mt-4 border-t border-gray-100 pt-4">
+      <div className="mt-4 border-gray-100 border-t pt-4">
         <button
-          type="button"
+          className="inline-flex items-center gap-2 font-medium text-[12.5px] text-[color:var(--ink-3)] hover:text-[color:var(--moby-600)]"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[color:var(--ink-3)] hover:text-[color:var(--moby-600)]"
+          type="button"
         >
           <ChevronDown
-            size={14}
             className={`transition-transform ${showAdvanced ? "rotate-0" : "-rotate-90"}`}
+            size={14}
           />
           <SlidersHorizontal size={13} />
           ตั้งค่าขั้นสูง — horizon
@@ -188,14 +208,16 @@ export function TrainPanel({
             <label className="block">
               <span className="type-label">Horizon (days)</span>
               <input
-                type="number"
-                min={1}
-                step={1}
-                value={Number.isNaN(horizonDays) ? "" : horizonDays}
-                onChange={(e) => setHorizonDays(Number.parseInt(e.target.value, 10))}
                 className={`${fieldCls} max-w-[200px]`}
+                min={1}
+                onChange={(e) =>
+                  setHorizonDays(Number.parseInt(e.target.value, 10))
+                }
+                step={1}
+                type="number"
+                value={Number.isNaN(horizonDays) ? "" : horizonDays}
               />
-              <span className="mt-1.5 block text-[12px] leading-5 text-[color:var(--ink-4)]">
+              <span className="mt-1.5 block text-[12px] text-[color:var(--ink-4)] leading-5">
                 default {DEFAULT_HORIZON_DAYS} วัน — เปลี่ยนเฉพาะเมื่อรู้ว่าทำอะไรอยู่
               </span>
               {!horizonValid && (
@@ -225,50 +247,57 @@ function UploadForm({
   const [file, setFile] = useState<File | null>(null);
 
   return (
-    <div className="absolute left-0 right-0 top-full z-10 mt-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_20px_48px_rgba(13,17,35,0.12)]">
+    <div className="absolute top-full right-0 left-0 z-10 mt-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_20px_48px_rgba(13,17,35,0.12)]">
       <div className="flex items-center justify-between">
         <span className="type-label">นำเข้า dataset ใหม่ (.xlsx 8 sheets)</span>
         <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[color:var(--ink-5)] hover:bg-gray-50"
           aria-label="ปิด"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[color:var(--ink-5)] hover:bg-gray-50"
+          onClick={onClose}
+          type="button"
         >
           <X size={14} />
         </button>
       </div>
 
       <input
-        ref={uploadRef}
-        type="file"
         accept=".xlsx"
         className="hidden"
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        ref={uploadRef}
+        type="file"
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
-          type="button"
-          onClick={() => uploadRef.current?.click()}
+          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 font-semibold text-[12.5px] text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:opacity-40"
           disabled={importing}
-          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:opacity-40"
+          onClick={() => uploadRef.current?.click()}
+          type="button"
         >
           <FileSpreadsheet size={14} />
           เลือกไฟล์
         </button>
-        <span className="min-w-0 flex-1 truncate text-[12px] text-[color:var(--ink-4)]" title={file?.name}>
-          {file ? `${file.name} · ${formatFileSize(file.size)}` : "ยังไม่ได้เลือกไฟล์"}
+        <span
+          className="min-w-0 flex-1 truncate text-[12px] text-[color:var(--ink-4)]"
+          title={file?.name}
+        >
+          {file
+            ? `${file.name} · ${formatFileSize(file.size)}`
+            : "ยังไม่ได้เลือกไฟล์"}
         </span>
         <button
-          type="button"
+          className={PRIMARY_BUTTON_CLS}
+          disabled={importing || !file}
           onClick={() => {
-            if (!file) return;
+            if (!file) {
+              return;
+            }
             onUpload(file);
             setFile(null);
             onClose();
           }}
-          disabled={importing || !file}
-          className={PRIMARY_BUTTON_CLS}
+          type="button"
         >
           <UploadCloud size={16} />
           Upload and clean

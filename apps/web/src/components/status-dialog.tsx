@@ -17,21 +17,24 @@ type StatusDialogProps = {
   onCancel?: () => void;
 };
 
-const TONE_STYLE: Record<StatusDialogTone, { button: string; icon: string; alt: string }> = {
-  success: {
-    button: MOBY_BRAND.blue,
-    icon: "/icons/success-alert.svg",
-    alt: "success",
-  },
+const TONE_STYLE: Record<
+  StatusDialogTone,
+  { button: string; icon: string; alt: string }
+> = {
   error: {
+    alt: "error",
     button: "var(--danger)",
     icon: "/icons/error-alert.svg",
-    alt: "error",
+  },
+  success: {
+    alt: "success",
+    button: MOBY_BRAND.blue,
+    icon: "/icons/success-alert.svg",
   },
   warning: {
+    alt: "notification",
     button: "var(--danger)",
     icon: "/icons/noti.svg",
-    alt: "notification",
   },
 };
 
@@ -46,7 +49,9 @@ export function StatusDialog({
   onConfirm,
   onCancel,
 }: StatusDialogProps) {
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const style = TONE_STYLE[tone];
 
@@ -55,14 +60,20 @@ export function StatusDialog({
       <div className="w-full max-w-[607px] rounded-[28px] border border-white/70 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.22)]">
         <div className="flex flex-col items-center gap-16 px-6 py-16 text-center">
           <div className="flex flex-col items-center justify-center gap-10">
-            <Image src={style.icon} alt={style.alt} width={105} height={105} priority />
+            <Image
+              alt={style.alt}
+              height={105}
+              priority
+              src={style.icon}
+              width={105}
+            />
 
             <div>
-              <h3 className="max-w-[400px] text-[18px] font-bold leading-7 text-[color:var(--ink-1)]">
+              <h3 className="max-w-[400px] font-bold text-[18px] text-[color:var(--ink-1)] leading-7">
                 {title}
               </h3>
               {message && (
-                <p className="mt-3 max-w-[420px] text-[13px] leading-6 text-[color:var(--ink-4)]">
+                <p className="mt-3 max-w-[420px] text-[13px] text-[color:var(--ink-4)] leading-6">
                   {message}
                 </p>
               )}
@@ -72,20 +83,20 @@ export function StatusDialog({
           <div className="flex flex-col-reverse gap-3 sm:flex-row">
             {onCancel && (
               <button
-                type="button"
+                className="inline-flex h-[47px] min-w-[102px] items-center justify-center rounded-2xl border border-gray-200 bg-white px-5 font-semibold text-[13px] text-[color:var(--ink-2)] hover:bg-gray-50 disabled:opacity-50"
                 disabled={loading}
                 onClick={onCancel}
-                className="inline-flex h-[47px] min-w-[102px] items-center justify-center rounded-2xl border border-gray-200 bg-white px-5 text-[13px] font-semibold text-[color:var(--ink-2)] hover:bg-gray-50 disabled:opacity-50"
+                type="button"
               >
                 {cancelLabel}
               </button>
             )}
             <button
-              type="button"
+              className="inline-flex h-[47px] min-w-[102px] items-center justify-center rounded-2xl px-5 font-semibold text-[13px] text-white disabled:opacity-50"
               disabled={loading}
               onClick={onConfirm}
-              className="inline-flex h-[47px] min-w-[102px] items-center justify-center rounded-2xl px-5 text-[13px] font-semibold text-white disabled:opacity-50"
               style={{ background: style.button }}
+              type="button"
             >
               {loading ? "กำลังดำเนินการ..." : confirmLabel}
             </button>

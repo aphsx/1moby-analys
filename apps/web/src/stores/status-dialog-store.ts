@@ -10,13 +10,13 @@ export type StatusDialogPayload = {
 
 interface StatusDialogState {
   dialog: StatusDialogPayload | null;
-  notify: (payload: StatusDialogPayload) => void;
   dismiss: () => void;
+  notify: (payload: StatusDialogPayload) => void;
 }
 
 /** App-wide status dialog. Rendered by GlobalStatusDialogHost. */
 export const useStatusDialogStore = create<StatusDialogState>()((set) => ({
   dialog: null,
-  notify: (dialog) => set({ dialog }),
   dismiss: () => set({ dialog: null }),
+  notify: (dialog) => set({ dialog }),
 }));

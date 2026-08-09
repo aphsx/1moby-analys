@@ -20,38 +20,46 @@ import {
 } from "../db/schema";
 import { abortPredictDataSource } from "./abort-data-source";
 import type { CleanManifest } from "./clean-manifest";
+import { PREDICT_IMPORT_BATCH_SIZE } from "./predict-excel-contract";
 import {
+  type CleanSkipReason,
   emptySkippedCounts,
   mapPaymentRow,
   mapUsageRow,
   mapUserRow,
-  type CleanSkipReason,
   type RawRowInput,
 } from "./sheet-cleaners";
-import { PREDICT_IMPORT_BATCH_SIZE } from "./predict-excel-contract";
-import {
-  USAGE_SHEET_CHANNEL,
-  USAGE_SHEET_NAMES,
-} from "./train-clean-mapping";
+import { USAGE_SHEET_CHANNEL, USAGE_SHEET_NAMES } from "./train-clean-mapping";
 
-export type { CleanManifest };
+export type { CleanManifest } from "./clean-manifest";
+
+type MappedRow<T extends { ok: boolean }> =
+  Extract<T, { ok: true }> extends { value: infer V } ? V : never;
+type CustomerRow = MappedRow<ReturnType<typeof mapUserRow>>;
+type PaymentRow = MappedRow<ReturnType<typeof mapPaymentRow>>;
+type UsageRow = MappedRow<ReturnType<typeof mapUsageRow>>;
 
 const USAGE_RAW_TABLES = {
-  "SMS_usage (BC)": predictRawSheetSmsUsageBc,
-  "SMS_usage (API)": predictRawSheetSmsUsageApi,
-  "SMS_usage (OTP)": predictRawSheetSmsUsageOtp,
-  "Email_usage (BC)": predictRawSheetEmailUsageBc,
   "Email_usage (API)": predictRawSheetEmailUsageApi,
+  "Email_usage (BC)": predictRawSheetEmailUsageBc,
   "Email_usage (OTP)": predictRawSheetEmailUsageOtp,
+  "SMS_usage (API)": predictRawSheetSmsUsageApi,
+  "SMS_usage (BC)": predictRawSheetSmsUsageBc,
+  "SMS_usage (OTP)": predictRawSheetSmsUsageOtp,
 } as const;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
   return out;
 }
 
-function bumpSkip(skipped: Record<CleanSkipReason, number>, reason: CleanSkipReason): void {
+function bumpSkip(
+  skipped: Record<CleanSkipReason, number>,
+  reason: CleanSkipReason
+): void {
   skipped[reason] += 1;
 }
 
@@ -62,12 +70,14 @@ function toRawInput(row: {
 }): RawRowInput {
   return {
     excelRow: row.excelRow,
-    rawRowId: row.id,
     payload: row.rowPayload as Record<string, unknown>,
+    rawRowId: row.id,
   };
 }
 
-export async function cleanPredictFromRaw(sourceId: string): Promise<CleanManifest> {
+export async function cleanPredictFromRaw(
+  sourceId: string
+): Promise<CleanManifest> {
   const [sourceRow] = await db
     .select({ sheetManifest: predictDataSources.sheetManifest })
     .from(predictDataSources)
@@ -79,7 +89,7 @@ export async function cleanPredictFromRaw(sourceId: string): Promise<CleanManife
 
   await db
     .update(predictDataSources)
-    .set({ importStatus: "cleaning", errorMessage: null })
+    .set({ errorMessage: null, importStatus: "cleaning" })
     .where(eq(predictDataSources.id, sourceId));
 
   const skipped = emptySkippedCounts();
@@ -89,113 +99,127 @@ export async function cleanPredictFromRaw(sourceId: string): Promise<CleanManife
   let usage = 0;
 
   try {
-  await db.transaction(async (tx) => {
-    await tx.delete(predictCleanCustomers).where(eq(predictCleanCustomers.sourceId, sourceId));
-    await tx.delete(predictCleanPayments).where(eq(predictCleanPayments.sourceId, sourceId));
-    await tx.delete(predictCleanUsage).where(eq(predictCleanUsage.sourceId, sourceId));
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(predictCleanCustomers)
+        .where(eq(predictCleanCustomers.sourceId, sourceId));
+      await tx
+        .delete(predictCleanPayments)
+        .where(eq(predictCleanPayments.sourceId, sourceId));
+      await tx
+        .delete(predictCleanUsage)
+        .where(eq(predictCleanUsage.sourceId, sourceId));
 
-    const userRows = await tx
-      .select({
-        id: predictRawSheetUsersUserProfile.id,
-        excelRow: predictRawSheetUsersUserProfile.excelRow,
-        rowPayload: predictRawSheetUsersUserProfile.rowPayload,
-      })
-      .from(predictRawSheetUsersUserProfile)
-      .where(eq(predictRawSheetUsersUserProfile.sourceId, sourceId));
-
-    const customerValues = [];
-    for (const r of userRows) {
-      const mapped = mapUserRow(toRawInput(r), sourceId);
-      if (!mapped.ok) {
-        bumpSkip(skipped, mapped.reason);
-        continue;
-      }
-      customerValues.push(mapped.value);
-    }
-
-    for (const batch of chunk(customerValues, PREDICT_IMPORT_BATCH_SIZE)) {
-      await tx.insert(predictCleanCustomers).values(batch);
-      customers += batch.length;
-    }
-
-    const payRows = await tx
-      .select({
-        id: predictRawSheetBackendPayment.id,
-        excelRow: predictRawSheetBackendPayment.excelRow,
-        rowPayload: predictRawSheetBackendPayment.rowPayload,
-      })
-      .from(predictRawSheetBackendPayment)
-      .where(eq(predictRawSheetBackendPayment.sourceId, sourceId));
-
-    const paymentValues = [];
-    for (const r of payRows) {
-      const mapped = mapPaymentRow(toRawInput(r), sourceId);
-      if (!mapped.ok) {
-        bumpSkip(skipped, mapped.reason);
-        continue;
-      }
-      paymentValues.push(mapped.value);
-    }
-
-    for (const batch of chunk(paymentValues, PREDICT_IMPORT_BATCH_SIZE)) {
-      await tx.insert(predictCleanPayments).values(batch);
-      payments += batch.length;
-    }
-
-    for (const sheetName of USAGE_SHEET_NAMES) {
-      const meta = USAGE_SHEET_CHANNEL[sheetName];
-      const table = USAGE_RAW_TABLES[sheetName as keyof typeof USAGE_RAW_TABLES];
-
-      const rawUsage = await tx
+      const userRows = await tx
         .select({
-          id: table.id,
-          excelRow: table.excelRow,
-          rowPayload: table.rowPayload,
+          excelRow: predictRawSheetUsersUserProfile.excelRow,
+          id: predictRawSheetUsersUserProfile.id,
+          rowPayload: predictRawSheetUsersUserProfile.rowPayload,
         })
-        .from(table)
-        .where(eq(table.sourceId, sourceId));
+        .from(predictRawSheetUsersUserProfile)
+        .where(eq(predictRawSheetUsersUserProfile.sourceId, sourceId));
 
-      const usageValues = [];
-      for (const r of rawUsage) {
-        const mapped = mapUsageRow(toRawInput(r), sourceId, meta.channel, meta.usageSource);
+      const customerValues: CustomerRow[] = [];
+      for (const r of userRows) {
+        const mapped = mapUserRow(toRawInput(r), sourceId);
         if (!mapped.ok) {
           bumpSkip(skipped, mapped.reason);
           continue;
         }
-        if (mapped.warnings) warnings.push(...mapped.warnings);
-        usageValues.push(mapped.value);
+        customerValues.push(mapped.value);
       }
 
-      for (const batch of chunk(usageValues, PREDICT_IMPORT_BATCH_SIZE)) {
-        await tx.insert(predictCleanUsage).values(batch);
-        usage += batch.length;
+      for (const batch of chunk(customerValues, PREDICT_IMPORT_BATCH_SIZE)) {
+        await tx.insert(predictCleanCustomers).values(batch);
+        customers += batch.length;
       }
-    }
-  });
 
-  const manifest: CleanManifest = {
-    raw: rawManifest,
-    clean: { customers, payments, usage },
-    skipped: {
-      customers_no_acc_id: skipped.customers_no_acc_id,
-      payments_no_acc_id: skipped.payments_no_acc_id,
-      payments_no_date: skipped.payments_no_date,
-      usage_no_acc_id: skipped.usage_no_acc_id,
-    },
-    warnings,
-  };
+      const payRows = await tx
+        .select({
+          excelRow: predictRawSheetBackendPayment.excelRow,
+          id: predictRawSheetBackendPayment.id,
+          rowPayload: predictRawSheetBackendPayment.rowPayload,
+        })
+        .from(predictRawSheetBackendPayment)
+        .where(eq(predictRawSheetBackendPayment.sourceId, sourceId));
 
-  await db
-    .update(predictDataSources)
-    .set({
-      importStatus: "ready",
-      cleanManifest: manifest,
-      cleanedAt: new Date(),
-      errorMessage: null,
-    })
-    .where(eq(predictDataSources.id, sourceId));
+      const paymentValues: PaymentRow[] = [];
+      for (const r of payRows) {
+        const mapped = mapPaymentRow(toRawInput(r), sourceId);
+        if (!mapped.ok) {
+          bumpSkip(skipped, mapped.reason);
+          continue;
+        }
+        paymentValues.push(mapped.value);
+      }
 
-  return manifest;
+      for (const batch of chunk(paymentValues, PREDICT_IMPORT_BATCH_SIZE)) {
+        await tx.insert(predictCleanPayments).values(batch);
+        payments += batch.length;
+      }
+
+      for (const sheetName of USAGE_SHEET_NAMES) {
+        const meta = USAGE_SHEET_CHANNEL[sheetName];
+        const table =
+          USAGE_RAW_TABLES[sheetName as keyof typeof USAGE_RAW_TABLES];
+
+        const rawUsage = await tx
+          .select({
+            excelRow: table.excelRow,
+            id: table.id,
+            rowPayload: table.rowPayload,
+          })
+          .from(table)
+          .where(eq(table.sourceId, sourceId));
+
+        const usageValues: UsageRow[] = [];
+        for (const r of rawUsage) {
+          const mapped = mapUsageRow(
+            toRawInput(r),
+            sourceId,
+            meta.channel,
+            meta.usageSource
+          );
+          if (!mapped.ok) {
+            bumpSkip(skipped, mapped.reason);
+            continue;
+          }
+          if (mapped.warnings) {
+            warnings.push(...mapped.warnings);
+          }
+          usageValues.push(mapped.value);
+        }
+
+        for (const batch of chunk(usageValues, PREDICT_IMPORT_BATCH_SIZE)) {
+          await tx.insert(predictCleanUsage).values(batch);
+          usage += batch.length;
+        }
+      }
+    });
+
+    const manifest: CleanManifest = {
+      clean: { customers, payments, usage },
+      raw: rawManifest,
+      skipped: {
+        customers_no_acc_id: skipped.customers_no_acc_id,
+        payments_no_acc_id: skipped.payments_no_acc_id,
+        payments_no_date: skipped.payments_no_date,
+        usage_no_acc_id: skipped.usage_no_acc_id,
+      },
+      warnings,
+    };
+
+    await db
+      .update(predictDataSources)
+      .set({
+        cleanedAt: new Date(),
+        cleanManifest: manifest,
+        errorMessage: null,
+        importStatus: "ready",
+      })
+      .where(eq(predictDataSources.id, sourceId));
+
+    return manifest;
   } catch (e) {
     await abortPredictDataSource(sourceId);
     throw e;

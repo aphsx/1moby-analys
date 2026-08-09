@@ -1,4 +1,5 @@
 "use client";
+
 /**
  * Create-run card (redesigned). One card does the whole job:
  *   pick (or import) a predict source → name → Run.
@@ -8,7 +9,6 @@
  * separate data-sources section anymore.
  */
 
-import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   FileSpreadsheet,
@@ -19,9 +19,10 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { SectionCard } from "@/components/ui";
-import { uploadPredictDataFile, type PredictDataSource } from "@/lib/api";
+import { type PredictDataSource, uploadPredictDataFile } from "@/lib/api";
 import { ADMIN_ONLY_TITLE, useIsAdmin } from "@/lib/auth";
 import {
   createPredictionRun,
@@ -37,6 +38,8 @@ import {
   getCleanCounts,
   todayISO,
 } from "./runs-utils";
+
+const XLSX_EXTENSION_RE = /\.xlsx$/i;
 
 const MODEL_TYPES = ["churn", "clv", "credit"] as const;
 type ModelType = (typeof MODEL_TYPES)[number];
@@ -64,7 +67,9 @@ export function CreateRunPanel({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Per-run model selection. "" = use the production champion for that type.
-  const [versionsByType, setVersionsByType] = useState<Record<ModelType, ModelVersionSummary[]>>({
+  const [versionsByType, setVersionsByType] = useState<
+    Record<ModelType, ModelVersionSummary[]>
+  >({
     churn: [],
     clv: [],
     credit: [],
@@ -79,34 +84,44 @@ export function CreateRunPanel({
     let alive = true;
     Promise.all(MODEL_TYPES.map((t) => fetchModelVersions(t).catch(() => [])))
       .then(([churn, clv, credit]) => {
-        if (alive) setVersionsByType({ churn, clv, credit });
+        if (alive) {
+          setVersionsByType({ churn, clv, credit });
+        }
       })
-      .catch(() => {});
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
   }, []);
 
   useEffect(() => {
-    if (sourceId && readySources.some((s) => s.id === sourceId)) return;
+    if (sourceId && readySources.some((s) => s.id === sourceId)) {
+      return;
+    }
     setSourceId(readySources[0]?.id ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readySources.map((s) => s.id).join(",")]);
 
   const selected = readySources.find((s) => s.id === sourceId) ?? null;
   useEffect(() => {
-    if (nameTouched) return;
+    if (nameTouched) {
+      return;
+    }
     setName(selected ? defaultRunName(selected.name) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id, nameTouched]);
 
   useEffect(() => {
     setCutoff("");
-    if (!selected) return;
+    if (!selected) {
+      return;
+    }
     let alive = true;
     fetchPredictSuggestedCutoff(selected.id)
       .then(({ suggested_cutoff }) => {
-        if (alive) setCutoff(suggested_cutoff);
+        if (alive) {
+          setCutoff(suggested_cutoff);
+        }
       })
       .catch(() => {
         // Keep the local fallback when no suggestion is available.
@@ -120,25 +135,35 @@ export function CreateRunPanel({
   const canCreate = Boolean(sourceId && name.trim() && cutoff && !creating);
 
   const create = async () => {
-    if (!canCreate) return;
+    if (!canCreate) {
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
-      const modelOverrides: { churn?: string; clv?: string; credit?: string } = {};
+      const modelOverrides: { churn?: string; clv?: string; credit?: string } =
+        {};
       for (const modelType of MODEL_TYPES) {
-        if (overrides[modelType]) modelOverrides[modelType] = overrides[modelType];
+        if (overrides[modelType]) {
+          modelOverrides[modelType] = overrides[modelType];
+        }
       }
       await createPredictionRun({
-        predict_source_id: sourceId,
-        name: name.trim(),
         cutoff_date: cutoff,
-        ...(Object.keys(modelOverrides).length > 0 ? { model_overrides: modelOverrides } : {}),
+        name: name.trim(),
+        predict_source_id: sourceId,
+        ...(Object.keys(modelOverrides).length > 0
+          ? { model_overrides: modelOverrides }
+          : {}),
       });
       setNameTouched(false);
       setName(selected ? defaultRunName(selected.name) : "");
       await onRefresh();
     } catch (e) {
-      setError(getDisplayError(e, "สร้าง prediction run ไม่สำเร็จ") ?? "สร้าง prediction run ไม่สำเร็จ");
+      setError(
+        getDisplayError(e, "สร้าง prediction run ไม่สำเร็จ") ??
+          "สร้าง prediction run ไม่สำเร็จ"
+      );
     } finally {
       setCreating(false);
     }
@@ -149,16 +174,19 @@ export function CreateRunPanel({
   return (
     <SectionCard
       eyebrow="Prediction runs"
-      title="สร้าง prediction run"
       hint="เลือกข้อมูล ตั้งชื่อ แล้วกดรัน — ระบบจัดการ cutoff และรัน lifecycle / churn / CLV / credit ให้ทุกลูกค้า"
       right={
         <button
-          type="button"
-          onClick={() => void create()}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 font-semibold text-[13px] text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50 sm:min-w-[140px]"
           disabled={!canCreate}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 text-[13px] font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50 sm:min-w-[140px]"
+          onClick={() => void create()}
+          type="button"
         >
-          {creating ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
+          {creating ? (
+            <RefreshCw className="animate-spin" size={16} />
+          ) : (
+            <Play size={16} />
+          )}
           {creating ? "กำลังรัน…" : "รัน"}
         </button>
       }
@@ -168,12 +196,14 @@ export function CreateRunPanel({
           <span className="type-label">แหล่งข้อมูล</span>
           <div className="mt-1.5 flex items-center gap-2">
             <select
-              value={sourceId}
-              onChange={(e) => setSourceId(e.target.value)}
-              disabled={creating || readySources.length === 0}
               className="h-11 min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white px-3.5 text-[13px] text-[color:var(--ink-2)] shadow-[var(--shadow-1)] outline-none transition-colors focus:border-[color:var(--moby-500)] disabled:opacity-50"
+              disabled={creating || readySources.length === 0}
+              onChange={(e) => setSourceId(e.target.value)}
+              value={sourceId}
             >
-              {readySources.length === 0 && <option value="">ยังไม่มี source ที่ ready</option>}
+              {readySources.length === 0 && (
+                <option value="">ยังไม่มี source ที่ ready</option>
+              )}
               {readySources.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -187,7 +217,9 @@ export function CreateRunPanel({
             <p className="mt-2 text-[12px] text-[color:var(--ink-5)]">
               {counts ? `${counts.customers.toLocaleString()} ลูกค้า · ` : ""}
               นำเข้า {formatRelative(selected.imported_at)}
-              {selected.created_by_name ? ` โดย ${selected.created_by_name}` : ""}
+              {selected.created_by_name
+                ? ` โดย ${selected.created_by_name}`
+                : ""}
               {cutoff ? ` · ทำนาย ณ ${formatDate(cutoff)} (อัตโนมัติ)` : ""}
             </p>
           )}
@@ -196,27 +228,27 @@ export function CreateRunPanel({
         <label className="block">
           <span className="type-label">ชื่อ run</span>
           <input
-            value={name}
+            className={fieldCls}
+            disabled={creating || readySources.length === 0}
             onChange={(e) => {
               setName(e.target.value);
               setNameTouched(true);
             }}
             placeholder="ชื่อ run"
-            disabled={creating || readySources.length === 0}
-            className={fieldCls}
+            value={name}
           />
         </label>
       </div>
 
-      <div className="mt-4 border-t border-gray-100 pt-4">
+      <div className="mt-4 border-gray-100 border-t pt-4">
         <button
-          type="button"
+          className="inline-flex items-center gap-2 font-medium text-[12.5px] text-[color:var(--ink-3)] hover:text-[color:var(--moby-600)]"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[color:var(--ink-3)] hover:text-[color:var(--moby-600)]"
+          type="button"
         >
           <ChevronDown
-            size={14}
             className={`transition-transform ${showAdvanced ? "rotate-0" : "-rotate-90"}`}
+            size={14}
           />
           <SlidersHorizontal size={13} />
           ตั้งค่าขั้นสูง — เลือกเวอร์ชันโมเดล
@@ -225,28 +257,33 @@ export function CreateRunPanel({
           <div className="mt-3 space-y-4">
             <div>
               <span className="type-label">เลือกโมเดลต่อ run</span>
-              <p className="mt-1 mb-2 text-[12px] leading-5 text-[color:var(--ink-4)]">
-                ปล่อยเป็น &quot;Production (ปัจจุบัน)&quot; เพื่อใช้ champion — หรือเลือกเวอร์ชันเจาะจงสำหรับ run นี้
+              <p className="mt-1 mb-2 text-[12px] text-[color:var(--ink-4)] leading-5">
+                ปล่อยเป็น &quot;Production (ปัจจุบัน)&quot; เพื่อใช้ champion —
+                หรือเลือกเวอร์ชันเจาะจงสำหรับ run นี้
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {MODEL_TYPES.map((modelType) => (
-                  <label key={modelType} className="block">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ink-5)]">
+                  <label className="block" key={modelType}>
+                    <span className="font-semibold text-[11px] text-[color:var(--ink-5)] uppercase tracking-[0.1em]">
                       {modelType}
                     </span>
                     <select
-                      value={overrides[modelType]}
-                      onChange={(e) =>
-                        setOverrides((prev) => ({ ...prev, [modelType]: e.target.value }))
-                      }
-                      disabled={creating}
                       className={fieldCls}
+                      disabled={creating}
+                      onChange={(e) =>
+                        setOverrides((prev) => ({
+                          ...prev,
+                          [modelType]: e.target.value,
+                        }))
+                      }
+                      value={overrides[modelType]}
                     >
                       <option value="">Production (ปัจจุบัน)</option>
                       {versionsByType[modelType].map((v) => (
                         <option key={v.id} value={v.id}>
                           {v.version}
-                          {v.is_active ? " · production" : ""} · {v.algorithm || "—"}
+                          {v.is_active ? " · production" : ""} ·{" "}
+                          {v.algorithm || "—"}
                         </option>
                       ))}
                     </select>
@@ -268,18 +305,22 @@ export function CreateRunPanel({
 }
 
 /** "+ import ใหม่" toggle that reveals an inline upload form (admin only). */
-function ImportToggleButton({ onImported }: { onImported: () => Promise<void> }) {
+function ImportToggleButton({
+  onImported,
+}: {
+  onImported: () => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
   const { isAdmin, loading: roleLoading } = useIsAdmin();
-  const disabled = !roleLoading && !isAdmin;
+  const disabled = !(roleLoading || isAdmin);
   return (
     <>
       <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 font-semibold text-[12.5px] text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
         disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
         title={disabled ? ADMIN_ONLY_TITLE : undefined}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
+        type="button"
       >
         <Plus size={14} />
         import ใหม่
@@ -312,20 +353,26 @@ function InlineImportForm({
   const [error, setError] = useState<string | null>(null);
 
   const doImport = async () => {
-    if (!file || busy) return;
-    const datasetName = name.trim() || file.name.replace(/\.xlsx$/i, "");
+    if (!file || busy) {
+      return;
+    }
+    const datasetName = name.trim() || file.name.replace(XLSX_EXTENSION_RE, "");
     setBusy(true);
     setError(null);
     try {
-      const result = await uploadPredictDataFile(file, datasetName, clientLabel.trim() || undefined);
+      const result = await uploadPredictDataFile(
+        file,
+        datasetName,
+        clientLabel.trim() || undefined
+      );
       await onImported();
       // The import auto-creates + triggers a prediction run — surface it so the
       // user knows the new run in the history table is already underway.
       if (result.auto_prediction_run_id) {
         notifyStatusDialog({
-          tone: "success",
-          title: "นำเข้าข้อมูลสำเร็จ",
           message: `ระบบเริ่ม prediction run ให้อัตโนมัติแล้ว (Auto — ${datasetName}) — ติดตามสถานะได้จากตาราง run ด้านล่าง`,
+          title: "นำเข้าข้อมูลสำเร็จ",
+          tone: "success",
         });
       }
     } catch (e) {
@@ -336,14 +383,16 @@ function InlineImportForm({
   };
 
   return (
-    <div className="absolute left-0 right-0 top-full z-10 mt-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_20px_48px_rgba(13,17,35,0.12)]">
+    <div className="absolute top-full right-0 left-0 z-10 mt-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_20px_48px_rgba(13,17,35,0.12)]">
       <div className="flex items-center justify-between">
-        <span className="type-label">นำเข้า predict data ใหม่ (.xlsx 8 sheets)</span>
+        <span className="type-label">
+          นำเข้า predict data ใหม่ (.xlsx 8 sheets)
+        </span>
         <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[color:var(--ink-5)] hover:bg-gray-50"
           aria-label="ปิด"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[color:var(--ink-5)] hover:bg-gray-50"
+          onClick={onClose}
+          type="button"
         >
           <X size={14} />
         </button>
@@ -354,26 +403,29 @@ function InlineImportForm({
           <span className="type-label">ไฟล์ Excel</span>
           <div className="mt-1.5 flex items-center gap-2">
             <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
+              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 font-semibold text-[12.5px] text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:opacity-40"
               disabled={busy}
-              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:opacity-40"
+              onClick={() => fileRef.current?.click()}
+              type="button"
             >
               <FileSpreadsheet size={14} />
               เลือกไฟล์
             </button>
-            <span className="min-w-0 truncate text-[12px] text-[color:var(--ink-4)]" title={file?.name}>
+            <span
+              className="min-w-0 truncate text-[12px] text-[color:var(--ink-4)]"
+              title={file?.name}
+            >
               {file ? file.name : "ยังไม่ได้เลือก"}
             </span>
             <input
-              ref={fileRef}
-              type="file"
               accept=".xlsx"
               className="hidden"
               onChange={(e) => {
                 setFile(e.target.files?.[0] ?? null);
                 setError(null);
               }}
+              ref={fileRef}
+              type="file"
             />
           </div>
         </div>
@@ -381,32 +433,38 @@ function InlineImportForm({
         <label className="block">
           <span className="type-label">ชื่อ</span>
           <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={file ? file.name.replace(/\.xlsx$/i, "") : "เช่น Customers 2026-06"}
-            disabled={busy}
             className={fieldCls}
+            disabled={busy}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={
+              file ? file.name.replace(XLSX_EXTENSION_RE, "") : "เช่น Customers 2026-06"
+            }
+            value={name}
           />
         </label>
 
         <label className="block">
           <span className="type-label">Client label</span>
           <input
-            value={clientLabel}
+            className={fieldCls}
+            disabled={busy}
             onChange={(e) => setClientLabel(e.target.value)}
             placeholder="optional"
-            disabled={busy}
-            className={fieldCls}
+            value={clientLabel}
           />
         </label>
 
         <button
-          type="button"
-          onClick={() => void doImport()}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 font-semibold text-[13px] text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50"
           disabled={busy || !file}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 text-[13px] font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50"
+          onClick={() => void doImport()}
+          type="button"
         >
-          {busy ? <RefreshCw size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+          {busy ? (
+            <RefreshCw className="animate-spin" size={16} />
+          ) : (
+            <UploadCloud size={16} />
+          )}
           {busy ? "กำลังนำเข้า…" : "Import"}
         </button>
       </div>

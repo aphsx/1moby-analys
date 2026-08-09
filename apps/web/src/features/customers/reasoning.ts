@@ -40,26 +40,26 @@ export type ReasoningLayer = {
 
 /** Human-readable Thai labels for known model feature codes. */
 const FEATURE_LABELS: Record<string, string> = {
-  days_since_last_activity: "จำนวนวันที่ไม่มีการใช้งาน",
-  days_since_last_send: "จำนวนวันที่ไม่ส่งข้อความ",
-  days_since_last_payment: "จำนวนวันที่ไม่เติมเครดิต",
-  usage_total_180d: "ปริมาณการใช้งานรวม 180 วัน",
-  usage_total_90d: "ปริมาณการใช้งานรวม 90 วัน",
-  usage_trend_slope: "แนวโน้มการใช้งาน",
+  avg_transaction_value: "มูลค่าเฉลี่ยต่อครั้ง",
+  channel_hhi: "ความกระจุกตัวของช่องทาง (SMS/Email)",
+  credit_added_180d: "เครดิตที่เติมรวม 180 วัน",
   credit_balance_proxy: "เครดิตคงเหลือโดยประมาณ",
   credit_runway_months: "เครดิตพอใช้ได้อีก (เดือน)",
-  credit_added_180d: "เครดิตที่เติมรวม 180 วัน",
-  n_purchases: "จำนวนครั้งที่ชำระเงิน",
-  total_revenue: "รายได้รวม",
-  avg_transaction_value: "มูลค่าเฉลี่ยต่อครั้ง",
-  payment_amount_cv: "ความผันผวนของยอดเติมเครดิต",
-  channel_hhi: "ความกระจุกตัวของช่องทาง (SMS/Email)",
-  multichannel_flag: "ใช้หลายช่องทาง (SMS+Email)",
   customer_age_days: "อายุการเป็นลูกค้า (วัน)",
-  recency_days: "ระยะเวลาตั้งแต่ใช้งานล่าสุด",
+  days_since_last_activity: "จำนวนวันที่ไม่มีการใช้งาน",
+  days_since_last_payment: "จำนวนวันที่ไม่เติมเครดิต",
+  days_since_last_send: "จำนวนวันที่ไม่ส่งข้อความ",
   frequency: "ความถี่การใช้งาน",
   monetary: "มูลค่าการใช้จ่าย",
+  multichannel_flag: "ใช้หลายช่องทาง (SMS+Email)",
+  n_purchases: "จำนวนครั้งที่ชำระเงิน",
+  payment_amount_cv: "ความผันผวนของยอดเติมเครดิต",
+  recency_days: "ระยะเวลาตั้งแต่ใช้งานล่าสุด",
   tenure_months: "อายุบัญชี (เดือน)",
+  total_revenue: "รายได้รวม",
+  usage_total_90d: "ปริมาณการใช้งานรวม 90 วัน",
+  usage_total_180d: "ปริมาณการใช้งานรวม 180 วัน",
+  usage_trend_slope: "แนวโน้มการใช้งาน",
 };
 
 /** Fallback: snake_case → spaced, capitalised words. */
@@ -75,9 +75,13 @@ function humanizeFeature(feature: string): string {
 
 function formatFactorValue(value: number | string): string {
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) return "—";
+    if (!Number.isFinite(value)) {
+      return "—";
+    }
     const abs = Math.abs(value);
-    if (abs !== 0 && abs < 1) return value.toFixed(2);
+    if (abs !== 0 && abs < 1) {
+      return value.toFixed(2);
+    }
     return Math.round(value).toLocaleString("th-TH");
   }
   return String(value);
@@ -85,9 +89,15 @@ function formatFactorValue(value: number | string): string {
 
 function narrativeFor(fields: ReasonAiFields): ReasonNarrative {
   const saved = fields.ai_explanation?.trim();
-  if (saved) return { kind: "ready", text: saved };
-  if (fields.ai_status === "pending") return { kind: "pending", text: "กำลังสร้างคำอธิบายจาก AI…" };
-  if (fields.ai_status === "failed") return { kind: "failed", text: "สร้างคำอธิบายจาก AI ไม่สำเร็จ" };
+  if (saved) {
+    return { kind: "ready", text: saved };
+  }
+  if (fields.ai_status === "pending") {
+    return { kind: "pending", text: "กำลังสร้างคำอธิบายจาก AI…" };
+  }
+  if (fields.ai_status === "failed") {
+    return { kind: "failed", text: "สร้างคำอธิบายจาก AI ไม่สำเร็จ" };
+  }
   return { kind: "empty", text: "ยังไม่มีคำอธิบายจาก AI" };
 }
 
@@ -96,9 +106,9 @@ export function composeReasoning(input: ReasonInput): ReasoningLayer {
   const drivers: ReasonDriver[] = (input.churn_factors ?? [])
     .slice(0, 5)
     .map((factor: ChurnFactor) => ({
-      label: humanizeFeature(factor.feature),
       direction: factor.direction,
       directionLabel: factor.direction === "up" ? "เพิ่มความเสี่ยง" : "ลดความเสี่ยง",
+      label: humanizeFeature(factor.feature),
       valueText: formatFactorValue(factor.value),
     }));
 

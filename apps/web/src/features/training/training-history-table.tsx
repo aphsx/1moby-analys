@@ -7,9 +7,15 @@
  */
 
 import { History } from "lucide-react";
-import { EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill } from "@/components/ui";
-import type { TrainingRun } from "@/lib/ml-api";
+import {
+  EmptyState,
+  ProgressMeter,
+  SectionCard,
+  Skeleton,
+  StatusPill,
+} from "@/components/ui";
 import { formatRelative } from "@/features/runs/runs-utils";
+import type { TrainingRun } from "@/lib/ml-api";
 import {
   primaryResultSummary,
   promotedSummary,
@@ -20,13 +26,21 @@ import { getTimestamp } from "./training-utils";
 
 /** "1 ชม. 12 นาที" / "12 นาที" / "45 วิ" — duration between start and finish. */
 function formatDuration(startedAt: string, finishedAt: string | null): string {
-  if (!finishedAt) return "—";
+  if (!finishedAt) {
+    return "—";
+  }
   const ms = getTimestamp(finishedAt) - getTimestamp(startedAt);
-  if (ms <= 0) return "—";
+  if (ms <= 0) {
+    return "—";
+  }
   const totalSeconds = Math.round(ms / 1000);
-  if (totalSeconds < 60) return `${totalSeconds} วิ`;
+  if (totalSeconds < 60) {
+    return `${totalSeconds} วิ`;
+  }
   const totalMinutes = Math.floor(totalSeconds / 60);
-  if (totalMinutes < 60) return `${totalMinutes} นาที`;
+  if (totalMinutes < 60) {
+    return `${totalMinutes} นาที`;
+  }
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return minutes > 0 ? `${hours} ชม. ${minutes} นาที` : `${hours} ชม.`;
@@ -48,13 +62,17 @@ function GateResultCell({ run }: { run: TrainingRun }) {
   }
   const promoted = promotedSummary(run.results);
   const primary = primaryResultSummary(run.results);
-  if (!promoted && !primary) {
+  if (!(promoted || primary)) {
     return <span className="text-[color:var(--ink-5)]">ไม่มีผลลัพธ์</span>;
   }
   return (
     <div className="min-w-0">
-      {promoted && <div className="font-medium text-[color:var(--ink-2)]">{promoted}</div>}
-      {primary && <div className="text-[11.5px] text-[color:var(--ink-5)]">{primary}</div>}
+      {promoted && (
+        <div className="font-medium text-[color:var(--ink-2)]">{promoted}</div>
+      )}
+      {primary && (
+        <div className="text-[11.5px] text-[color:var(--ink-5)]">{primary}</div>
+      )}
     </div>
   );
 }
@@ -69,20 +87,20 @@ export function TrainingHistoryTable({
   return (
     <SectionCard
       eyebrow="Training history"
-      title="ประวัติการเทรนทั้งหมด"
       hint="หนึ่งแถวต่อหนึ่งรอบเทรน — ใหม่สุดอยู่บน ผล gate/promotion อยู่คอลัมน์ขวา"
+      title="ประวัติการเทรนทั้งหมด"
     >
       {loading ? (
         <div className="space-y-2">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-8" />
+          {[...new Array(4)].map((_, i) => (
+            <Skeleton className="h-8" key={i} />
           ))}
         </div>
       ) : runs.length === 0 ? (
         <EmptyState
+          hint="เลือก dataset ที่ Ready แล้วกด เทรน ด้านบน"
           icon={History}
           title="ยังไม่มี training run"
-          hint="เลือก dataset ที่ Ready แล้วกด เทรน ด้านบน"
         />
       ) : (
         <div className="overflow-x-auto rounded-[22px] border border-gray-200">
@@ -104,26 +122,40 @@ export function TrainingHistoryTable({
                 return (
                   <tr key={run.id}>
                     <td>
-                      <div className="font-medium text-[color:var(--ink-1)]">{run.dataset_name}</div>
+                      <div className="font-medium text-[color:var(--ink-1)]">
+                        {run.dataset_name}
+                      </div>
                       <div className="text-[11.5px] text-[color:var(--ink-5)]">
                         horizon {run.horizon_days} วัน
                       </div>
                     </td>
                     <td>
                       <div className="flex flex-col gap-1.5">
-                        <StatusPill tone={runStatusTone(run.status)} loading={inProgress}>
+                        <StatusPill
+                          loading={inProgress}
+                          tone={runStatusTone(run.status)}
+                        >
                           {runStatusLabel(run.status)}
                         </StatusPill>
                         {inProgress && run.progress && (
                           <div className="max-w-[200px]">
-                            <ProgressMeter value={run.progress.pct} label={run.progress.phase} />
+                            <ProgressMeter
+                              label={run.progress.phase}
+                              value={run.progress.pct}
+                            />
                           </div>
                         )}
                       </div>
                     </td>
-                    <td className="text-[color:var(--ink-3)]">{run.created_by_name ?? "—"}</td>
-                    <td className="num text-[color:var(--ink-3)]">{run.cutoff_date}</td>
-                    <td className="text-[color:var(--ink-3)]">{formatRelative(run.started_at)}</td>
+                    <td className="text-[color:var(--ink-3)]">
+                      {run.created_by_name ?? "—"}
+                    </td>
+                    <td className="num text-[color:var(--ink-3)]">
+                      {run.cutoff_date}
+                    </td>
+                    <td className="text-[color:var(--ink-3)]">
+                      {formatRelative(run.started_at)}
+                    </td>
                     <td className="num text-right text-[color:var(--ink-3)]">
                       {formatDuration(run.started_at, run.finished_at)}
                     </td>

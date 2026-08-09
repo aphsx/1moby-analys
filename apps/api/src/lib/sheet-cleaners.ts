@@ -10,8 +10,8 @@ import {
 } from "./train-clean-cell";
 export interface RawRowInput {
   excelRow: number;
-  rawRowId: number;
   payload: Record<string, unknown>;
+  rawRowId: number;
 }
 
 export type CleanSkipReason =
@@ -33,11 +33,14 @@ export function emptySkippedCounts(): Record<CleanSkipReason, number> {
   };
 }
 
-function payloadString(payload: Record<string, unknown>, excelKey: string): string | null {
+function payloadString(
+  payload: Record<string, unknown>,
+  excelKey: string
+): string | null {
   return parseCellString(payload[excelKey]);
 }
 
-function payloadNumericDefaultZero(
+function _payloadNumericDefaultZero(
   payload: Record<string, unknown>,
   excelKey: string
 ): string {
@@ -63,30 +66,34 @@ export function mapUserRow(
   lastSend: Date | null;
 }> {
   const accId = parseCellInt(raw.payload.acc_id);
-  if (accId == null) {
+  if (accId === null) {
     return { ok: false, reason: "customers_no_acc_id" };
   }
 
   const creditSmsKey = "user.credit + user.credit_premium";
   const creditSms =
-    parseCellNumeric(raw.payload[creditSmsKey] ?? raw.payload.credit_sms) ?? "0";
+    parseCellNumeric(raw.payload[creditSmsKey] ?? raw.payload.credit_sms) ??
+    "0";
   const creditEmail = parseCellNumeric(raw.payload.credit_email) ?? "0";
 
   const row = {
-    sourceId,
-    rawRowId: raw.rawRowId,
-    excelRow: raw.excelRow,
     accId,
-    statusSms: payloadString(raw.payload, "status (SMS)") ?? payloadString(raw.payload, "status_sms"),
-    creditSms,
     creditEmail,
-    expireSms: parseCellDateOnly(raw.payload.expire),
+    creditSms,
+    excelRow: raw.excelRow,
     expireEmail: parseCellDateOnly(raw.payload.expire_email),
-    statusEmail:
-      payloadString(raw.payload, "status (Email)") ?? payloadString(raw.payload, "status_email"),
+    expireSms: parseCellDateOnly(raw.payload.expire),
     joinDate: parseCellDateOnly(raw.payload.join_date),
     lastAccess: parseCellDate(raw.payload.last_access),
     lastSend: parseCellDate(raw.payload.last_send),
+    rawRowId: raw.rawRowId,
+    sourceId,
+    statusEmail:
+      payloadString(raw.payload, "status (Email)") ??
+      payloadString(raw.payload, "status_email"),
+    statusSms:
+      payloadString(raw.payload, "status (SMS)") ??
+      payloadString(raw.payload, "status_sms"),
   };
 
   return { ok: true, value: row };
@@ -107,7 +114,7 @@ export function mapPaymentRow(
   creditType: string | null;
 }> {
   const accId = parseCellInt(raw.payload.acc_id);
-  if (accId == null) {
+  if (accId === null) {
     return { ok: false, reason: "payments_no_acc_id" };
   }
 
@@ -119,15 +126,15 @@ export function mapPaymentRow(
   return {
     ok: true,
     value: {
-      sourceId,
-      rawRowId: raw.rawRowId,
-      excelRow: raw.excelRow,
       accId,
-      paymentUid: parseCellInt(raw.payload.uid),
-      paymentDate,
       amount: parseCellNumeric(raw.payload.amount),
       creditAdd: parseCellNumeric(raw.payload.credit_add),
       creditType: parseCellString(raw.payload.credit_type),
+      excelRow: raw.excelRow,
+      paymentDate,
+      paymentUid: parseCellInt(raw.payload.uid),
+      rawRowId: raw.rawRowId,
+      sourceId,
     },
   };
 }
@@ -149,29 +156,31 @@ export function mapUsageRow(
   usageSource: string;
 }> {
   const accId = parseCellInt(raw.payload.acc_id);
-  if (accId == null) {
+  if (accId === null) {
     return { ok: false, reason: "usage_no_acc_id" };
   }
 
   const year = parseCellInt(raw.payload.year);
   const month = parseCellInt(raw.payload.month);
   const warnings: string[] = [];
-  if (month != null && (month < 1 || month > 12)) {
-    warnings.push(`usage month out of range (${month}) at excel_row ${raw.excelRow}`);
+  if (month !== null && (month < 1 || month > 12)) {
+    warnings.push(
+      `usage month out of range (${month}) at excel_row ${raw.excelRow}`
+    );
   }
 
   return {
     ok: true,
     value: {
-      sourceId,
-      rawRowId: raw.rawRowId,
-      excelRow: raw.excelRow,
       accId,
-      year,
-      month,
-      usage: parseCellNumeric(raw.payload.usage) ?? "0",
       channel,
+      excelRow: raw.excelRow,
+      month,
+      rawRowId: raw.rawRowId,
+      sourceId,
+      usage: parseCellNumeric(raw.payload.usage) ?? "0",
       usageSource,
+      year,
     },
     warnings: warnings.length > 0 ? warnings : undefined,
   };

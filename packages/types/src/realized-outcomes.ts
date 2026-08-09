@@ -11,70 +11,70 @@ export type RealizedModelType = "churn" | "clv" | "credit";
 
 /** Calibration curve stored alongside realized churn metrics. */
 export interface RealizedCalibration {
+  ece: number;
   prob_pred: number[];
   prob_true: number[];
-  ece: number;
 }
 
 export interface RealizedLiftRow {
   decile: number;
-  share_of_churners: number;
   lift: number;
+  share_of_churners: number;
 }
 
 /** Measurement context persisted in business_metrics_json (snake_case keys). */
 export interface RealizedOutcomeContext {
-  actuals_source_id?: string;
   actuals_max_activity_date?: string;
-  predicted_customers?: number;
+  actuals_source_id?: string;
+  horizons_elapsed?: number[];
   label_population?: number;
   matched_customers?: number;
-  threshold?: number;
-  threshold_source?: string;
+  predicted_customers?: number;
+  predicted_total_clv?: number;
   realized_churn_rate?: number;
   realized_total_revenue?: number;
-  predicted_total_clv?: number;
-  horizons_elapsed?: number[];
+  threshold?: number;
+  threshold_source?: string;
   [key: string]: unknown;
 }
 
 /** One model's realized (production_holdout) evaluation for a prediction run. */
 export interface RealizedOutcome {
-  model_type: RealizedModelType;
-  model_version_id: string;
-  /** Version string of the served model (null if the version row was deleted). */
-  model_version: string | null;
-  evaluation_type: "production_holdout";
-  cutoff_date: string | null;
-  horizon_days: number | null;
-  /** Same metric keys as training-time evaluations (metrics_json). */
-  metrics: Record<string, number>;
-  context: RealizedOutcomeContext | null;
-  confusion_matrix: Record<string, number> | null;
   calibration: RealizedCalibration | null;
+  confusion_matrix: Record<string, number> | null;
+  context: RealizedOutcomeContext | null;
+  cutoff_date: string | null;
+  evaluation_type: "production_holdout";
+  horizon_days: number | null;
   lift_table: RealizedLiftRow[] | null;
   measured_at: string;
+  /** Same metric keys as training-time evaluations (metrics_json). */
+  metrics: Record<string, number>;
+  model_type: RealizedModelType;
+  /** Version string of the served model (null if the version row was deleted). */
+  model_version: string | null;
+  model_version_id: string;
 }
 
 /** GET /prediction-runs/:id/realized-outcomes */
 export interface RealizedOutcomesResponse {
-  prediction_run_id: string;
   cutoff_date: string;
   /** True once the backfill job has persisted at least one realized metric. */
   evaluated: boolean;
   outcomes: RealizedOutcome[];
+  prediction_run_id: string;
 }
 
 /** POST /outcome-backfill (admin) */
 export interface OutcomeBackfillRequest {
-  /** Measure one specific completed run; omit to backfill every eligible run. */
-  prediction_run_id?: string;
   /** Re-measure runs that already have production_holdout evaluations. */
   force?: boolean;
+  /** Measure one specific completed run; omit to backfill every eligible run. */
+  prediction_run_id?: string;
 }
 
 export interface OutcomeBackfillResponse {
   accepted: boolean;
-  prediction_run_id: string | null;
   force: boolean;
+  prediction_run_id: string | null;
 }

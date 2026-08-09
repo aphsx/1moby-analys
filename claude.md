@@ -38,7 +38,8 @@ docker compose up -d db redis        # just the backing services for local dev
 # Run everything in dev via Turbo (web :3000, api :3001)
 bun run dev
 bun run build                        # turbo build (web: next build; api: none)
-bun run lint                         # turbo lint — no per-app lint scripts yet, currently a no-op
+bun run lint                         # turbo lint — runs `tsc --noEmit` per app (web + api); same as typecheck
+bun run typecheck                    # turbo typecheck — identical to lint (tsc --noEmit)
 
 # Per-app dev (cd into the app)
 cd apps/web && bun run dev           # Next.js on :3000
@@ -55,7 +56,8 @@ python -m src.cli.predict --help                   # prediction CLI (src/predict
 
 ### Tests / verification
 
-There is **no unit-test framework** (no jest/vitest/pytest config). ML correctness is checked by the
+There is **no test suite yet** — `web`/`api` have a `bun test` script wired up (`bun run test`) but no
+test files exist under it, and there's no jest/vitest/pytest config. ML correctness is checked by the
 `apps/ml/scripts/verify_*.py` "contract" scripts — run them against a populated DB after changing the
 matching pipeline module:
 

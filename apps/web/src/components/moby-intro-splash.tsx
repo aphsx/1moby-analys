@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
+import { useEffect, useRef, useState } from "react";
 import { INTRO_ASSETS } from "@/lib/login-brand-colors";
 import styles from "./intro.module.css";
 
@@ -17,7 +17,9 @@ export function MobyIntroSplash() {
     const logo = logoRef.current;
     const cover = coverRef.current;
     const blue = blueRef.current;
-    if (!section || !logo || !cover || !blue) return;
+    if (!(section && logo && cover && blue)) {
+      return;
+    }
 
     gsap.set(logo, { opacity: 0, y: 0 });
     gsap.set(cover, { opacity: 0 });
@@ -27,26 +29,45 @@ export function MobyIntroSplash() {
       onComplete: () => setVisible(false),
     });
 
-    tl.to(logo, { opacity: 1, duration: 1, delay: 0 })
-      .to(cover, { opacity: 1, duration: 1.5, delay: -0.8, ease: "power3.out" })
-      .to(logo, { y: -120, opacity: 0, duration: 1.5, delay: -0.5, ease: "power3.out" })
-      .to(blue, { top: 0, duration: 0.7, delay: -1.8, ease: "power4.in" })
-      .to(section, { height: 0, delay: -1.7, duration: 0.8, ease: "power2.in" });
+    tl.to(logo, { delay: 0, duration: 1, opacity: 1 })
+      .to(cover, { delay: -0.8, duration: 1.5, ease: "power3.out", opacity: 1 })
+      .to(logo, {
+        delay: -0.5,
+        duration: 1.5,
+        ease: "power3.out",
+        opacity: 0,
+        y: -120,
+      })
+      .to(blue, { delay: -1.8, duration: 0.7, ease: "power4.in", top: 0 })
+      .to(section, {
+        delay: -1.7,
+        duration: 0.8,
+        ease: "power2.in",
+        height: 0,
+      });
 
     return () => {
       tl.kill();
     };
   }, []);
 
-  if (!visible) return null;
+  if (!visible) {
+    return null;
+  }
 
   return (
-    <div ref={sectionRef} className={styles.introSection} aria-hidden="true">
-      <div ref={logoRef} className={styles.logo}>
-        <img src={INTRO_ASSETS.logo} alt="" className="w-full h-auto" />
+    <div aria-hidden="true" className={styles.introSection} ref={sectionRef}>
+      <div className={styles.logo} ref={logoRef}>
+        <img
+          alt=""
+          className="h-auto w-full"
+          height={25}
+          src={INTRO_ASSETS.logo}
+          width={174}
+        />
       </div>
-      <div ref={blueRef} className={styles.bgBlue} />
-      <div ref={coverRef} className={styles.bgCover} />
+      <div className={styles.bgBlue} ref={blueRef} />
+      <div className={styles.bgCover} ref={coverRef} />
     </div>
   );
 }

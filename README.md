@@ -16,7 +16,8 @@ It ingests a fixed-schema Excel export, then predicts customer **churn**, segmen
 | **ML** (`apps/ml`) | Python 3.11 · FastAPI (health + internal job triggers) · LightGBM · XGBoost · SHAP · lifetimes · Optuna |
 | **Database** | PostgreSQL 15 (`pgvector/pgvector:pg15` image) · schema bootstrapped from `db/init/001_schema.sql` |
 | **Queue / progress** | Redis (Arq + Redis Streams for progress) |
-| **Monorepo** | Turborepo + Bun workspaces |
+| **Monorepo** | Turborepo + Bun workspaces |x
+
 
 ## Run it
 

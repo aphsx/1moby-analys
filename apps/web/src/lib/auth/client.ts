@@ -1,7 +1,7 @@
 "use client";
-import { createAuthClient } from "better-auth/react";
-import { inferAdditionalFields } from "better-auth/client/plugins";
 import { USER_PROFILE_FIELDS, USER_ROLE_FIELD } from "@moby/types";
+import { inferAdditionalFields } from "better-auth/client/plugins";
+import { createAuthClient } from "better-auth/react";
 
 // Auth routes through the Next.js proxy (/api/auth/* → Elysia /api/auth/*).
 // baseURL is omitted so Better Auth uses the same origin — no CORS, no extra env var.
@@ -11,8 +11,17 @@ export const authClient = createAuthClient({
   plugins: [
     // Mirror the server's user.additionalFields (single source: @moby/types) so
     // session.user is typed with givenName / familyName / locale / role.
-    inferAdditionalFields({ user: { ...USER_PROFILE_FIELDS, ...USER_ROLE_FIELD } }),
+    inferAdditionalFields({
+      user: { ...USER_PROFILE_FIELDS, ...USER_ROLE_FIELD },
+    }),
   ],
 });
 
-export const { signIn, signOut, useSession, getSession, updateUser, deleteUser } = authClient;
+export const {
+  signIn,
+  signOut,
+  useSession,
+  getSession,
+  updateUser,
+  deleteUser,
+} = authClient;

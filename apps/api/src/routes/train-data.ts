@@ -4,45 +4,49 @@
  * Org-shared model: reads are org-wide; importing is admin-only; deleting a
  * source is creator-or-admin.
  */
-import Elysia, { t } from "elysia";
+
 import { desc, eq } from "drizzle-orm";
+import Elysia, { t } from "elysia";
 import { db } from "../db/client";
 import { trainDataSources, user } from "../db/schema";
+import { releaseStaleTrainImports } from "../lib/abort-data-source";
 import { requireCreatorOrAdminForMutation } from "../lib/access-control";
 import { requireAdmin, requireUser } from "../lib/auth-middleware";
-import { UUID_RE } from "../lib/constants";
 import { getTrainCutoffSuggestion } from "../lib/clean-cutoff";
-import { prepareTrainDataSource } from "../lib/train-import";
-import { releaseStaleTrainImports } from "../lib/abort-data-source";
+import { UUID_RE } from "../lib/constants";
 import {
-  publishTrainPipelineProgress,
-  readLatestTrainImportStreamEntry,
-} from "../lib/train-import-stream";
+  isXlsxFilename,
+  mapDataSourceRow,
+} from "../lib/data-import/data-source-dto";
+import { prepareTrainDataSource } from "../lib/train-import";
 import {
   readImportBuffer,
   runTrainImportJob,
   runTrainImportPipeline,
 } from "../lib/train-import-orchestrator";
-import { isXlsxFilename, mapDataSourceRow } from "../lib/data-import/data-source-dto";
+import {
+  publishTrainPipelineProgress,
+  readLatestTrainImportStreamEntry,
+} from "../lib/train-import-stream";
 
 const sourceSelect = {
-  id: trainDataSources.id,
-  name: trainDataSources.name,
+  cleanedAt: trainDataSources.cleanedAt,
+  cleanManifest: trainDataSources.cleanManifest,
   clientLabel: trainDataSources.clientLabel,
-  originalFilename: trainDataSources.originalFilename,
+  createdAt: trainDataSources.createdAt,
+  errorMessage: trainDataSources.errorMessage,
   fileChecksumSha256: trainDataSources.fileChecksumSha256,
   fileSizeBytes: trainDataSources.fileSizeBytes,
-  importStatus: trainDataSources.importStatus,
+  id: trainDataSources.id,
   importedAt: trainDataSources.importedAt,
-  sheetManifest: trainDataSources.sheetManifest,
-  cleanManifest: trainDataSources.cleanManifest,
-  cleanedAt: trainDataSources.cleanedAt,
-  notes: trainDataSources.notes,
-  errorMessage: trainDataSources.errorMessage,
   importedBy: trainDataSources.importedBy,
-  createdAt: trainDataSources.createdAt,
-  importerName: user.name,
   importerEmail: user.email,
+  importerName: user.name,
+  importStatus: trainDataSources.importStatus,
+  name: trainDataSources.name,
+  notes: trainDataSources.notes,
+  originalFilename: trainDataSources.originalFilename,
+  sheetManifest: trainDataSources.sheetManifest,
 };
 
 // Admin-only: importing/replacing shared training data.
@@ -62,19 +66,19 @@ const adminTrainDataRoutes = new Elysia()
       try {
         const sourceId = await prepareTrainDataSource({
           buffer,
-          filename,
-          name: body.name,
           client_label: body.client_label ?? null,
-          notes: body.notes ?? null,
+          filename,
           imported_by: userId!,
+          name: body.name,
+          notes: body.notes ?? null,
         });
         const result = await runTrainImportPipeline({
           buffer,
-          filename,
-          name: body.name,
           client_label: body.client_label ?? null,
-          notes: body.notes ?? null,
+          filename,
           imported_by: userId!,
+          name: body.name,
+          notes: body.notes ?? null,
           sourceId,
         });
         return result;
@@ -90,9 +94,9 @@ const adminTrainDataRoutes = new Elysia()
     },
     {
       body: t.Object({
+        client_label: t.Optional(t.String()),
         file: t.File(),
         name: t.String({ minLength: 1 }),
-        client_label: t.Optional(t.String()),
         notes: t.Optional(t.String()),
       }),
     }
@@ -117,29 +121,29 @@ const adminTrainDataRoutes = new Elysia()
       try {
         const sourceId = await prepareTrainDataSource({
           buffer,
-          filename,
-          name: body.name,
           client_label: body.client_label ?? null,
-          notes: body.notes ?? null,
+          filename,
           imported_by: userId!,
+          name: body.name,
+          notes: body.notes ?? null,
         });
 
         await publishTrainPipelineProgress(sourceId, {
+          phase: "raw",
           progress: 3,
           step: "Upload received — connecting progress…",
-          phase: "raw",
         });
 
         runTrainImportJob(sourceId, {
           buffer,
-          filename,
-          name: body.name,
           client_label: body.client_label ?? null,
-          notes: body.notes ?? null,
+          filename,
           imported_by: userId!,
+          name: body.name,
+          notes: body.notes ?? null,
         });
 
-        return { source_id: sourceId, import_status: "importing" };
+        return { import_status: "importing", source_id: sourceId };
       } catch (e) {
         const err = e as Error & { code?: string; source_id?: string };
         if (err.code === "DUPLICATE_FILE") {
@@ -152,9 +156,9 @@ const adminTrainDataRoutes = new Elysia()
     },
     {
       body: t.Object({
+        client_label: t.Optional(t.String()),
         file: t.File(),
         name: t.String({ minLength: 1 }),
-        client_label: t.Optional(t.String()),
         notes: t.Optional(t.String()),
       }),
     }
@@ -178,10 +182,10 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
       const sourceId = params.id;
       const [row] = await db
         .select({
-          importStatus: trainDataSources.importStatus,
-          errorMessage: trainDataSources.errorMessage,
-          sheetManifest: trainDataSources.sheetManifest,
           cleanManifest: trainDataSources.cleanManifest,
+          errorMessage: trainDataSources.errorMessage,
+          importStatus: trainDataSources.importStatus,
+          sheetManifest: trainDataSources.sheetManifest,
         })
         .from(trainDataSources)
         .where(eq(trainDataSources.id, sourceId))
@@ -189,32 +193,35 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
 
       if (!row) {
         set.status = 404;
-        return { status: "not_found" as const, message: "Train data source not found" };
+        return {
+          message: "Train data source not found",
+          status: "not_found" as const,
+        };
       }
 
       // DB terminal state wins over Redis progress. Progress events are published
       // fire-and-forget and can arrive after the final "done" stream entry.
       if (row.importStatus === "ready") {
         return {
-          status: "ready" as const,
-          progress: 100,
-          step: "Ready for model training",
           phase: "clean" as const,
+          progress: 100,
           result: {
-            source_id: sourceId,
+            clean_manifest: row.cleanManifest ?? undefined,
             import_status: "ready",
             sheet_manifest: (row.sheetManifest ?? {}) as Record<string, number>,
-            clean_manifest: row.cleanManifest ?? undefined,
+            source_id: sourceId,
           },
+          status: "ready" as const,
+          step: "Ready for model training",
         };
       }
 
       if (row.importStatus === "failed") {
         return {
-          status: "failed" as const,
-          progress: 0,
-          step: row.errorMessage ?? "Import failed",
           message: row.errorMessage ?? "Import failed",
+          progress: 0,
+          status: "failed" as const,
+          step: row.errorMessage ?? "Import failed",
         };
       }
 
@@ -222,47 +229,47 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
 
       if (snap.kind === "done") {
         return {
-          status: "ready" as const,
-          progress: 100,
-          step: "Ready for model training",
           phase: "clean" as const,
+          progress: 100,
           result: {
-            source_id: snap.result.source_id,
+            clean_manifest: snap.result.clean_manifest,
+            file_checksum_sha256: snap.result.file_checksum_sha256,
             import_status: snap.result.import_status,
             sheet_manifest: snap.result.sheet_manifest,
-            file_checksum_sha256: snap.result.file_checksum_sha256,
-            clean_manifest: snap.result.clean_manifest,
+            source_id: snap.result.source_id,
           },
+          status: "ready" as const,
+          step: "Ready for model training",
         };
       }
 
       if (snap.kind === "failed") {
         return {
-          status: "failed" as const,
-          progress: 0,
-          step: snap.message,
-          message: snap.message,
           code: snap.code,
+          message: snap.message,
+          progress: 0,
           source_id: snap.source_id,
+          status: "failed" as const,
+          step: snap.message,
         };
       }
 
       if (snap.kind === "progress") {
         return {
-          status: "importing" as const,
-          progress: snap.event.progress,
-          step: snap.event.step,
           phase: snap.event.phase,
-          sheet: snap.event.sheet,
+          progress: snap.event.progress,
           rows: snap.event.rows,
+          sheet: snap.event.sheet,
+          status: "importing" as const,
+          step: snap.event.step,
         };
       }
 
       return {
-        status: "importing" as const,
-        progress: 0,
-        step: "Waiting for import to start…",
         phase: "raw" as const,
+        progress: 0,
+        status: "importing" as const,
+        step: "Waiting for import to start…",
       };
     },
     { params: t.Object({ id: t.String() }) }
@@ -306,14 +313,14 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
         params.id,
         HORIZON_DAYS
       );
-      if (!cutoff_date || !latest_data_date) {
+      if (!(cutoff_date && latest_data_date)) {
         set.status = 400;
         return { message: "No clean activity data for this source yet" };
       }
       return {
-        suggested_cutoff: cutoff_date,
-        latest_data_date: latest_data_date,
         horizon_days: HORIZON_DAYS,
+        latest_data_date,
+        suggested_cutoff: cutoff_date,
       };
     },
     { params: t.Object({ id: t.String() }) }
@@ -323,20 +330,32 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
     async ({ params, userId, isAdmin, set }) => {
       const [row] = await db
         .select({
-          importStatus: trainDataSources.importStatus,
           importedBy: trainDataSources.importedBy,
+          importStatus: trainDataSources.importStatus,
         })
         .from(trainDataSources)
         .where(eq(trainDataSources.id, params.id))
         .limit(1);
 
-      const denied = requireCreatorOrAdminForMutation(row, row?.importedBy, userId, isAdmin, set, {
-        notFound: "Train data source not found",
-        forbidden: "Only the importer of this data source or an admin can delete it.",
-      });
-      if (denied) return denied;
+      const denied = requireCreatorOrAdminForMutation(
+        row,
+        row?.importedBy,
+        userId,
+        isAdmin,
+        set,
+        {
+          forbidden:
+            "Only the importer of this data source or an admin can delete it.",
+          notFound: "Train data source not found",
+        }
+      );
+      if (denied) {
+        return denied;
+      }
 
-      await db.delete(trainDataSources).where(eq(trainDataSources.id, params.id));
+      await db
+        .delete(trainDataSources)
+        .where(eq(trainDataSources.id, params.id));
       return { deleted: true };
     },
     { params: t.Object({ id: t.String() }) }

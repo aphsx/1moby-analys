@@ -4,115 +4,125 @@
  * Org-shared model: reads are org-wide; importing is admin-only. A successful
  * import auto-triggers a prediction run (opt out with auto_run=false).
  */
-import Elysia, { t } from "elysia";
+
 import { desc, eq } from "drizzle-orm";
+import Elysia, { t } from "elysia";
 import { db } from "../db/client";
 import { predictDataSources, user } from "../db/schema";
-import { requireAdmin, requireUser } from "../lib/auth-middleware";
-import { denyNotFound } from "../lib/access-control";
-import { UUID_RE, MAX_UPLOAD_BYTES } from "../lib/constants";
-import { importPredictExcel, type PredictImportResult } from "../lib/predict-import";
 import { abortPredictDataSource } from "../lib/abort-data-source";
-import { cleanPredictFromRaw } from "../lib/predict-clean";
-import { isXlsxFilename, mapDataSourceRow } from "../lib/data-import/data-source-dto";
-import { getPredictCutoffSuggestion } from "../lib/clean-cutoff";
+import { denyNotFound } from "../lib/access-control";
+import { requireAdmin, requireUser } from "../lib/auth-middleware";
 import { createAutoPredictionRun } from "../lib/auto-prediction-run";
+import { getPredictCutoffSuggestion } from "../lib/clean-cutoff";
+import { MAX_UPLOAD_BYTES, UUID_RE } from "../lib/constants";
+import {
+  isXlsxFilename,
+  mapDataSourceRow,
+} from "../lib/data-import/data-source-dto";
+import { cleanPredictFromRaw } from "../lib/predict-clean";
+import {
+  importPredictExcel,
+  type PredictImportResult,
+} from "../lib/predict-import";
 
 const sourceSelect = {
-  id: predictDataSources.id,
-  name: predictDataSources.name,
+  cleanedAt: predictDataSources.cleanedAt,
+  cleanManifest: predictDataSources.cleanManifest,
   clientLabel: predictDataSources.clientLabel,
-  originalFilename: predictDataSources.originalFilename,
+  createdAt: predictDataSources.createdAt,
+  errorMessage: predictDataSources.errorMessage,
   fileChecksumSha256: predictDataSources.fileChecksumSha256,
   fileSizeBytes: predictDataSources.fileSizeBytes,
-  importStatus: predictDataSources.importStatus,
+  id: predictDataSources.id,
   importedAt: predictDataSources.importedAt,
-  sheetManifest: predictDataSources.sheetManifest,
-  cleanManifest: predictDataSources.cleanManifest,
-  cleanedAt: predictDataSources.cleanedAt,
-  notes: predictDataSources.notes,
-  errorMessage: predictDataSources.errorMessage,
   importedBy: predictDataSources.importedBy,
-  createdAt: predictDataSources.createdAt,
-  importerName: user.name,
   importerEmail: user.email,
+  importerName: user.name,
+  importStatus: predictDataSources.importStatus,
+  name: predictDataSources.name,
+  notes: predictDataSources.notes,
+  originalFilename: predictDataSources.originalFilename,
+  sheetManifest: predictDataSources.sheetManifest,
 };
 
 // Admin-only: importing/replacing shared predict data.
-const adminPredictDataRoutes = new Elysia()
-  .use(requireAdmin)
-  .post(
-    "/import",
-    async ({ body, userId, set }) => {
-      const filename = body.file.name ?? "upload.xlsx";
-      if (!isXlsxFilename(filename)) {
-        set.status = 400;
-        return { message: "Only .xlsx files are supported" };
-      }
-
-      const buffer = Buffer.from(await body.file.arrayBuffer());
-      if (buffer.length > MAX_UPLOAD_BYTES) {
-        set.status = 413;
-        return { message: `File exceeds ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit` };
-      }
-
-      const displayName = body.name?.trim() || filename;
-
-      let sourceId = "";
-
-      try {
-        const rawResult = await importPredictExcel({
-          buffer,
-          filename,
-          name: displayName,
-          imported_by: userId!,
-          client_label: body.client_label ?? null,
-          notes: body.notes ?? null,
-          deferReadyCatalog: true,
-        });
-        sourceId = rawResult.source_id;
-
-        const cleanManifest = await cleanPredictFromRaw(sourceId);
-        const result: PredictImportResult = {
-          ...rawResult,
-          import_status: "ready",
-          clean_manifest: cleanManifest,
-        };
-
-        // Auto prediction run (default on; opt out with auto_run=false). Fully
-        // isolated from import success — createAutoPredictionRun never throws.
-        const autoRunWanted = body.auto_run !== false && body.auto_run !== "false";
-        const autoRunId = autoRunWanted
-          ? await createAutoPredictionRun({
-              predictSourceId: sourceId,
-              sourceName: displayName,
-              createdBy: userId!,
-            })
-          : null;
-
-        return { ...result, auto_prediction_run_id: autoRunId };
-      } catch (e) {
-        const err = e as Error;
-        const message = err.message?.slice(0, 500) ?? "Import failed";
-        if (sourceId) {
-          await abortPredictDataSource(sourceId);
-        }
-        set.status = 400;
-        return { message };
-      }
-    },
-    {
-      body: t.Object({
-        file: t.File(),
-        name: t.Optional(t.String()),
-        client_label: t.Optional(t.String()),
-        notes: t.Optional(t.String()),
-        // Multipart form fields arrive as strings — accept both JSON booleans
-        // and "true"/"false" literals. Default (omitted) = auto-run enabled.
-        auto_run: t.Optional(t.Union([t.Boolean(), t.Literal("true"), t.Literal("false")])),
-      }),
+const _adminPredictDataRoutes = new Elysia().use(requireAdmin).post(
+  "/import",
+  async ({ body, userId, set }) => {
+    const filename = body.file.name ?? "upload.xlsx";
+    if (!isXlsxFilename(filename)) {
+      set.status = 400;
+      return { message: "Only .xlsx files are supported" };
     }
-  );
+
+    const buffer = Buffer.from(await body.file.arrayBuffer());
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      set.status = 413;
+      return {
+        message: `File exceeds ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit`,
+      };
+    }
+
+    const displayName = body.name?.trim() || filename;
+
+    let sourceId = "";
+
+    try {
+      const rawResult = await importPredictExcel({
+        buffer,
+        client_label: body.client_label ?? null,
+        deferReadyCatalog: true,
+        filename,
+        imported_by: userId!,
+        name: displayName,
+        notes: body.notes ?? null,
+      });
+      sourceId = rawResult.source_id;
+
+      const cleanManifest = await cleanPredictFromRaw(sourceId);
+      const result: PredictImportResult = {
+        ...rawResult,
+        clean_manifest: cleanManifest,
+        import_status: "ready",
+      };
+
+      // Auto prediction run (default on; opt out with auto_run=false). Fully
+      // isolated from import success — createAutoPredictionRun never throws.
+      const autoRunWanted =
+        body.auto_run !== false && body.auto_run !== "false";
+      const autoRunId = autoRunWanted
+        ? await createAutoPredictionRun({
+            createdBy: userId!,
+            predictSourceId: sourceId,
+            sourceName: displayName,
+          })
+        : null;
+
+      return { ...result, auto_prediction_run_id: autoRunId };
+    } catch (e) {
+      const err = e as Error;
+      const message = err.message?.slice(0, 500) ?? "Import failed";
+      if (sourceId) {
+        await abortPredictDataSource(sourceId);
+      }
+      set.status = 400;
+      return { message };
+    }
+  },
+  {
+    body: t.Object({
+      // Multipart form fields arrive as strings — accept both JSON booleans
+      // and "true"/"false" literals. Default (omitted) = auto-run enabled.
+      auto_run: t.Optional(
+        t.Union([t.Boolean(), t.Literal("true"), t.Literal("false")])
+      ),
+      client_label: t.Optional(t.String()),
+      file: t.File(),
+      name: t.Optional(t.String()),
+      notes: t.Optional(t.String()),
+    }),
+  }
+);
 
 export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
   .use(requireUser)
@@ -132,7 +142,9 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
       .where(eq(predictDataSources.id, params.id))
       .limit(1);
 
-    if (rows.length === 0) return denyNotFound(set, "Predict data source not found");
+    if (rows.length === 0) {
+      return denyNotFound(set, "Predict data source not found");
+    }
     return mapDataSourceRow(rows[0]);
   })
   // Suggested prediction cutoff = day after the latest observed activity
@@ -140,22 +152,27 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
   .get(
     "/:id/suggested-cutoff",
     async ({ params, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Predict data source not found");
+      if (!UUID_RE.test(params.id)) {
+        return denyNotFound(set, "Predict data source not found");
+      }
       const [source] = await db
         .select({ id: predictDataSources.id })
         .from(predictDataSources)
         .where(eq(predictDataSources.id, params.id))
         .limit(1);
-      if (!source) return denyNotFound(set, "Predict data source not found");
+      if (!source) {
+        return denyNotFound(set, "Predict data source not found");
+      }
 
-      const { cutoff_date, latest_data_date } = await getPredictCutoffSuggestion(params.id);
+      const { cutoff_date, latest_data_date } =
+        await getPredictCutoffSuggestion(params.id);
       if (!cutoff_date) {
         set.status = 400;
         return { message: "No clean activity data for this source yet" };
       }
       return {
+        latest_data_date,
         suggested_cutoff: cutoff_date,
-        latest_data_date: latest_data_date,
       };
     },
     { params: t.Object({ id: t.String() }) }
@@ -172,31 +189,32 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
       const buffer = Buffer.from(await body.file.arrayBuffer());
       if (buffer.length > MAX_UPLOAD_BYTES) {
         set.status = 413;
-        return { message: `File exceeds ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit` };
+        return {
+          message: `File exceeds ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit`,
+        };
       }
 
-      const displayName =
-        body.name?.trim() || filename;
+      const displayName = body.name?.trim() || filename;
 
       let sourceId = "";
 
       try {
         const rawResult = await importPredictExcel({
           buffer,
-          filename,
-          name: displayName,
-          imported_by: userId!,
           client_label: body.client_label ?? null,
-          notes: body.notes ?? null,
           deferReadyCatalog: true,
+          filename,
+          imported_by: userId!,
+          name: displayName,
+          notes: body.notes ?? null,
         });
         sourceId = rawResult.source_id;
 
         const cleanManifest = await cleanPredictFromRaw(sourceId);
         const result: PredictImportResult = {
           ...rawResult,
-          import_status: "ready",
           clean_manifest: cleanManifest,
+          import_status: "ready",
         };
 
         return result;
@@ -212,9 +230,9 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
     },
     {
       body: t.Object({
+        client_label: t.Optional(t.String()),
         file: t.File(),
         name: t.Optional(t.String()),
-        client_label: t.Optional(t.String()),
         notes: t.Optional(t.String()),
       }),
     }

@@ -11,15 +11,15 @@
  *  built-in user fields. `input: false` keeps them read-only from the client —
  *  they are only ever set by the Google profile mapping on sign-in. */
 export const USER_PROFILE_FIELDS = {
-  givenName: { type: "string", required: false, input: false },
-  familyName: { type: "string", required: false, input: false },
-  locale: { type: "string", required: false, input: false },
+  familyName: { input: false, required: false, type: "string" },
+  givenName: { input: false, required: false, type: "string" },
+  locale: { input: false, required: false, type: "string" },
 } as const;
 
 /** Keys of the OAuth-derived profile fields (`["givenName", "familyName", "locale"]`). */
-export const USER_PROFILE_FIELD_KEYS = Object.keys(USER_PROFILE_FIELDS) as Array<
-  keyof typeof USER_PROFILE_FIELDS
->;
+export const USER_PROFILE_FIELD_KEYS = Object.keys(
+  USER_PROFILE_FIELDS
+) as Array<keyof typeof USER_PROFILE_FIELDS>;
 
 export type UserProfileFieldKey = keyof typeof USER_PROFILE_FIELDS;
 
@@ -37,20 +37,25 @@ export type UserRole = (typeof USER_ROLE)[keyof typeof USER_ROLE];
 /** Better Auth `additionalFields` entry for the role column. `input: false`
  *  keeps it read-only from the client — only admins/bootstrap may change it. */
 export const USER_ROLE_FIELD = {
-  role: { type: "string", required: false, input: false, defaultValue: USER_ROLE.MEMBER },
+  role: {
+    defaultValue: USER_ROLE.MEMBER,
+    input: false,
+    required: false,
+    type: "string",
+  },
 } as const;
 
 /** The full authenticated-user shape (Better Auth built-ins + our profile fields). */
 export interface AuthUser {
-  id: string;
-  name: string;
+  createdAt: Date;
   email: string;
   emailVerified: boolean;
-  image: string | null;
-  givenName: string | null;
   familyName: string | null;
+  givenName: string | null;
+  id: string;
+  image: string | null;
   locale: string | null;
+  name: string;
   role: UserRole;
-  createdAt: Date;
   updatedAt: Date;
 }

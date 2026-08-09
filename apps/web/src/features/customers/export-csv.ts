@@ -5,7 +5,11 @@
  * correctly in Excel.
  */
 
-import { fetchRunOutputs, type OutputsQuery, type PredictionOutput } from "@/lib/ml-api";
+import {
+  fetchRunOutputs,
+  type OutputsQuery,
+  type PredictionOutput,
+} from "@/lib/ml-api";
 
 /** Server-enforced max page size for /prediction-runs/:id/outputs. */
 const EXPORT_PAGE_SIZE = 200;
@@ -14,12 +18,12 @@ const EXPORT_PAGE_SIZE = 200;
 export const EXPORT_ROW_CAP = 20_000;
 
 export interface ExportResult {
+  /** True when total exceeded EXPORT_ROW_CAP and the file was truncated. */
+  capped: boolean;
   /** Rows actually written to the CSV. */
   rows: number;
   /** Total rows matching the filters server-side. */
   total: number;
-  /** True when total exceeded EXPORT_ROW_CAP and the file was truncated. */
-  capped: boolean;
 }
 
 type CsvValue = string | number | boolean | null | undefined;
@@ -38,10 +42,22 @@ const CSV_COLUMNS: ReadonlyArray<{
   { header: "customer_value_tier", value: (r) => r.customer_value_tier },
   { header: "revenue_at_risk", value: (r) => r.revenue_at_risk },
   { header: "credit_urgency_level", value: (r) => r.credit_urgency_level },
-  { header: "estimated_days_until_topup", value: (r) => r.estimated_days_until_topup },
-  { header: "predicted_credit_usage_30d", value: (r) => r.predicted_credit_usage_30d },
-  { header: "predicted_credit_usage_90d", value: (r) => r.predicted_credit_usage_90d },
-  { header: "days_since_last_activity", value: (r) => r.days_since_last_activity },
+  {
+    header: "estimated_days_until_topup",
+    value: (r) => r.estimated_days_until_topup,
+  },
+  {
+    header: "predicted_credit_usage_30d",
+    value: (r) => r.predicted_credit_usage_30d,
+  },
+  {
+    header: "predicted_credit_usage_90d",
+    value: (r) => r.predicted_credit_usage_90d,
+  },
+  {
+    header: "days_since_last_activity",
+    value: (r) => r.days_since_last_activity,
+  },
   { header: "n_purchases", value: (r) => r.n_purchases },
   { header: "total_revenue", value: (r) => r.total_revenue },
   { header: "priority_score", value: (r) => r.priority_score },
@@ -51,10 +67,17 @@ const CSV_COLUMNS: ReadonlyArray<{
   { header: "output_status", value: (r) => r.output_status },
 ];
 
+const CSV_NEEDS_QUOTING_RE = /[",\n\r]/;
+const CSV_QUOTE_RE = /"/g;
+
 function csvCell(value: CsvValue): string {
-  if (value === null || value === undefined) return "";
+  if (value === null || value === undefined) {
+    return "";
+  }
   const text = String(value);
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  return CSV_NEEDS_QUOTING_RE.test(text)
+    ? `"${text.replace(CSV_QUOTE_RE, '""')}"`
+    : text;
 }
 
 function buildCsv(rows: PredictionOutput[]): string {
@@ -88,7 +111,9 @@ export async function fetchAllOutputsForExport(
       result.data.length === 0 ||
       rows.length >= total ||
       rows.length >= EXPORT_ROW_CAP;
-    if (done) break;
+    if (done) {
+      break;
+    }
     page += 1;
   }
 
@@ -98,7 +123,9 @@ export async function fetchAllOutputsForExport(
 /** Trigger a browser download of the rows as a UTF-8 (BOM) CSV. */
 export function downloadCsv(rows: PredictionOutput[], filename: string): void {
   const bom = "\uFEFF"; // UTF-8 BOM so Excel renders Thai text correctly.
-  const blob = new Blob([bom + buildCsv(rows)], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob([bom + buildCsv(rows)], {
+    type: "text/csv;charset=utf-8",
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -115,8 +142,12 @@ export async function exportOutputsCsv(
   baseQuery: Omit<OutputsQuery, "page" | "page_size">,
   onProgress?: (loaded: number, total: number) => void
 ): Promise<ExportResult> {
-  const { rows, total } = await fetchAllOutputsForExport(runId, baseQuery, onProgress);
+  const { rows, total } = await fetchAllOutputsForExport(
+    runId,
+    baseQuery,
+    onProgress
+  );
   const stamp = new Date().toISOString().slice(0, 10);
   downloadCsv(rows, `prediction-outputs-${runId.slice(0, 8)}-${stamp}.csv`);
-  return { rows: rows.length, total, capped: total > EXPORT_ROW_CAP };
+  return { capped: total > EXPORT_ROW_CAP, rows: rows.length, total };
 }
