@@ -23,7 +23,6 @@ import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { Select } from "@/components/select";
 import { SectionCard } from "@/components/ui";
 import { uploadPredictDataFile, type PredictDataSource } from "@/lib/api";
-import { ADMIN_ONLY_TITLE, useIsAdmin } from "@/lib/auth";
 import {
   createPredictionRun,
   fetchModelVersions,
@@ -268,19 +267,15 @@ export function CreateRunPanel({
   );
 }
 
-/** "+ import ใหม่" toggle that reveals an inline upload form (admin only). */
+/** "+ import ใหม่" toggle that reveals an inline upload form (any authenticated user). */
 function ImportToggleButton({ onImported }: { onImported: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
-  const { isAdmin, loading: roleLoading } = useIsAdmin();
-  const disabled = !roleLoading && !isAdmin;
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        disabled={disabled}
-        title={disabled ? ADMIN_ONLY_TITLE : undefined}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50"
       >
         <Plus size={14} />
         import ใหม่

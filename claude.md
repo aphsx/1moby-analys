@@ -13,9 +13,10 @@ Used by internal staff across multiple teams (~10–50 users). Analyzes uploaded
 predict customer churn, segment customers by CLV / value tier, and forecast credit consumption.
 
 **Access model (org-shared):** all data sources, runs, and dashboards are visible to every
-authenticated user. Two roles on `user.role`: `admin` (import data, trigger training, delete
+authenticated user. Two roles on `user.role`: `admin` (import train data, trigger training, delete
 anything, pin/delete model versions, trigger outcome backfill) and `member` (default — view
-everything, create prediction runs, AI chat). Bootstrap admins via `ADMIN_EMAILS` env.
+everything, import predict data, create prediction runs, AI chat). Bootstrap admins via
+`ADMIN_EMAILS` env.
 Deletes are creator-or-admin. AI chat conversations stay private per user, but Text-to-SQL
 queries are scoped org-wide (deterministic id allowlist in `apps/api/src/lib/ai/scope.ts`).
 
@@ -269,7 +270,7 @@ Prediction runs
   GET    /prediction-runs/:id/realized-outcomes realized metrics once horizon elapsed
 
 Data sources
-  POST   /predict-data-sources/import           [admin] import predict Excel (raw + clean);
+  POST   /predict-data-sources/import           import predict Excel (raw + clean);
                                                 auto-triggers a prediction run (auto_run=false to skip)
   POST   /train-data-sources/import             [admin] import train Excel (raw + clean)
   GET    /{train,predict}-data-sources[/...]    lists/detail/progress — org-wide reads
@@ -381,7 +382,8 @@ Done: ~~Realized-outcome loop~~ (shipped — `src/outcomes/`, `POST /outcome-bac
 
 - Is the run status updated to `in_progress`/`completed`/`failed` at the right points?
 - Are all Elysia routes behind `requireUser`? Reads are org-wide by design; writes that change
-  shared state (imports, training, champion pinning, backfill) must be behind `requireAdmin`.
+  shared training/model state (train import, training, champion pinning, backfill) must be behind
+  `requireAdmin`. Predict import + creating prediction runs are open to any authenticated user.
 - Do deletes enforce creator-or-admin and return 403 (not bypass) otherwise?
 - Are uploaded files validated (size, MIME, required sheet presence) before inserting?
 - Are batch inserts used (never row-by-row `for` loops)?
