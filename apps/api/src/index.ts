@@ -1,18 +1,15 @@
-import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
+import { cors } from "@elysiajs/cors";
 import { auth } from "./auth";
-import {
-  releaseStalePredict,
-  releaseStaleTrainImports,
-} from "./lib/abort-data-source";
-import { startStaleRunReaper } from "./lib/run-reaper";
+import { trainDataRoutes } from "./routes/train-data";
+import { predictDataRoutes } from "./routes/predict-data";
 import { aiChatRoutes } from "./routes/ai-chat";
+import { predictionRunRoutes } from "./routes/prediction-runs";
+import { trainingRunRoutes } from "./routes/training-runs";
 import { modelPerformanceRoutes } from "./routes/model-performance";
 import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
-import { predictDataRoutes } from "./routes/predict-data";
-import { predictionRunRoutes } from "./routes/prediction-runs";
-import { trainDataRoutes } from "./routes/train-data";
-import { trainingRunRoutes } from "./routes/training-runs";
+import { releaseStaleTrainImports, releaseStalePredict } from "./lib/abort-data-source";
+import { startStaleRunReaper } from "./lib/run-reaper";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -24,9 +21,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000")
 Promise.all([releaseStaleTrainImports(), releaseStalePredict()])
   .then(([train, predict]) => {
     if (train > 0 || predict > 0) {
-      console.log(
-        `[api] Released stale imports on startup: train=${train} predict=${predict}`
-      );
+      console.log(`[api] Released stale imports on startup: train=${train} predict=${predict}`);
     }
   })
   .catch((e) => console.error("[api] Failed to release stale imports:", e));
@@ -37,8 +32,8 @@ startStaleRunReaper();
 const app = new Elysia()
   .use(
     cors({
-      credentials: true,
       origin: ALLOWED_ORIGINS,
+      credentials: true,
     })
   )
   // Better Auth handles all /api/auth/* routes; returns null for everything else
@@ -57,11 +52,13 @@ const app = new Elysia()
   .use(modelPerformanceRoutes)
   // ML v2 — realized-outcome backfill trigger (TRAINING-PIPELINE §15, admin)
   .use(outcomeBackfillRoutes)
-  .get("/health", () => ({
-    db: "connected",
-    message: "ML v2 API: prediction-runs, training-runs, model-performance.",
-    status: "ok",
-  }))
+  .get("/health", () => {
+    return {
+      status: "ok",
+      db: "connected",
+      message: "ML v2 API: prediction-runs, training-runs, model-performance.",
+    };
+  })
   .listen(PORT);
 
 console.log(`[api] Elysia listening on port ${PORT}`);

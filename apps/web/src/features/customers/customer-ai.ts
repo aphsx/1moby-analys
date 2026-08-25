@@ -11,16 +11,10 @@ export function isCustomerAiGenerating(
   return inFlight || ai_status === "pending";
 }
 
-export function isCustomerAiGenerated({
-  ai_status,
-  ai_explanation,
-}: AiFields): boolean {
+export function isCustomerAiGenerated({ ai_status, ai_explanation }: AiFields): boolean {
   return ai_status === "completed" && Boolean(ai_explanation?.trim());
 }
 
-export function shouldConfirmAiOverwrite({
-  ai_status,
-  ai_explanation,
-}: AiFields): boolean {
-  return isCustomerAiGenerated({ ai_explanation, ai_status });
+export function shouldConfirmAiOverwrite({ ai_status, ai_explanation }: AiFields): boolean {
+  return isCustomerAiGenerated({ ai_status, ai_explanation });
 }

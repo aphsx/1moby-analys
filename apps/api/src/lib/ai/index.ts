@@ -10,23 +10,20 @@
  * re-exports what the rest of the app consumes.
  */
 
+// Chat assistant
+export { orchestrate, sseError, generateConversationTitle } from "./orchestrator";
+
 // Customer insight
 export {
-  type CustomerAiExplanationResponse,
   createCustomerAiExplanation,
+  type CustomerAiExplanationResponse,
 } from "./customer-ai-service";
-export {
-  loadCustomerPayments,
-  loadCustomerUsageMonthly,
-} from "./customer-dataset";
-// Chat assistant
-export {
-  generateConversationTitle,
-  orchestrate,
-  sseError,
-} from "./orchestrator";
 export {
   createRunInsight,
   getRunInsight,
   type RunInsight,
 } from "./run-insight";
+export {
+  loadCustomerPayments,
+  loadCustomerUsageMonthly,
+} from "./customer-dataset";

@@ -1,10 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db/client";
-import {
-  type MonthlyUsagePoint,
-  monthKeysBeforeCutoff,
-  type PaymentEvent,
-} from "../ml-contract";
+import { monthKeysBeforeCutoff, type MonthlyUsagePoint, type PaymentEvent } from "../ml-contract";
 
 export type PredictRunRef = {
   predictSourceId: string;
@@ -24,12 +20,8 @@ export type CustomerProfile = {
 };
 
 function toIsoDate(value: Date | string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
   return String(value);
 }
 
@@ -64,20 +56,18 @@ export async function loadCustomerProfile(
   `);
 
   const row = rows[0];
-  if (!row) {
-    return null;
-  }
+  if (!row) return null;
 
   return {
-    credit_email: row.credit_email ?? 0,
+    status_sms: row.status_sms,
+    status_email: row.status_email,
     credit_sms: row.credit_sms ?? 0,
-    expire_email: row.expire_email,
+    credit_email: row.credit_email ?? 0,
     expire_sms: row.expire_sms,
+    expire_email: row.expire_email,
     join_date: row.join_date,
     last_access: toIsoDate(row.last_access),
     last_send: toIsoDate(row.last_send),
-    status_email: row.status_email,
-    status_sms: row.status_sms,
   };
 }
 
@@ -115,12 +105,12 @@ export async function loadCustomerUsageMonthly(
   return monthKeysBeforeCutoff(run.cutoffDate).map((month) => {
     const row = byMonth.get(month);
     return {
-      api: row?.api ?? 0,
-      bc: row?.bc ?? 0,
-      email: row?.email ?? 0,
       month,
-      otp: row?.otp ?? 0,
       sms: row?.sms ?? 0,
+      email: row?.email ?? 0,
+      bc: row?.bc ?? 0,
+      api: row?.api ?? 0,
+      otp: row?.otp ?? 0,
       total: row?.total ?? 0,
     };
   });
@@ -150,9 +140,9 @@ export async function loadCustomerPayments(
   `);
 
   return rows.map((row) => ({
+    payment_date: new Date(row.payment_date).toISOString(),
     amount: row.amount,
     credit_add: row.credit_add,
     credit_type: row.credit_type,
-    payment_date: new Date(row.payment_date).toISOString(),
   }));
 }

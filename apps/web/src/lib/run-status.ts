@@ -10,27 +10,15 @@ import type { RunStatus } from "@/lib/ml-api";
 export type RunStatusTone = "brand" | "danger" | "info" | "neutral";
 
 export function runStatusTone(status: RunStatus): RunStatusTone {
-  if (status === "completed") {
-    return "brand";
-  }
-  if (status === "failed") {
-    return "danger";
-  }
-  if (status === "in_progress") {
-    return "info";
-  }
+  if (status === "completed") return "brand";
+  if (status === "failed") return "danger";
+  if (status === "in_progress") return "info";
   return "neutral";
 }
 
 export function runStatusLabel(status: RunStatus): string {
-  if (status === "completed") {
-    return "Completed";
-  }
-  if (status === "failed") {
-    return "Failed";
-  }
-  if (status === "in_progress") {
-    return "In progress";
-  }
+  if (status === "completed") return "Completed";
+  if (status === "failed") return "Failed";
+  if (status === "in_progress") return "In progress";
   return "Pending";
 }

@@ -1,14 +1,11 @@
 import type { TrainingRunResult } from "@/lib/ml-api";
 
 // Run status tone/label live in the shared module (single source for runs + training).
-export { runStatusLabel, runStatusTone } from "@/lib/run-status";
+export { runStatusTone, runStatusLabel } from "@/lib/run-status";
 
 export const DEFAULT_HORIZON_DAYS = 180;
 
-export const MODEL_TYPE_LABELS: Record<
-  TrainingRunResult["model_type"],
-  string
-> = {
+export const MODEL_TYPE_LABELS: Record<TrainingRunResult["model_type"], string> = {
   churn: "Churn",
   clv: "CLV",
   credit: "Credit",
@@ -31,12 +28,8 @@ export function beatsBaseline(result: TrainingRunResult): boolean {
 }
 
 /** Compact summary for the history table, e.g. "churn PR-AUC 0.712 ✓" */
-export function primaryResultSummary(
-  results: TrainingRunResult[] | null
-): string | null {
-  if (!results || results.length === 0) {
-    return null;
-  }
+export function primaryResultSummary(results: TrainingRunResult[] | null): string | null {
+  if (!results || results.length === 0) return null;
   const primary = results.find((r) => r.model_type === "churn") ?? results[0];
   return `${primary.model_type} ${primary.primary_metric_name} ${formatMetric(primary.primary_metric_value)} ${
     beatsBaseline(primary) ? "✓" : "✗"
@@ -44,12 +37,8 @@ export function primaryResultSummary(
 }
 
 /** "3/3 promoted" */
-export function promotedSummary(
-  results: TrainingRunResult[] | null
-): string | null {
-  if (!results || results.length === 0) {
-    return null;
-  }
+export function promotedSummary(results: TrainingRunResult[] | null): string | null {
+  if (!results || results.length === 0) return null;
   const promoted = results.filter((r) => r.promoted).length;
   return `${promoted}/${results.length} promoted`;
 }

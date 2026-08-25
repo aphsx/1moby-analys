@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { hasValidSession } from "@/lib/auth/session";
 
 const PUBLIC_PATHS = ["/login"];
@@ -9,10 +9,7 @@ export async function proxy(request: NextRequest) {
   // Legacy/alternate home URL — dashboard lives at `/`.
   if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
     const url = request.nextUrl.clone();
-    url.pathname =
-      pathname === "/dashboard"
-        ? "/"
-        : pathname.slice("/dashboard".length) || "/";
+    url.pathname = pathname === "/dashboard" ? "/" : pathname.slice("/dashboard".length) || "/";
     return NextResponse.redirect(url);
   }
 
@@ -21,9 +18,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (
-    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
-  ) {
+  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();
   }
 

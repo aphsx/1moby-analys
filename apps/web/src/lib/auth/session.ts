@@ -12,18 +12,14 @@ const ELYSIA_URL = process.env.ELYSIA_URL ?? "http://localhost:3001";
  */
 export async function hasValidSession(request: NextRequest): Promise<boolean> {
   const cookie = request.headers.get("cookie");
-  if (!cookie) {
-    return false;
-  }
+  if (!cookie) return false;
 
   try {
     const res = await fetch(`${ELYSIA_URL}/api/auth/get-session`, {
-      cache: "no-store",
       headers: { cookie },
+      cache: "no-store",
     });
-    if (!res.ok) {
-      return false;
-    }
+    if (!res.ok) return false;
     const session = (await res.json()) as { user?: { id?: string } } | null;
     return Boolean(session?.user?.id);
   } catch {

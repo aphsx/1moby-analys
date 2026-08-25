@@ -1,6 +1,6 @@
 export interface SplitMetrics {
-  metrics: Record<string, number>;
   split: "validation" | "test" | "backtest_avg";
+  metrics: Record<string, number>;
 }
 
 /**
@@ -10,54 +10,43 @@ export interface SplitMetrics {
  */
 export interface CandidateResult {
   algorithm: string;
-  cv_metric: string;
   cv_score: number | null;
+  cv_metric: string;
+  test_score?: number | null;
   gate_passed?: boolean;
   is_champion: boolean;
   reason?: string;
-  test_score?: number | null;
 }
 
 /** A trained model version, for the production-override version picker. */
 export interface ModelVersionSummary {
-  algorithm: string;
   id: string;
-  is_active: boolean;
   model_type: string;
+  version: string;
+  algorithm: string;
+  status: string;
+  is_active: boolean;
+  trained_at: string | null;
   primary_metric_name: string;
   primary_metric_value: number | null;
-  status: string;
-  trained_at: string | null;
-  version: string;
 }
 
 export interface ModelPerfEntry {
+  model_type: "lifecycle" | "churn" | "clv" | "credit";
+  method: string;
   algorithm: string;
-  baselines: { name: string; metrics: Record<string, number> }[];
-  calibration?: { prob_pred: number[]; prob_true: number[]; ece: number };
-  competition?: CandidateResult[];
-  confusion?: {
-    tp: number;
-    fp: number;
-    fn: number;
-    tn: number;
-    threshold: number;
-  };
+  version: string | null;
+  trained_at: string | null;
   cutoff_date: string | null;
   dataset_rows: number | null;
   feature_set: string | null;
-  lift_table?: { decile: number; share_of_churners: number; lift: number }[];
-  method: string;
-  model_type: "lifecycle" | "churn" | "clv" | "credit";
-  notes?: string;
-  primary_metric: {
-    name: string;
-    value: number | string;
-    baseline?: number;
-    baseline_name?: string;
-  };
+  primary_metric: { name: string; value: number | string; baseline?: number; baseline_name?: string };
   splits: SplitMetrics[];
+  baselines: { name: string; metrics: Record<string, number> }[];
+  competition?: CandidateResult[];
   thresholds?: Record<string, number>;
-  trained_at: string | null;
-  version: string | null;
+  calibration?: { prob_pred: number[]; prob_true: number[]; ece: number };
+  confusion?: { tp: number; fp: number; fn: number; tn: number; threshold: number };
+  lift_table?: { decile: number; share_of_churners: number; lift: number }[];
+  notes?: string;
 }

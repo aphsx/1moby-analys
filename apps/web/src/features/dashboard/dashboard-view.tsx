@@ -14,26 +14,19 @@ import { CreditUrgencyCard } from "./credit-urgency-card";
 import { LifecycleMixCard } from "./lifecycle-mix-card";
 import { MetricCard } from "./metric-card";
 import { MonthlyRevenueCard } from "./monthly-revenue-card";
-import { TEXT_SAFE } from "./palette";
 import { RiskCard } from "./risk-card";
-import { RunInsightCard } from "./run-insight-card";
 import { TopPriorityCard } from "./top-priority-card";
-import { fromRunSummary } from "./types";
 import { ValueCard } from "./value-card";
 import { ValueRiskMatrixCard } from "./value-risk-matrix-card";
+import { RunInsightCard } from "./run-insight-card";
+import { TEXT_SAFE } from "./palette";
+import { fromRunSummary } from "./types";
 
-export function DashboardView({
-  summary,
-  runId,
-}: {
-  summary: RunSummary;
-  runId: string;
-}) {
+export function DashboardView({ summary, runId }: { summary: RunSummary; runId: string }) {
   const { overview, monthlyRevenue } = fromRunSummary(summary);
   const activeHighRiskPct =
     overview.active_churn.base_customers > 0
-      ? (overview.active_churn.high / overview.active_churn.base_customers) *
-        100
+      ? (overview.active_churn.high / overview.active_churn.base_customers) * 100
       : 0;
 
   return (
@@ -55,39 +48,39 @@ export function DashboardView({
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard
-          hint={`run cutoff ${overview.run.cutoff_date}`}
           icon={Users}
           label="Total customers"
-          tone="brand"
           value={formatNumber(overview.totals.customers)}
+          hint={`run cutoff ${overview.run.cutoff_date}`}
+          tone="brand"
         />
         <MetricCard
-          hint={`${overview.monthly_value.months}-month avg from payment history (actual)`}
           icon={Gem}
           label="Avg monthly value"
-          tone="warn"
           value={formatCurrency(overview.monthly_value.avg_monthly_revenue)}
+          hint={`${overview.monthly_value.months}-month avg from payment history (actual)`}
+          tone="warn"
         />
         <MetricCard
-          hint={`${activeHighRiskPct.toFixed(1)}% of churn-eligible (active paid) — forecast`}
           icon={TrendingDown}
           label="Active high risk"
-          tone="danger"
           value={formatNumber(overview.active_churn.high)}
+          hint={`${activeHighRiskPct.toFixed(1)}% of churn-eligible (active paid) — forecast`}
+          tone="danger"
         />
         <MetricCard
-          hint="expected 6m loss across active paid — forecast"
           icon={CreditCard}
           label="Revenue at risk"
-          tone="warn"
           value={formatCurrency(overview.totals.revenue_at_risk)}
+          hint="expected 6m loss across active paid — forecast"
+          tone="warn"
         />
         <MetricCard
-          hint="การคาดการณ์ความต้องการในการใช้งาน SMS/Email"
           icon={CalendarClock}
           label="30d credit demand"
-          tone="brand"
           value={formatCredits(overview.credit.predicted_usage_30d)}
+          hint="การคาดการณ์ความต้องการในการใช้งาน SMS/Email"
+          tone="brand"
         />
       </section>
 
@@ -101,19 +94,17 @@ export function DashboardView({
           <ValueCard overview={overview} />
           <CreditUrgencyCard overview={overview} />
         </div>
-        <ValueRiskMatrixCard runId={runId} summary={summary} />
-        <TopPriorityCard runId={runId} summary={summary} />
+        <ValueRiskMatrixCard summary={summary} runId={runId} />
+        <TopPriorityCard summary={summary} runId={runId} />
       </section>
 
       <section className="surface mt-6 p-4">
-        <div
-          className={`flex min-w-0 flex-wrap items-center gap-3 text-[11px] text-[color:var(--ink-5)] ${TEXT_SAFE}`}
-        >
+        <div className={`flex min-w-0 flex-wrap items-center gap-3 text-[11px] text-[color:var(--ink-5)] ${TEXT_SAFE}`}>
           <ShieldCheck size={12} />
           Run: {overview.run.name} · cutoff {overview.run.cutoff_date}
           <span className="opacity-50">·</span>
-          Models: churn {summary.model_versions.churn} / clv{" "}
-          {summary.model_versions.clv} / credit {summary.model_versions.credit}
+          Models: churn {summary.model_versions.churn} / clv {summary.model_versions.clv} / credit{" "}
+          {summary.model_versions.credit}
         </div>
       </section>
     </main>

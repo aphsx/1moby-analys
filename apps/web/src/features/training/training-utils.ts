@@ -14,21 +14,11 @@ export type CleanCounts = {
   usage: number;
 };
 
-export function getCleanCounts(
-  source: TrainDataSource | null
-): CleanCounts | null {
+export function getCleanCounts(source: TrainDataSource | null): CleanCounts | null {
   const cleanManifest = source?.clean_manifest;
-  if (
-    !cleanManifest ||
-    typeof cleanManifest !== "object" ||
-    Array.isArray(cleanManifest)
-  ) {
-    return null;
-  }
+  if (!cleanManifest || typeof cleanManifest !== "object" || Array.isArray(cleanManifest)) return null;
   const clean = (cleanManifest as Record<string, unknown>).clean;
-  if (!clean || typeof clean !== "object" || Array.isArray(clean)) {
-    return null;
-  }
+  if (!clean || typeof clean !== "object" || Array.isArray(clean)) return null;
   const counts = clean as Record<string, unknown>;
   return {
     customers: Number(counts.customers ?? 0),
@@ -37,41 +27,23 @@ export function getCleanCounts(
   };
 }
 
-export function statusTone(
-  status: string
-): "brand" | "danger" | "neutral" | "info" {
-  if (status === "ready") {
-    return "brand";
-  }
-  if (status === "failed") {
-    return "danger";
-  }
-  if (status === "cleaning" || status === "importing") {
-    return "info";
-  }
+export function statusTone(status: string): "brand" | "danger" | "neutral" | "info" {
+  if (status === "ready") return "brand";
+  if (status === "failed") return "danger";
+  if (status === "cleaning" || status === "importing") return "info";
   return "neutral";
 }
 
 export function statusLabel(status: string): string {
-  if (status === "ready") {
-    return "Ready";
-  }
-  if (status === "failed") {
-    return "Failed";
-  }
-  if (status === "cleaning") {
-    return "Cleaning";
-  }
-  if (status === "importing") {
-    return "Importing";
-  }
+  if (status === "ready") return "Ready";
+  if (status === "failed") return "Failed";
+  if (status === "cleaning") return "Cleaning";
+  if (status === "importing") return "Importing";
   return "No dataset";
 }
 
 export function formatDate(value?: string | null): string {
-  if (!value) {
-    return "-";
-  }
+  if (!value) return "-";
   return new Date(value).toLocaleString("th-TH");
 }
 
@@ -80,9 +52,7 @@ export function formatFileSize(bytes: number): string {
 }
 
 export function getTimestamp(value?: string | null): number {
-  if (!value) {
-    return 0;
-  }
+  if (!value) return 0;
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
 }

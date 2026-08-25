@@ -1,18 +1,18 @@
 "use client";
+import { ReactNode, Suspense } from "react";
 import { usePathname } from "next/navigation";
-import { type ReactNode, Suspense } from "react";
+import Sidebar from "./sidebar";
+import AIChatWidget from "./ai-chat-widget";
+import { MobyIntroSplash } from "./moby-intro-splash";
+import { GlobalStatusDialogHost } from "./global-status-dialog-host";
+import RunSelector from "./run-selector";
+import { RunUrlSync } from "@/stores/run-url-sync";
 import {
   getRouteTitle,
   isBareRoute,
   shouldHideAiWidget,
   shouldShowRunSelector,
 } from "@/lib/nav";
-import { RunUrlSync } from "@/stores/run-url-sync";
-import AIChatWidget from "./ai-chat-widget";
-import { GlobalStatusDialogHost } from "./global-status-dialog-host";
-import { MobyIntroSplash } from "./moby-intro-splash";
-import RunSelector from "./run-selector";
-import Sidebar from "./sidebar";
 
 export default function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -43,8 +43,8 @@ export default function Shell({ children }: { children: ReactNode }) {
       )}
       <div className="flex h-screen overflow-hidden">
         <Sidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <header className="flex h-16 shrink-0 items-center justify-between gap-4 overflow-hidden border-gray-200 border-b bg-white px-8">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <header className="flex h-16 shrink-0 items-center justify-between gap-4 overflow-hidden border-b border-gray-200 bg-white px-8">
             {routeTitle ? (
               <div className="min-w-0 flex-1">
                 <h1 className="type-display truncate text-[20px] leading-tight">
@@ -61,11 +61,7 @@ export default function Shell({ children }: { children: ReactNode }) {
             )}
           </header>
           <main className="flex-1 overflow-y-auto">
-            <Suspense
-              fallback={
-                <div className="p-8 text-[color:var(--ink-5)]">Loading…</div>
-              }
-            >
+            <Suspense fallback={<div className="p-8 text-[color:var(--ink-5)]">Loading…</div>}>
               {children}
             </Suspense>
           </main>

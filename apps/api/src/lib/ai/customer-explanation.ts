@@ -20,11 +20,8 @@
  *   ## ข้อสังเกต          — only when dataset and model output conflict
  */
 
-import type {
-  CustomerAiContext,
-  CustomerAiSignals,
-} from "./customer-ai-context";
-import { type ChatMessage, complete } from "./llm-client";
+import type { CustomerAiContext, CustomerAiSignals } from "./customer-ai-context";
+import { complete, type ChatMessage } from "./llm-client";
 import { getLLMConfig, isLLMConfigured } from "./llm-config";
 import { renderGuardrails } from "./safety";
 
@@ -72,23 +69,16 @@ ${renderGuardrails()}
 ## ข้อสังเกต
 [เฉพาะเมื่อพบความขัดแย้งหรือความผิดปกติในข้อมูล ถ้าไม่มีให้เขียน "ไม่มี"]`;
 
-function formatChurnFactors(
-  factors: CustomerAiContext["ml_output"]["churn_factors"]
-): string {
-  if (!factors || factors.length === 0) {
-    return "N/A";
-  }
+function formatChurnFactors(factors: CustomerAiContext["ml_output"]["churn_factors"]): string {
+  if (!factors || factors.length === 0) return "N/A";
   return factors
     .slice(0, 5)
-    .map(
-      (f) =>
-        `${f.feature} (${f.direction === "up" ? "เพิ่มความเสี่ยง" : "ลดความเสี่ยง"}, ค่า=${f.value})`
-    )
+    .map((f) => `${f.feature} (${f.direction === "up" ? "เพิ่มความเสี่ยง" : "ลดความเสี่ยง"}, ค่า=${f.value})`)
     .join("; ");
 }
 
 function formatPct(value: number | null): string {
-  return value === null ? "N/A" : `${value > 0 ? "+" : ""}${value}%`;
+  return value == null ? "N/A" : `${value > 0 ? "+" : ""}${value}%`;
 }
 
 function formatSignals(s: CustomerAiSignals): string {
@@ -117,9 +107,7 @@ function formatContext(ctx: CustomerAiContext): string {
   const usageSummary = usage_monthly
     .slice(-12)
     .reverse()
-    .map(
-      (u) => `  ${u.month}: รวม ${u.total} (SMS ${u.sms} / Email ${u.email})`
-    )
+    .map((u) => `  ${u.month}: รวม ${u.total} (SMS ${u.sms} / Email ${u.email})`)
     .join("\n");
 
   // payments arrive newest-first from the loader — take the most recent 12.
@@ -149,14 +137,14 @@ ${paymentSummary || "  No payment data"}
 
 === ML MODEL OUTPUT ===
 Lifecycle: ${ml_output.lifecycle_stage ?? "N/A"} / ${ml_output.sub_stage ?? "N/A"}
-Churn probability: ${ml_output.churn_probability === null ? "N/A" : `${(ml_output.churn_probability * 100).toFixed(1)}%`}
+Churn probability: ${ml_output.churn_probability != null ? (ml_output.churn_probability * 100).toFixed(1) + "%" : "N/A"}
 Churn risk level: ${ml_output.churn_risk_level ?? "N/A"}
 Days since last activity: ${ml_output.days_since_last_activity ?? "N/A"} (derived from customer activity signals; do not equate this with Last access unless the dates match)
 Usage trend: ${ml_output.usage_trend ?? "N/A"}
 Priority score: ${ml_output.priority_score ?? "N/A"}
-Revenue at risk: ${ml_output.revenue_at_risk === null ? "N/A" : `฿${ml_output.revenue_at_risk.toLocaleString()}`}
-Predicted CLV 6m: ${ml_output.predicted_clv_6m === null ? "N/A" : `฿${ml_output.predicted_clv_6m.toLocaleString()}`}
-P(alive): ${ml_output.p_alive === null ? "N/A" : `${(ml_output.p_alive * 100).toFixed(1)}%`}
+Revenue at risk: ${ml_output.revenue_at_risk != null ? "฿" + ml_output.revenue_at_risk.toLocaleString() : "N/A"}
+Predicted CLV 6m: ${ml_output.predicted_clv_6m != null ? "฿" + ml_output.predicted_clv_6m.toLocaleString() : "N/A"}
+P(alive): ${ml_output.p_alive != null ? (ml_output.p_alive * 100).toFixed(1) + "%" : "N/A"}
 Churn factors: ${formatChurnFactors(ml_output.churn_factors)}
 </data>`;
 }
@@ -165,24 +153,20 @@ export async function generateCustomerAiExplanation(
   context: CustomerAiContext
 ): Promise<CustomerAiExplanationResult> {
   if (!isLLMConfigured()) {
-    throw new Error(
-      "กรุณาตั้งค่า LLM_API_KEY (หรือ OLLAMA_API_KEY) ใน .env ก่อนใช้ Gen AI"
-    );
+    throw new Error("กรุณาตั้งค่า LLM_API_KEY (หรือ OLLAMA_API_KEY) ใน .env ก่อนใช้ Gen AI");
   }
 
   const llmConfig = getLLMConfig();
   const messages: ChatMessage[] = [
-    { content: SYSTEM_PROMPT, role: "system" },
-    { content: formatContext(context), role: "user" },
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: formatContext(context) },
   ];
 
   const text = (
     await complete(messages, { config: llmConfig, temperature: 0.2 })
   ).trim();
 
-  if (!text) {
-    throw new Error("LLM returned an empty explanation");
-  }
+  if (!text) throw new Error("LLM returned an empty explanation");
   assertNoBuddhistYears(text);
   return { explanation: text, model: llmConfig.model };
 }

@@ -11,51 +11,51 @@
 
 // ── SSE event names (mirrored by the web store) ──────────────────────────────
 export const SSE_EVENT = {
+  THINKING: "thinking",
+  TOKEN: "token",
+  EVIDENCE: "evidence",
+  TITLE: "title",
   DONE: "done",
   ERROR: "error",
-  EVIDENCE: "evidence",
-  THINKING: "thinking",
-  TITLE: "title",
-  TOKEN: "token",
 } as const;
 export type SseEventName = (typeof SSE_EVENT)[keyof typeof SSE_EVENT];
 
 // ── Planner step ids (stable; UI may key labels/icons off these) ─────────────
 export const STEP = {
-  ANSWER: "answer",
   PLAN: "plan",
-  RETRY: "retry",
   SQL: "sql",
+  RETRY: "retry",
+  ANSWER: "answer",
 } as const;
 export type StepId = (typeof STEP)[keyof typeof STEP];
 
 // ── Stable error codes ───────────────────────────────────────────────────────
 export const ERROR_CODE = {
-  AI_SAFETY_BLOCKED: "ai_safety_blocked",
   LLM_NOT_CONFIGURED: "llm_not_configured",
+  AI_SAFETY_BLOCKED: "ai_safety_blocked",
   LLM_STREAM_FAILED: "llm_stream_failed",
-  ORCHESTRATOR_ERROR: "orchestrator_error",
   STREAM_ERROR: "stream_error",
+  ORCHESTRATOR_ERROR: "orchestrator_error",
 } as const;
 
 // ── Thai status copy shown as inline "thinking" labels ───────────────────────
 export const STATUS_COPY = {
-  COMPOSING: "กำลังเรียบเรียงคำตอบ…",
-  COMPOSING_FROM_RESULT: "กำลังเรียบเรียงคำตอบจากผลที่ได้…",
   PLANNING: "กำลังวิเคราะห์คำถาม…",
   QUERYING_DB: "กำลังดึงข้อมูลจากฐานข้อมูล…",
   QUERYING_TABLE: (table: string) => `กำลังดึงข้อมูลจาก ${table}…`,
   RETRYING_SQL: "ปรับ query แล้วลองใหม่อีกครั้ง…",
   SUMMARIZING_ROWS: (rows: number) => `กำลังสรุปจากข้อมูล ${rows} แถว…`,
+  COMPOSING_FROM_RESULT: "กำลังเรียบเรียงคำตอบจากผลที่ได้…",
+  COMPOSING: "กำลังเรียบเรียงคำตอบ…",
 } as const;
 
 // ── Terminal / fallback messages ─────────────────────────────────────────────
 export const MESSAGE = {
   LLM_NOT_CONFIGURED:
     "กรุณาตั้งค่า LLM_API_KEY (หรือ OLLAMA_API_KEY) ใน .env ก่อนใช้งาน",
-  NO_EVIDENCE: "ไม่มี evidence จากฐานข้อมูล",
-  NO_ROWS: "query สำเร็จแต่ไม่พบข้อมูลที่ตรงกัน",
   SAFETY_BLOCKED: "คำถามถูกบล็อกโดย AI safety policy",
+  NO_ROWS: "query สำเร็จแต่ไม่พบข้อมูลที่ตรงกัน",
+  NO_EVIDENCE: "ไม่มี evidence จากฐานข้อมูล",
 } as const;
 
 // ── Limits ───────────────────────────────────────────────────────────────────

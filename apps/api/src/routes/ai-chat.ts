@@ -20,15 +20,15 @@
  *   POST   /ai-chat/conversations/:id/messages → SSE stream
  */
 
-import { and, desc, eq } from "drizzle-orm";
 import Elysia, { t } from "elysia";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { aiConversations, aiMessages, mlPredictionRuns } from "../db/schema";
+import { requireUser } from "../lib/auth-middleware";
 import { denyNotFound } from "../lib/access-control";
 import { orchestrate, sseError } from "../lib/ai";
-import { DEFAULT_CONVERSATION_TITLE, ERROR_CODE } from "../lib/ai/constants";
 import { getLLMConfig, isLLMConfigured } from "../lib/ai/llm-config";
-import { requireUser } from "../lib/auth-middleware";
+import { DEFAULT_CONVERSATION_TITLE, ERROR_CODE } from "../lib/ai/constants";
 import { UUID_RE } from "../lib/constants";
 
 const MAX_MESSAGE_CHARS = 12_000;
@@ -46,9 +46,7 @@ async function getConversation(id: string, userId: string) {
 
 /** Verify a prediction run exists before binding a chat to it (org-shared). */
 async function runExists(runId: string): Promise<boolean> {
-  if (!UUID_RE.test(runId)) {
-    return false;
-  }
+  if (!UUID_RE.test(runId)) return false;
   const [row] = await db
     .select({ id: mlPredictionRuns.id })
     .from(mlPredictionRuns)
@@ -65,30 +63,23 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   // ── Public LLM config (so the UI shows the real provider/model) ──────────────
   .get("/config", () => {
     const c = getLLMConfig();
-    return {
-      configured: isLLMConfigured(),
-      model: c.model,
-      provider: c.provider,
-    };
+    return { configured: isLLMConfigured(), provider: c.provider, model: c.model };
   })
 
   // ── List conversations (+ bound run name) ────────────────────────────────────
   .get("/conversations", async ({ userId }) => {
     const convs = await db
       .select({
-        archived: aiConversations.archived,
-        createdAt: aiConversations.createdAt,
         id: aiConversations.id,
+        title: aiConversations.title,
+        archived: aiConversations.archived,
         runId: aiConversations.runId,
         runName: mlPredictionRuns.name,
-        title: aiConversations.title,
+        createdAt: aiConversations.createdAt,
         updatedAt: aiConversations.updatedAt,
       })
       .from(aiConversations)
-      .leftJoin(
-        mlPredictionRuns,
-        eq(aiConversations.runId, mlPredictionRuns.id)
-      )
+      .leftJoin(mlPredictionRuns, eq(aiConversations.runId, mlPredictionRuns.id))
       .where(eq(aiConversations.userId, userId!))
       .orderBy(desc(aiConversations.updatedAt))
       .limit(100);
@@ -103,24 +94,24 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
       if (body.run_id) {
         if (!(await runExists(body.run_id))) {
           set.status = 404;
-          return { code: "run_not_found", message: "Prediction run not found" };
+          return { message: "Prediction run not found", code: "run_not_found" };
         }
         runId = body.run_id;
       }
       const [conv] = await db
         .insert(aiConversations)
         .values({
+          userId: userId!,
           runId,
           title: body.title?.trim() || DEFAULT_CONVERSATION_TITLE,
-          userId: userId!,
         })
         .returning();
       return conv;
     },
     {
       body: t.Object({
-        run_id: t.Optional(t.String()),
         title: t.Optional(t.String({ maxLength: 100 })),
+        run_id: t.Optional(t.String()),
       }),
     }
   )
@@ -129,22 +120,18 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   .get(
     "/conversations/:id",
     async ({ params, userId, set }) => {
-      if (!UUID_RE.test(params.id)) {
-        return denyNotFound(set, "Not found");
-      }
+      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Not found");
       const conv = await getConversation(params.id, userId!);
-      if (!conv) {
-        return denyNotFound(set, "Conversation not found");
-      }
+      if (!conv) return denyNotFound(set, "Conversation not found");
 
       const msgs = await db
         .select({
-          content: aiMessages.content,
-          createdAt: aiMessages.createdAt,
-          evidenceJson: aiMessages.evidenceJson,
           id: aiMessages.id,
-          model: aiMessages.model,
           role: aiMessages.role,
+          content: aiMessages.content,
+          evidenceJson: aiMessages.evidenceJson,
+          model: aiMessages.model,
+          createdAt: aiMessages.createdAt,
         })
         .from(aiMessages)
         .where(eq(aiMessages.conversationId, params.id))
@@ -160,23 +147,15 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   .patch(
     "/conversations/:id",
     async ({ params, body, userId, set }) => {
-      if (!UUID_RE.test(params.id)) {
-        return denyNotFound(set, "Not found");
-      }
+      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Not found");
       const conv = await getConversation(params.id, userId!);
-      if (!conv) {
-        return denyNotFound(set, "Conversation not found");
-      }
+      if (!conv) return denyNotFound(set, "Conversation not found");
 
       const updates: { title?: string; archived?: boolean; updatedAt: Date } = {
         updatedAt: new Date(),
       };
-      if (body.title !== undefined) {
-        updates.title = body.title.trim().slice(0, 100) || conv.title;
-      }
-      if (body.archived !== undefined) {
-        updates.archived = body.archived;
-      }
+      if (body.title !== undefined) updates.title = body.title.trim().slice(0, 100) || conv.title;
+      if (body.archived !== undefined) updates.archived = body.archived;
 
       const [updated] = await db
         .update(aiConversations)
@@ -186,11 +165,11 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
       return updated;
     },
     {
-      body: t.Object({
-        archived: t.Optional(t.Boolean()),
-        title: t.Optional(t.String({ maxLength: 100 })),
-      }),
       params: t.Object({ id: t.String() }),
+      body: t.Object({
+        title: t.Optional(t.String({ maxLength: 100 })),
+        archived: t.Optional(t.Boolean()),
+      }),
     }
   )
 
@@ -198,13 +177,9 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   .delete(
     "/conversations/:id",
     async ({ params, userId, set }) => {
-      if (!UUID_RE.test(params.id)) {
-        return denyNotFound(set, "Not found");
-      }
+      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Not found");
       const conv = await getConversation(params.id, userId!);
-      if (!conv) {
-        return denyNotFound(set, "Conversation not found");
-      }
+      if (!conv) return denyNotFound(set, "Conversation not found");
 
       await db.delete(aiConversations).where(eq(aiConversations.id, params.id));
       set.status = 204;
@@ -217,13 +192,9 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   .post(
     "/conversations/:id/messages",
     async ({ params, body, userId, set }) => {
-      if (!UUID_RE.test(params.id)) {
-        return denyNotFound(set, "Conversation not found");
-      }
+      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Conversation not found");
       const conv = await getConversation(params.id, userId!);
-      if (!conv) {
-        return denyNotFound(set, "Conversation not found");
-      }
+      if (!conv) return denyNotFound(set, "Conversation not found");
 
       const userMessage = body.message.trim();
       if (!userMessage) {
@@ -237,29 +208,24 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
         .from(aiMessages)
         .where(eq(aiMessages.conversationId, params.id))
         .limit(1);
-      const generateTitle =
-        !firstMsg && conv.title === DEFAULT_CONVERSATION_TITLE;
+      const generateTitle = !firstMsg && conv.title === DEFAULT_CONVERSATION_TITLE;
 
       const gen = orchestrate({
-        boundRunId: conv.runId ?? null,
         conversationId: params.id,
-        generateTitle,
         userId: userId!,
         userMessage,
+        boundRunId: conv.runId ?? null,
+        generateTitle,
       });
 
       const readable = new ReadableStream<Uint8Array>({
         async start(controller) {
           const enc = new TextEncoder();
           try {
-            for await (const chunk of gen) {
-              controller.enqueue(enc.encode(chunk));
-            }
+            for await (const chunk of gen) controller.enqueue(enc.encode(chunk));
           } catch (err) {
             const msg = err instanceof Error ? err.message : "Stream error";
-            controller.enqueue(
-              enc.encode(sseError(msg, ERROR_CODE.STREAM_ERROR))
-            );
+            controller.enqueue(enc.encode(sseError(msg, ERROR_CODE.STREAM_ERROR)));
           } finally {
             controller.close();
           }
@@ -268,17 +234,17 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
 
       return new Response(readable, {
         headers: {
+          "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
-          "Content-Type": "text/event-stream",
           "X-Accel-Buffering": "no",
         },
       });
     },
     {
-      body: t.Object({
-        message: t.String({ maxLength: MAX_MESSAGE_CHARS, minLength: 1 }),
-      }),
       params: t.Object({ id: t.String() }),
+      body: t.Object({
+        message: t.String({ minLength: 1, maxLength: MAX_MESSAGE_CHARS }),
+      }),
     }
   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRunStore } from "./run-store";
 
 /**
@@ -19,18 +19,14 @@ export function RunUrlSync() {
   // Deep links win over the persisted value.
   useEffect(() => {
     const fromUrl = sp.get("run");
-    if (fromUrl) {
-      setRunId(fromUrl);
-    }
+    if (fromUrl) setRunId(fromUrl);
   }, [sp, setRunId]);
 
   // Write the active run back into the URL (or drop a stale ?run= param).
   useEffect(() => {
     const params = new URLSearchParams(Array.from(sp.entries()));
     if (!runId) {
-      if (!params.has("run")) {
-        return;
-      }
+      if (!params.has("run")) return;
       params.delete("run");
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });

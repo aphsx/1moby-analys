@@ -48,9 +48,7 @@ export type CustomerAiContext = {
 function daysBetween(fromIso: string, toIso: string): number | null {
   const from = new Date(fromIso).getTime();
   const to = new Date(toIso).getTime();
-  if (!(Number.isFinite(from) && Number.isFinite(to))) {
-    return null;
-  }
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
   return Math.round((to - from) / 86_400_000);
 }
 
@@ -63,33 +61,27 @@ function computeSignals(
   // Short window (3m vs prior 3m): catches recent momentum shifts.
   const recent3 = totals.slice(-3).reduce((a, b) => a + b, 0);
   const prior3 = totals.slice(-6, -3).reduce((a, b) => a + b, 0);
-  const usageChangePct =
-    prior3 > 0 ? ((recent3 - prior3) / prior3) * 100 : null;
+  const usageChangePct = prior3 > 0 ? ((recent3 - prior3) / prior3) * 100 : null;
   // Long window (6m vs prior 6m): smooths out seasonal dips so the AI does not
   // call a customer "declining" off a single soft quarter when the year trends up.
   const recent6 = totals.slice(-6).reduce((a, b) => a + b, 0);
   const prior6 = totals.slice(-12, -6).reduce((a, b) => a + b, 0);
-  const usageChange6mPct =
-    prior6 > 0 ? ((recent6 - prior6) / prior6) * 100 : null;
+  const usageChange6mPct = prior6 > 0 ? ((recent6 - prior6) / prior6) * 100 : null;
 
   // payments arrive newest-first from the loader.
   const lastPayment = payments[0]?.payment_date ?? null;
 
   return {
-    last_payment_days_before_cutoff: lastPayment
-      ? daysBetween(lastPayment, cutoffDate)
-      : null,
     months_with_usage: totals.filter((t) => t > 0).length,
-    n_payments: payments.length,
-    prior_3m_usage: Math.round(prior3),
-    prior_6m_usage: Math.round(prior6),
     recent_3m_usage: Math.round(recent3),
+    prior_3m_usage: Math.round(prior3),
+    usage_change_pct: usageChangePct == null ? null : Math.round(usageChangePct),
     recent_6m_usage: Math.round(recent6),
+    prior_6m_usage: Math.round(prior6),
+    usage_change_6m_pct: usageChange6mPct == null ? null : Math.round(usageChange6mPct),
+    last_payment_days_before_cutoff: lastPayment ? daysBetween(lastPayment, cutoffDate) : null,
     total_paid: Math.round(payments.reduce((a, p) => a + (p.amount ?? 0), 0)),
-    usage_change_6m_pct:
-      usageChange6mPct === null ? null : Math.round(usageChange6mPct),
-    usage_change_pct:
-      usageChangePct === null ? null : Math.round(usageChangePct),
+    n_payments: payments.length,
   };
 }
 
@@ -105,14 +97,14 @@ export async function buildCustomerAiContext(
   ]);
 
   return {
-    acc_id: accId,
-    customer_dataset: { payments, profile, usage_monthly: usageMonthly },
-    ml_output: mlOutput,
     run: {
-      cutoff_date: run.cutoffDate,
       id: run.id,
       name: run.name,
+      cutoff_date: run.cutoffDate,
     },
+    acc_id: accId,
+    customer_dataset: { profile, usage_monthly: usageMonthly, payments },
     signals: computeSignals(usageMonthly, payments, run.cutoffDate),
+    ml_output: mlOutput,
   };
 }

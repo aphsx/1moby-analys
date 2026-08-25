@@ -8,15 +8,11 @@ export type QueryResultPreview = {
   row_count: number;
 };
 
-const QUERY_TIMEOUT_MS = 5000;
+const QUERY_TIMEOUT_MS = 5_000;
 
 function serializeValue(value: unknown): unknown {
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-  if (typeof value === "bigint") {
-    return Number(value);
-  }
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "bigint") return Number(value);
   return value;
 }
 
@@ -26,21 +22,17 @@ function serializeRow(row: Record<string, unknown>): QueryRow {
   );
 }
 
-export async function executeReadOnlySql(
-  sql: string
-): Promise<QueryResultPreview> {
+export async function executeReadOnlySql(sql: string): Promise<QueryResultPreview> {
   const rows = await sqlClient.begin(async (tx) => {
     await tx`SET TRANSACTION READ ONLY`;
     await tx.unsafe(`SET LOCAL statement_timeout = '${QUERY_TIMEOUT_MS}ms'`);
     return tx.unsafe(sql);
   });
 
-  const serializedRows = rows.map((row) =>
-    serializeRow(row as Record<string, unknown>)
-  );
+  const serializedRows = rows.map((row) => serializeRow(row as Record<string, unknown>));
   return {
     columns: Object.keys(serializedRows[0] ?? {}),
-    row_count: serializedRows.length,
     rows: serializedRows,
+    row_count: serializedRows.length,
   };
 }

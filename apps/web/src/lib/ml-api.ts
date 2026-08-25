@@ -12,53 +12,62 @@
 
 // ── Re-export shared contract types from @moby/types ────────────────────────
 export type {
-  CandidateResult,
-  ChurnFactor,
-  CustomerAiExplanationResult,
-  LifecycleStage,
-  ModelEligibility,
-  ModelPerfEntry,
-  ModelVersionSummary,
-  MonthlyUsagePoint,
-  OutputsPage,
-  OutputsQuery,
-  PaymentEvent,
-  PredictionOutput,
-  PredictionRun,
-  ProfileSnapshot,
-  RiskLevel,
-  RunInsight,
   RunStatus,
-  RunSummary,
-  SplitMetrics,
-  TrainingRun,
-  TrainingRunResult,
-  UrgencyLevel,
+  LifecycleStage,
+  RiskLevel,
   ValueTier,
+  UrgencyLevel,
+} from "@moby/types";
+
+export type {
+  ChurnFactor,
+  ModelEligibility,
+  ProfileSnapshot,
+  PredictionRun,
+  PredictionOutput,
+  RunSummary,
+  OutputsQuery,
+  OutputsPage,
+  MonthlyUsagePoint,
+  PaymentEvent,
+  CustomerAiExplanationResult,
+  RunInsight,
+} from "@moby/types";
+
+export type {
+  SplitMetrics,
+  ModelPerfEntry,
+  CandidateResult,
+  ModelVersionSummary,
+} from "@moby/types";
+
+export type {
+  TrainingRunResult,
+  TrainingRun,
 } from "@moby/types";
 
 export {
   LIFECYCLE_STAGES,
   RISK_LEVELS,
-  TOP_PRIORITY_LIMIT,
-  URGENCY_LEVELS,
   VALUE_TIERS,
+  URGENCY_LEVELS,
+  TOP_PRIORITY_LIMIT,
 } from "@moby/types";
 
 // ── Local imports for internal use ──────────────────────────────────────────
 import type {
-  CustomerAiExplanationResult,
+  PredictionRun,
+  PredictionOutput,
+  RunSummary,
+  OutputsQuery,
+  OutputsPage,
+  MonthlyUsagePoint,
+  PaymentEvent,
   ModelPerfEntry,
   ModelVersionSummary,
-  MonthlyUsagePoint,
-  OutputsPage,
-  OutputsQuery,
-  PaymentEvent,
-  PredictionOutput,
-  PredictionRun,
-  RunInsight,
-  RunSummary,
   TrainingRun,
+  CustomerAiExplanationResult,
+  RunInsight,
 } from "@moby/types";
 
 // ── Plumbing ────────────────────────────────────────────────────────────────
@@ -77,33 +86,22 @@ async function getJson<T>(url: string): Promise<T> {
   const res = await redirectingFetch(url);
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(
-      isApiError(body) ? body.message : `Request failed (${res.status})`
-    );
+    throw new Error(isApiError(body) ? body.message : `Request failed (${res.status})`);
   }
   return body as T;
 }
 
 // Note: mutations intentionally do not redirect on 401 (preserves prior behavior).
-async function sendJson<T>(
-  url: string,
-  method: string,
-  payload?: unknown
-): Promise<T> {
+async function sendJson<T>(url: string, method: string, payload?: unknown): Promise<T> {
   const res = await fetch(url, {
-    body: payload === undefined ? undefined : JSON.stringify(payload),
-    credentials: "include",
-    headers:
-      payload === undefined
-        ? undefined
-        : { "Content-Type": "application/json" },
     method,
+    credentials: "include",
+    headers: payload === undefined ? undefined : { "Content-Type": "application/json" },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
   });
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(
-      isApiError(body) ? body.message : `Request failed (${res.status})`
-    );
+    throw new Error(isApiError(body) ? body.message : `Request failed (${res.status})`);
   }
   return body as T;
 }
@@ -111,9 +109,7 @@ async function sendJson<T>(
 // ── Client functions (spec §7) ──────────────────────────────────────────────
 
 export async function fetchPredictionRuns(): Promise<PredictionRun[]> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockPredictionRuns();
-  }
+  if (IS_ML_MOCK) return (await mock()).mockPredictionRuns();
   return getJson("/api/prediction-runs");
 }
 
@@ -124,9 +120,7 @@ export async function createPredictionRun(input: {
   /** Optional per-run model overrides — version id per model type; omit a type to use its champion. */
   model_overrides?: { churn?: string; clv?: string; credit?: string };
 }): Promise<PredictionRun> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockCreatePredictionRun(input);
-  }
+  if (IS_ML_MOCK) return (await mock()).mockCreatePredictionRun(input);
   return sendJson("/api/prediction-runs", "POST", input);
 }
 
@@ -139,42 +133,26 @@ export async function deletePredictionRun(id: string): Promise<void> {
 }
 
 export async function retryPredictionRun(id: string): Promise<PredictionRun> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockRetryPredictionRun(id);
-  }
+  if (IS_ML_MOCK) return (await mock()).mockRetryPredictionRun(id);
   return sendJson(`/api/prediction-runs/${id}/retry`, "POST");
 }
 
 export async function fetchRunSummary(runId: string): Promise<RunSummary> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockRunSummary(runId);
-  }
+  if (IS_ML_MOCK) return (await mock()).mockRunSummary(runId);
   return getJson(`/api/prediction-runs/${runId}/summary`);
 }
 
-export async function fetchRunOutputs(
-  runId: string,
-  q: OutputsQuery = {}
-): Promise<OutputsPage> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockRunOutputs(runId, q);
-  }
+export async function fetchRunOutputs(runId: string, q: OutputsQuery = {}): Promise<OutputsPage> {
+  if (IS_ML_MOCK) return (await mock()).mockRunOutputs(runId, q);
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(q)) {
-    if (v !== undefined && v !== "") {
-      params.set(k, String(v));
-    }
+    if (v !== undefined && v !== "") params.set(k, String(v));
   }
   return getJson(`/api/prediction-runs/${runId}/outputs?${params.toString()}`);
 }
 
-export async function fetchRunOutput(
-  runId: string,
-  accId: number | string
-): Promise<PredictionOutput> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockRunOutput(runId, Number(accId));
-  }
+export async function fetchRunOutput(runId: string, accId: number | string): Promise<PredictionOutput> {
+  if (IS_ML_MOCK) return (await mock()).mockRunOutput(runId, Number(accId));
   return getJson(`/api/prediction-runs/${runId}/outputs/${accId}`);
 }
 
@@ -184,11 +162,7 @@ export async function generateCustomerAiExplanation(
   options: { force?: boolean } = {}
 ): Promise<CustomerAiExplanationResult> {
   if (IS_ML_MOCK) {
-    return (await mock()).mockGenerateCustomerAiExplanation(
-      runId,
-      Number(accId),
-      options
-    );
+    return (await mock()).mockGenerateCustomerAiExplanation(runId, Number(accId), options);
   }
   return sendJson(
     `/api/prediction-runs/${runId}/outputs/${accId}/ai-explanation`,
@@ -199,9 +173,7 @@ export async function generateCustomerAiExplanation(
 
 /** GET /prediction-runs/:id/insight — cached AI base summary of the whole base. */
 export async function fetchRunInsight(runId: string): Promise<RunInsight> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockRunInsight(runId);
-  }
+  if (IS_ML_MOCK) return (await mock()).mockRunInsight(runId);
   return getJson(`/api/prediction-runs/${runId}/insight`);
 }
 
@@ -210,9 +182,7 @@ export async function generateRunInsight(
   runId: string,
   options: { force?: boolean } = {}
 ): Promise<RunInsight> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockGenerateRunInsight(runId, options);
-  }
+  if (IS_ML_MOCK) return (await mock()).mockGenerateRunInsight(runId, options);
   return sendJson(`/api/prediction-runs/${runId}/insight`, "POST", options);
 }
 
@@ -220,21 +190,15 @@ export async function fetchCustomerUsageMonthly(
   runId: string,
   accId: number | string
 ): Promise<MonthlyUsagePoint[]> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockUsageMonthly(runId, Number(accId));
-  }
-  return getJson(
-    `/api/prediction-runs/${runId}/customers/${accId}/usage-monthly`
-  );
+  if (IS_ML_MOCK) return (await mock()).mockUsageMonthly(runId, Number(accId));
+  return getJson(`/api/prediction-runs/${runId}/customers/${accId}/usage-monthly`);
 }
 
 export async function fetchCustomerPayments(
   runId: string,
   accId: number | string
 ): Promise<PaymentEvent[]> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockPayments(runId, Number(accId));
-  }
+  if (IS_ML_MOCK) return (await mock()).mockPayments(runId, Number(accId));
   return getJson(`/api/prediction-runs/${runId}/customers/${accId}/payments`);
 }
 
@@ -242,50 +206,36 @@ export async function fetchCustomerPayments(
 export async function fetchPredictSuggestedCutoff(
   sourceId: string
 ): Promise<{ suggested_cutoff: string; latest_data_date: string | null }> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockPredictSuggestedCutoff(sourceId);
-  }
+  if (IS_ML_MOCK) return (await mock()).mockPredictSuggestedCutoff(sourceId);
   return getJson(`/api/predict-data-sources/${sourceId}/suggested-cutoff`);
 }
 
 /** GET /train-data-sources/:id/suggested-cutoff — Gate 3 feasible cutoff. */
-export async function fetchTrainSuggestedCutoff(sourceId: string): Promise<{
-  suggested_cutoff: string;
-  latest_data_date: string;
-  horizon_days: number;
-}> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockTrainSuggestedCutoff(sourceId);
-  }
+export async function fetchTrainSuggestedCutoff(
+  sourceId: string
+): Promise<{ suggested_cutoff: string; latest_data_date: string; horizon_days: number }> {
+  if (IS_ML_MOCK) return (await mock()).mockTrainSuggestedCutoff(sourceId);
   return getJson(`/api/train-data-sources/${sourceId}/suggested-cutoff`);
 }
 
 export async function fetchModelPerformance(): Promise<ModelPerfEntry[]> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockModelPerformance();
-  }
+  if (IS_ML_MOCK) return (await mock()).mockModelPerformance();
   return getJson("/api/model-performance");
 }
 
 /** GET /model-performance/:modelType/versions — all trained versions. */
-export function fetchModelVersions(
-  modelType: string
-): Promise<ModelVersionSummary[]> {
-  if (IS_ML_MOCK) {
-    return Promise.resolve([]);
-  }
+export async function fetchModelVersions(modelType: string): Promise<ModelVersionSummary[]> {
+  if (IS_ML_MOCK) return [];
   return getJson(`/api/model-performance/${modelType}/versions`);
 }
 
 /** POST /model-performance/:modelType/activate — pin a version to production. */
-export function activateModelVersion(
+export async function activateModelVersion(
   modelType: string,
   modelVersionId: string,
   reason?: string
 ): Promise<{ ok: boolean }> {
-  if (IS_ML_MOCK) {
-    return Promise.resolve({ ok: true });
-  }
+  if (IS_ML_MOCK) return { ok: true };
   return sendJson(`/api/model-performance/${modelType}/activate`, "POST", {
     modelVersionId,
     reason,
@@ -293,31 +243,22 @@ export function activateModelVersion(
 }
 
 /** DELETE /model-performance/:modelType/versions/:id — remove a non-production version. */
-export function deleteModelVersion(
+export async function deleteModelVersion(
   modelType: string,
   modelVersionId: string
 ): Promise<{ deleted: boolean }> {
-  if (IS_ML_MOCK) {
-    return Promise.resolve({ deleted: true });
-  }
-  return sendJson(
-    `/api/model-performance/${modelType}/versions/${modelVersionId}`,
-    "DELETE"
-  );
+  if (IS_ML_MOCK) return { deleted: true };
+  return sendJson(`/api/model-performance/${modelType}/versions/${modelVersionId}`, "DELETE");
 }
 
 export async function fetchTrainingRuns(): Promise<TrainingRun[]> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockTrainingRuns();
-  }
+  if (IS_ML_MOCK) return (await mock()).mockTrainingRuns();
   return getJson("/api/training-runs");
 }
 
 /** DELETE /training-runs/:id — remove a failed training run from history. */
-export function deleteTrainingRun(id: string): Promise<{ deleted: boolean }> {
-  if (IS_ML_MOCK) {
-    return Promise.resolve({ deleted: true });
-  }
+export async function deleteTrainingRun(id: string): Promise<{ deleted: boolean }> {
+  if (IS_ML_MOCK) return { deleted: true };
   return sendJson(`/api/training-runs/${id}`, "DELETE");
 }
 
@@ -327,8 +268,6 @@ export async function createTrainingRun(input: {
   cutoff_date?: string;
   horizon_days?: number;
 }): Promise<TrainingRun> {
-  if (IS_ML_MOCK) {
-    return (await mock()).mockCreateTrainingRun(input);
-  }
+  if (IS_ML_MOCK) return (await mock()).mockCreateTrainingRun(input);
   return sendJson("/api/training-runs", "POST", input);
 }

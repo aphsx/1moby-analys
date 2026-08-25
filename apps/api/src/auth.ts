@@ -1,13 +1,11 @@
-import { USER_PROFILE_FIELDS, USER_ROLE_FIELD } from "@moby/types";
 import { betterAuth } from "better-auth";
+import { USER_PROFILE_FIELDS, USER_ROLE_FIELD } from "@moby/types";
 import pg from "pg";
 
 const { Pool } = pg;
 
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL environment variable is not set");
-}
+if (!databaseUrl) throw new Error("DATABASE_URL environment variable is not set");
 
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -34,25 +32,19 @@ function googleProfileToUser(profile: {
   locale?: string;
 }) {
   return {
-    familyName: profile.family_name ?? null,
     givenName: profile.given_name ?? null,
+    familyName: profile.family_name ?? null,
     locale: profile.locale ?? null,
   };
 }
 
 export const auth = betterAuth({
+  database: pool,
   // The public-facing URL for OAuth callbacks (should be the Next.js origin in dev).
   // Google Console redirect URI: ${BETTER_AUTH_URL}/api/auth/callback/google
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
-  database: pool,
   secret: process.env.BETTER_AUTH_SECRET,
-  session: {
-    expiresIn: 60 * 60 * 24 * 7,
-    // Don't require a "fresh" session for sensitive ops (e.g. self-delete). Social-login
-    // users have no password to re-confirm with, so a freshness gate would just block them.
-    freshAge: 0,
-    updateAge: 60 * 60 * 24,
-  },
+  trustedOrigins: parseTrustedOrigins(process.env.ALLOWED_ORIGINS),
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
@@ -60,11 +52,17 @@ export const auth = betterAuth({
       mapProfileToUser: googleProfileToUser,
     },
   },
-  trustedOrigins: parseTrustedOrigins(process.env.ALLOWED_ORIGINS),
   user: {
     // Extra columns populated from the Google profile + org role (single source: @moby/types).
     additionalFields: { ...USER_PROFILE_FIELDS, ...USER_ROLE_FIELD },
     // Allow users to delete their own account (cascades to session + account rows).
     deleteUser: { enabled: true },
+  },
+  session: {
+    expiresIn: 60 * 60 * 24 * 7,
+    updateAge: 60 * 60 * 24,
+    // Don't require a "fresh" session for sensitive ops (e.g. self-delete). Social-login
+    // users have no password to re-confirm with, so a freshness gate would just block them.
+    freshAge: 0,
   },
 });

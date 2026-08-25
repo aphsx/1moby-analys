@@ -5,11 +5,11 @@
 export type PipelinePhase = "raw" | "clean";
 
 export interface TrainPipelineProgressEvent {
-  phase: PipelinePhase;
   progress: number;
-  rows?: number;
-  sheet?: string;
   step: string;
+  phase: PipelinePhase;
+  sheet?: string;
+  rows?: number;
 }
 
 const RAW_END = 45;
@@ -23,19 +23,15 @@ export function mapRawImportProgress(rawPct: number): number {
 }
 
 export function progressCleanStart(): TrainPipelineProgressEvent {
-  return {
-    phase: "clean",
-    progress: CLEAN_START,
-    step: "Starting clean (for model training)…",
-  };
+  return { progress: CLEAN_START, step: "Starting clean (for model training)…", phase: "clean" };
 }
 
 export function progressCleanCustomers(): TrainPipelineProgressEvent {
-  return { phase: "clean", progress: 52, step: "Clean: writing customers…" };
+  return { progress: 52, step: "Clean: writing customers…", phase: "clean" };
 }
 
 export function progressCleanPayments(): TrainPipelineProgressEvent {
-  return { phase: "clean", progress: 65, step: "Clean: writing payments…" };
+  return { progress: 65, step: "Clean: writing payments…", phase: "clean" };
 }
 
 export function progressCleanUsageSheet(
@@ -45,25 +41,19 @@ export function progressCleanUsageSheet(
   rows: number
 ): TrainPipelineProgressEvent {
   if (sheetCount <= 0) {
-    return {
-      phase: "clean",
-      progress: 75,
-      rows,
-      sheet: sheetName,
-      step: `Clean: ${sheetName}`,
-    };
+    return { progress: 75, step: `Clean: ${sheetName}`, phase: "clean", sheet: sheetName, rows };
   }
   const span = CLEAN_END - 75;
   const pct = 75 + Math.round(((sheetIndex + 1) / sheetCount) * span);
   return {
-    phase: "clean",
     progress: pct,
-    rows,
-    sheet: sheetName,
     step: `Clean: ${sheetName} (${rows.toLocaleString()} rows)`,
+    phase: "clean",
+    sheet: sheetName,
+    rows,
   };
 }
 
 export function progressPipelineDone(): TrainPipelineProgressEvent {
-  return { phase: "clean", progress: 100, step: "Ready for model training" };
+  return { progress: 100, step: "Ready for model training", phase: "clean" };
 }

@@ -1,5 +1,4 @@
 "use client";
-
 /**
  * Churn-only diagnostics (spec §2.4): calibration curve, confusion matrix
  * at the operating threshold, lift table with a business reading, and the
@@ -7,24 +6,20 @@
  * nothing is computed client-side.
  */
 
-import { StatusPill } from "@/components/ui";
 import type { ModelPerfEntry } from "@/lib/ml-api";
+import { StatusPill } from "@/components/ui";
 import { metricInfo } from "./metric-info";
 
 const PANEL_TITLE = "text-[13px] font-semibold text-[color:var(--ink-2)]";
 const PANEL_HINT = "text-[11.5px] leading-5 text-[color:var(--ink-5)] mt-1";
 
 export function ChurnDiagnostics({ entry }: { entry: ModelPerfEntry }) {
-  const testMetrics =
-    entry.splits.find((s) => s.split === "test")?.metrics ??
-    entry.splits[0]?.metrics;
+  const testMetrics = entry.splits.find((s) => s.split === "test")?.metrics ?? entry.splits[0]?.metrics;
 
   return (
     <div className="space-y-3">
       <div className="space-y-3">
-        {entry.calibration && (
-          <CalibrationPanel calibration={entry.calibration} />
-        )}
+        {entry.calibration && <CalibrationPanel calibration={entry.calibration} />}
         {entry.confusion && <ConfusionPanel confusion={entry.confusion} />}
         {entry.lift_table && entry.lift_table.length > 0 && (
           <LiftPanel
@@ -51,14 +46,8 @@ function CalibrationPanel({
   const plot = size - pad * 2;
   const x = (v: number): number => pad + v * plot;
   const y = (v: number): number => size - pad - v * plot;
-  const pts = calibration.prob_pred.map(
-    (p, i) => [x(p), y(calibration.prob_true[i] ?? 0)] as const
-  );
-  const path = pts
-    .map(
-      ([px, py], i) => `${i === 0 ? "M" : "L"}${px.toFixed(1)},${py.toFixed(1)}`
-    )
-    .join(" ");
+  const pts = calibration.prob_pred.map((p, i) => [x(p), y(calibration.prob_true[i] ?? 0)] as const);
+  const path = pts.map(([px, py], i) => `${i === 0 ? "M" : "L"}${px.toFixed(1)},${py.toFixed(1)}`).join(" ");
 
   return (
     <div className="surface-soft p-4">
@@ -68,51 +57,31 @@ function CalibrationPanel({
       </p>
       <div className="mt-3 flex flex-col items-center gap-3">
         <svg
-          aria-label="Calibration curve: predicted vs observed churn probability"
-          className="shrink-0"
-          height={size}
-          role="img"
-          viewBox={`0 0 ${size} ${size}`}
           width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          className="shrink-0"
+          role="img"
+          aria-label="Calibration curve: predicted vs observed churn probability"
         >
-          <rect
-            fill="#ffffff"
-            height={plot}
-            stroke="#e5e7eb"
-            width={plot}
-            x={pad}
-            y={pad}
-          />
+          <rect x={pad} y={pad} width={plot} height={plot} fill="#ffffff" stroke="#e5e7eb" />
           <line
-            stroke="#9ca3af"
-            strokeDasharray="4 3"
-            strokeWidth="1"
-            x1={x(0)}
-            x2={x(1)}
-            y1={y(0)}
-            y2={y(1)}
+            x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)}
+            stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 3"
           />
-          <path
-            d={path}
-            fill="none"
-            stroke="var(--moby-600)"
-            strokeWidth="1.75"
-          />
+          <path d={path} fill="none" stroke="var(--moby-600)" strokeWidth="1.75" />
           {pts.map(([px, py], i) => (
-            <circle cx={px} cy={py} fill="var(--moby-600)" key={i} r="2.5" />
+            <circle key={i} cx={px} cy={py} r="2.5" fill="var(--moby-600)" />
           ))}
         </svg>
         <div className="w-full text-center">
-          <div
-            className="font-semibold text-[10.5px] text-[color:var(--ink-5)] uppercase tracking-[.08em]"
-            title={metricInfo("ece").tooltip}
-          >
+          <div className="text-[10.5px] font-semibold uppercase tracking-[.08em] text-[color:var(--ink-5)]" title={metricInfo("ece").tooltip}>
             ECE
           </div>
-          <div className="num font-semibold text-[22px] leading-none">
+          <div className="num text-[22px] font-semibold leading-none">
             {calibration.ece.toFixed(3)}
           </div>
-          <p className="mt-2 text-[11px] text-[color:var(--ink-4)] leading-5">
+          <p className="mt-2 text-[11px] leading-5 text-[color:var(--ink-4)]">
             แกน X = prob ที่ทำนาย
             <br />
             แกน Y = churn จริง
@@ -131,84 +100,41 @@ function ConfusionPanel({
   confusion: NonNullable<ModelPerfEntry["confusion"]>;
 }) {
   const cells = [
-    {
-      bg: "var(--ok-bg)",
-      fg: "var(--ok)",
-      hint: "ชี้ว่าเสี่ยง และ churn จริง",
-      key: "TP",
-      value: confusion.tp,
-    },
-    {
-      bg: "var(--warn-bg)",
-      fg: "var(--warn)",
-      hint: "ชี้ว่าเสี่ยง แต่ไม่ churn (โทรเก้อ)",
-      key: "FP",
-      value: confusion.fp,
-    },
-    {
-      bg: "var(--danger-bg)",
-      fg: "var(--danger)",
-      hint: "ไม่ได้ชี้ แต่ churn จริง (หลุดมือ)",
-      key: "FN",
-      value: confusion.fn,
-    },
-    {
-      bg: "#f3f4f6",
-      fg: "#4b5563",
-      hint: "ไม่ได้ชี้ และไม่ churn",
-      key: "TN",
-      value: confusion.tn,
-    },
+    { key: "TP", value: confusion.tp, hint: "ชี้ว่าเสี่ยง และ churn จริง", fg: "var(--ok)", bg: "var(--ok-bg)" },
+    { key: "FP", value: confusion.fp, hint: "ชี้ว่าเสี่ยง แต่ไม่ churn (โทรเก้อ)", fg: "var(--warn)", bg: "var(--warn-bg)" },
+    { key: "FN", value: confusion.fn, hint: "ไม่ได้ชี้ แต่ churn จริง (หลุดมือ)", fg: "var(--danger)", bg: "var(--danger-bg)" },
+    { key: "TN", value: confusion.tn, hint: "ไม่ได้ชี้ และไม่ churn", fg: "#4b5563", bg: "#f3f4f6" },
   ];
 
   return (
     <div className="surface-soft p-4">
       <div className={PANEL_TITLE}>Confusion matrix</div>
       <p className={PANEL_HINT} title={metricInfo("f1").tooltip}>
-        ที่ threshold ใช้งาน ={" "}
-        <span className="num">{confusion.threshold.toFixed(2)}</span>
+        ที่ threshold ใช้งาน = <span className="num">{confusion.threshold.toFixed(2)}</span>
       </p>
       <div className="mt-3">
         <table className="w-full border-separate border-spacing-2 text-[11px]">
           <thead>
             <tr>
-              <th aria-hidden className="w-[88px]" />
-              <th className="pb-1 text-center font-medium text-[color:var(--ink-5)]">
-                Churn จริง
-              </th>
-              <th className="pb-1 text-center font-medium text-[color:var(--ink-5)]">
-                ไม่ churn
-              </th>
+              <th className="w-[88px]" aria-hidden />
+              <th className="pb-1 text-center font-medium text-[color:var(--ink-5)]">Churn จริง</th>
+              <th className="pb-1 text-center font-medium text-[color:var(--ink-5)]">ไม่ churn</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <th
-                className="pr-2 text-left font-medium text-[color:var(--ink-5)] leading-4"
-                scope="row"
-              >
+              <th scope="row" className="pr-2 text-left font-medium leading-4 text-[color:var(--ink-5)]">
                 ชี้ว่าเสี่ยง
               </th>
-              <td>
-                <Cell cell={cells[0]} />
-              </td>
-              <td>
-                <Cell cell={cells[1]} />
-              </td>
+              <td><Cell cell={cells[0]} /></td>
+              <td><Cell cell={cells[1]} /></td>
             </tr>
             <tr>
-              <th
-                className="pr-2 text-left font-medium text-[color:var(--ink-5)] leading-4"
-                scope="row"
-              >
+              <th scope="row" className="pr-2 text-left font-medium leading-4 text-[color:var(--ink-5)]">
                 ไม่ได้ชี้
               </th>
-              <td>
-                <Cell cell={cells[2]} />
-              </td>
-              <td>
-                <Cell cell={cells[3]} />
-              </td>
+              <td><Cell cell={cells[2]} /></td>
+              <td><Cell cell={cells[3]} /></td>
             </tr>
           </tbody>
         </table>
@@ -217,24 +143,17 @@ function ConfusionPanel({
   );
 }
 
-function Cell({
-  cell,
-}: {
-  cell: { key: string; value: number; hint: string; fg: string; bg: string };
-}) {
+function Cell({ cell }: { cell: { key: string; value: number; hint: string; fg: string; bg: string } }) {
   return (
     <div
       className="rounded-lg px-3 py-3 text-center"
       style={{ background: cell.bg }}
       title={cell.hint}
     >
-      <div
-        className="font-semibold text-[10px] uppercase tracking-[.06em]"
-        style={{ color: cell.fg }}
-      >
+      <div className="text-[10px] font-semibold uppercase tracking-[.06em]" style={{ color: cell.fg }}>
         {cell.key}
       </div>
-      <div className="num mt-0.5 font-semibold text-[18px] text-[color:var(--ink-1)] leading-none">
+      <div className="num mt-0.5 text-[18px] font-semibold leading-none text-[color:var(--ink-1)]">
         {cell.value.toLocaleString()}
       </div>
     </div>
@@ -260,28 +179,20 @@ function LiftPanel({
       <div className="mt-3">
         <table className="w-full text-[12px]">
           <thead className="sticky top-0 bg-gray-50">
-            <tr className="text-[10.5px] text-[color:var(--ink-5)] uppercase tracking-[.08em]">
+            <tr className="text-[10.5px] uppercase tracking-[.08em] text-[color:var(--ink-5)]">
               <th className="pb-2 text-left font-semibold">Decile</th>
-              <th
-                className="pb-2 text-right font-semibold"
-                title="กลุ่มนี้กิน churner จริงทั้งหมดกี่ %"
-              >
+              <th className="pb-2 text-right font-semibold" title="กลุ่มนี้กิน churner จริงทั้งหมดกี่ %">
                 % of churners
               </th>
-              <th
-                className="pb-2 text-right font-semibold"
-                title={metricInfo("lift_at_top10pct").tooltip}
-              >
+              <th className="pb-2 text-right font-semibold" title={metricInfo("lift_at_top10pct").tooltip}>
                 Lift
               </th>
             </tr>
           </thead>
           <tbody>
             {liftTable.map((row) => (
-              <tr className="border-gray-200/80 border-t" key={row.decile}>
-                <td className="py-1.5 text-[color:var(--ink-3)]">
-                  #{row.decile}
-                </td>
+              <tr key={row.decile} className="border-t border-gray-200/80">
+                <td className="py-1.5 text-[color:var(--ink-3)]">#{row.decile}</td>
                 <td className="num py-1.5 text-right">
                   {(row.share_of_churners * 100).toFixed(1)}%
                 </td>
@@ -294,16 +205,12 @@ function LiftPanel({
         </table>
       </div>
       {recallAtTop10 !== undefined && topDecile && (
-        <p className="mt-4 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[11.5px] text-[color:var(--ink-3)] leading-5">
+        <p className="mt-4 text-[11.5px] leading-5 text-[color:var(--ink-3)] rounded-lg bg-white border border-gray-200 px-3 py-2.5">
           โทรหา top 10% = เจอ churner จริง{" "}
           <span className="num font-semibold">
             {(recallAtTop10 * 100).toFixed(1)}%
           </span>{" "}
-          (lift{" "}
-          <span className="num font-semibold">
-            {topDecile.lift.toFixed(2)}×
-          </span>
-          )
+          (lift <span className="num font-semibold">{topDecile.lift.toFixed(2)}×</span>)
         </p>
       )}
     </div>
@@ -313,20 +220,14 @@ function LiftPanel({
 /* ── Risk-level thresholds legend ──────────────────────────────── */
 
 const THRESHOLD_TONES: Record<string, "ok" | "warn" | "danger"> = {
-  critical: "danger",
-  high: "danger",
   medium: "warn",
+  high: "danger",
+  critical: "danger",
 };
 
-function ThresholdsLegend({
-  thresholds,
-}: {
-  thresholds: Record<string, number>;
-}) {
+function ThresholdsLegend({ thresholds }: { thresholds: Record<string, number> }) {
   const sorted = Object.entries(thresholds).sort((a, b) => a[1] - b[1]);
-  if (sorted.length === 0) {
-    return null;
-  }
+  if (sorted.length === 0) return null;
   const lowest = sorted[0][1];
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3">
@@ -336,15 +237,11 @@ function ThresholdsLegend({
       >
         Risk thresholds (churn_probability):
       </span>
-      <StatusPill dot={false} tone="ok">
+      <StatusPill tone="ok" dot={false}>
         low <span className="num">&lt; {lowest.toFixed(2)}</span>
       </StatusPill>
       {sorted.map(([name, value]) => (
-        <StatusPill
-          dot={false}
-          key={name}
-          tone={THRESHOLD_TONES[name] ?? "warn"}
-        >
+        <StatusPill key={name} tone={THRESHOLD_TONES[name] ?? "warn"} dot={false}>
           {name} <span className="num">≥ {value.toFixed(2)}</span>
         </StatusPill>
       ))}

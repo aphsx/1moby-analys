@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,9 +23,15 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@moby/api": ["../api/src/index.ts"],
-      "@moby/types": ["../../packages/types/src/index.ts"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@moby/api": [
+        "../api/src/index.ts"
+      ],
+      "@moby/types": [
+        "../../packages/types/src/index.ts"
+      ]
     }
   },
   "include": [
@@ -31,5 +41,7 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

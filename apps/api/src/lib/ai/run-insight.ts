@@ -17,12 +17,9 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionRuns } from "../../db/schema";
-import { type ChatMessage, complete } from "./llm-client";
+import { buildRunInsightSignals, type RunInsightSignals } from "./run-insight-context";
+import { complete, type ChatMessage } from "./llm-client";
 import { getLLMConfig, isLLMConfigured } from "./llm-config";
-import {
-  buildRunInsightSignals,
-  type RunInsightSignals,
-} from "./run-insight-context";
 import { renderGuardrails } from "./safety";
 
 export type RunInsight = {
@@ -34,18 +31,10 @@ export type RunInsight = {
 };
 
 type InsightCache =
-  | {
-      status: "completed";
-      summary: string;
-      model: string;
-      generated_at: string;
-    }
+  | { status: "completed"; summary: string; model: string; generated_at: string }
   | { status: "failed"; summary: null; model: null; generated_at: string };
 
-type ServiceError = {
-  status: number;
-  body: { message: string; code?: string };
-};
+type ServiceError = { status: number; body: { message: string; code?: string } };
 
 const SYSTEM_PROMPT = `คุณคือนักวิเคราะห์ข้อมูลลูกค้าอาวุโสของบริษัท 1Moby (B2B SaaS ด้านการส่ง SMS/Email)
 
@@ -79,9 +68,7 @@ base ที่มีความเสี่ยงกระจุกตัวส
 หรือ base ใหญ่แต่ active paid มีน้อยผิดปกติ — ถ้าไม่มีให้เขียน "ไม่มีข้อมูลผิดปกติ"]`;
 
 function pct(part: number, whole: number): string {
-  if (whole <= 0) {
-    return "0%";
-  }
+  if (whole <= 0) return "0%";
   return `${((part / whole) * 100).toFixed(1)}%`;
 }
 
@@ -133,29 +120,17 @@ urgency — critical: ${u.critical} | warning: ${u.warning} | monitor: ${u.monit
 
 function toResponse(runId: string, cache: InsightCache | null): RunInsight {
   if (!cache) {
-    return {
-      ai_generated_at: null,
-      ai_model: null,
-      ai_status: "not_requested",
-      ai_summary: null,
-      run_id: runId,
-    };
+    return { run_id: runId, ai_status: "not_requested", ai_summary: null, ai_model: null, ai_generated_at: null };
   }
   if (cache.status === "failed") {
-    return {
-      ai_generated_at: cache.generated_at,
-      ai_model: null,
-      ai_status: "failed",
-      ai_summary: null,
-      run_id: runId,
-    };
+    return { run_id: runId, ai_status: "failed", ai_summary: null, ai_model: null, ai_generated_at: cache.generated_at };
   }
   return {
-    ai_generated_at: cache.generated_at,
-    ai_model: cache.model,
+    run_id: runId,
     ai_status: "completed",
     ai_summary: cache.summary,
-    run_id: runId,
+    ai_model: cache.model,
+    ai_generated_at: cache.generated_at,
   };
 }
 
@@ -181,22 +156,13 @@ export async function createRunInsight(
     .limit(1);
   const existing = (row?.cache as InsightCache | null) ?? null;
   if (existing?.summary && !force) {
-    return {
-      body: {
-        code: "insight_already_exists",
-        message: "Run insight already exists",
-      },
-      status: 409,
-    };
+    return { status: 409, body: { message: "Run insight already exists", code: "insight_already_exists" } };
   }
 
   if (!isLLMConfigured()) {
     return {
-      body: {
-        message:
-          "กรุณาตั้งค่า LLM_API_KEY (หรือ OLLAMA_API_KEY) ใน .env ก่อนใช้ Gen AI",
-      },
       status: 503,
+      body: { message: "กรุณาตั้งค่า LLM_API_KEY (หรือ OLLAMA_API_KEY) ใน .env ก่อนใช้ Gen AI" },
     };
   }
 
@@ -204,21 +170,17 @@ export async function createRunInsight(
     const signals = await buildRunInsightSignals(runId);
     const llmConfig = getLLMConfig();
     const messages: ChatMessage[] = [
-      { content: SYSTEM_PROMPT, role: "system" },
-      { content: formatSignals(signals), role: "user" },
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: formatSignals(signals) },
     ];
-    const summary = (
-      await complete(messages, { config: llmConfig, temperature: 0.2 })
-    ).trim();
-    if (!summary) {
-      throw new Error("LLM returned an empty summary");
-    }
+    const summary = (await complete(messages, { config: llmConfig, temperature: 0.2 })).trim();
+    if (!summary) throw new Error("LLM returned an empty summary");
 
     const cache: InsightCache = {
-      generated_at: new Date().toISOString(),
-      model: llmConfig.model,
       status: "completed",
       summary,
+      model: llmConfig.model,
+      generated_at: new Date().toISOString(),
     };
     await db
       .update(mlPredictionRuns)
@@ -229,20 +191,8 @@ export async function createRunInsight(
   } catch (e) {
     await db
       .update(mlPredictionRuns)
-      .set({
-        cohortInsightJson: {
-          generated_at: new Date().toISOString(),
-          model: null,
-          status: "failed",
-          summary: null,
-        },
-      })
+      .set({ cohortInsightJson: { status: "failed", summary: null, model: null, generated_at: new Date().toISOString() } })
       .where(eq(mlPredictionRuns.id, runId));
-    return {
-      body: {
-        message: (e as Error).message || "Failed to generate run insight",
-      },
-      status: 500,
-    };
+    return { status: 500, body: { message: (e as Error).message || "Failed to generate run insight" } };
   }
 }

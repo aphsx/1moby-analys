@@ -13,6 +13,6 @@ export const useRunStore = create<RunState>()(
       runId: "",
       setRunId: (runId) => set({ runId }),
     }),
-    { name: "moby:run" }
-  )
+    { name: "moby:run" },
+  ),
 );

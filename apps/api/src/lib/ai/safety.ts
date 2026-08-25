@@ -45,20 +45,18 @@ export function checkUserQuestionSafety(question: string): SafetyCheck {
   const warnings: string[] = [];
   for (const pattern of PROMPT_INJECTION_PATTERNS) {
     if (pattern.test(question)) {
-      warnings.push(
-        "Question contains prompt-injection or policy-bypass language."
-      );
+      warnings.push("Question contains prompt-injection or policy-bypass language.");
       break;
     }
   }
   for (const pattern of HARD_BLOCK_PATTERNS) {
     if (pattern.test(question)) {
       return {
-        blockedReason: "Question asks for a blocked database operation.",
         ok: false,
         warnings,
+        blockedReason: "Question asks for a blocked database operation.",
       };
     }
   }
-  return { blockedReason: null, ok: true, warnings };
+  return { ok: true, warnings, blockedReason: null };
 }

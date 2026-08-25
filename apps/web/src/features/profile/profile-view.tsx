@@ -1,22 +1,16 @@
 "use client";
 
-import { BadgeCheck, Loader2, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { BadgeCheck, Loader2, Trash2 } from "lucide-react";
 import { StatusDialog } from "@/components/status-dialog";
 import { deleteUser, updateUser, useSession } from "@/lib/auth";
 
-const WHITESPACE_RE = /\s+/;
-
 function initials(name: string) {
-  const parts = name.trim().split(WHITESPACE_RE).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-  return `${parts[0][0]}${parts.at(-1)?.[0] ?? ""}`.toUpperCase();
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 export function ProfileView() {
@@ -51,38 +45,23 @@ export function ProfileView() {
 
   if (!user) {
     return (
-      <div className="p-8 text-[color:var(--ink-4)]">
-        ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่
-      </div>
+      <div className="p-8 text-[color:var(--ink-4)]">ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่</div>
     );
   }
 
   const displayName = name.trim() || user.email?.split("@")[0] || "User";
-  const dirty =
-    name.trim() !== (user.name ?? "").trim() ||
-    image.trim() !== (user.image ?? "").trim();
-  const createdAt = user.createdAt
-    ? new Date(user.createdAt).toLocaleDateString("th-TH", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    : "—";
+  const dirty = name.trim() !== (user.name ?? "").trim() || image.trim() !== (user.image ?? "").trim();
+  const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString("th-TH", {
+    year: "numeric", month: "long", day: "numeric",
+  }) : "—";
 
   const handleSave = async () => {
-    if (!(dirty && name.trim())) {
-      return;
-    }
+    if (!dirty || !name.trim()) return;
     setSaving(true);
     setError(null);
     try {
-      const res = await updateUser({
-        image: image.trim() || undefined,
-        name: name.trim(),
-      });
-      if (res.error) {
-        throw new Error(res.error.message || "Update failed");
-      }
+      const res = await updateUser({ name: name.trim(), image: image.trim() || undefined });
+      if (res.error) throw new Error(res.error.message || "Update failed");
       await refetch();
       setSavedTick(true);
       setTimeout(() => setSavedTick(false), 2000);
@@ -98,9 +77,7 @@ export function ProfileView() {
     setError(null);
     try {
       const res = await deleteUser();
-      if (res.error) {
-        throw new Error(res.error.message || "Delete failed");
-      }
+      if (res.error) throw new Error(res.error.message || "Delete failed");
       router.push("/login");
       router.refresh();
     } catch (e: any) {
@@ -117,58 +94,52 @@ export function ProfileView() {
         <div className="flex items-center gap-4">
           {image.trim() ? (
             <img
-              alt=""
-              className="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
-              height={64}
-              referrerPolicy="no-referrer"
               src={image.trim()}
-              width={64}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
             />
           ) : (
-            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[color:var(--moby-600)] font-semibold text-lg text-white">
+            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[color:var(--moby-600)] text-lg font-semibold text-white">
               {initials(displayName)}
             </span>
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="truncate font-semibold text-[18px] text-[color:var(--ink-1)]">
-                {displayName}
-              </h2>
+              <h2 className="truncate text-[18px] font-semibold text-[color:var(--ink-1)]">{displayName}</h2>
               {user.emailVerified && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--moby-50)] px-2 py-0.5 font-medium text-[11px] text-[color:var(--moby-600)]">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--moby-50)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--moby-600)]">
                   <BadgeCheck size={13} /> ยืนยันแล้ว
                 </span>
               )}
             </div>
-            <p className="truncate text-[13px] text-[color:var(--ink-4)]">
-              {user.email}
-            </p>
+            <p className="truncate text-[13px] text-[color:var(--ink-4)]">{user.email}</p>
           </div>
         </div>
       </section>
 
       {/* Editable fields */}
       <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
-        <h3 className="mb-4 font-semibold text-[13px] text-[color:var(--ink-5)] uppercase tracking-[.1em]">
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-[.1em] text-[color:var(--ink-5)]">
           ข้อมูลส่วนตัว
         </h3>
 
         <div className="space-y-4">
           <Field label="ชื่อที่แสดง (Display name)">
             <input
-              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-[14px] outline-none focus:border-[color:var(--moby-600)]"
-              onChange={(e) => setName(e.target.value)}
-              placeholder="ชื่อที่แสดง"
               value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-[14px] outline-none focus:border-[color:var(--moby-600)]"
+              placeholder="ชื่อที่แสดง"
             />
           </Field>
 
           <Field label="ลิงก์รูปโปรไฟล์ (Image URL)">
             <input
-              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-[14px] outline-none focus:border-[color:var(--moby-600)]"
-              onChange={(e) => setImage(e.target.value)}
-              placeholder="https://…"
               value={image}
+              onChange={(e) => setImage(e.target.value)}
+              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-[14px] outline-none focus:border-[color:var(--moby-600)]"
+              placeholder="https://…"
             />
           </Field>
 
@@ -189,16 +160,12 @@ export function ProfileView() {
         )}
 
         <div className="mt-6 flex items-center justify-end gap-3">
-          {savedTick && (
-            <span className="text-[13px] text-[color:var(--moby-600)]">
-              บันทึกแล้ว ✓
-            </span>
-          )}
+          {savedTick && <span className="text-[13px] text-[color:var(--moby-600)]">บันทึกแล้ว ✓</span>}
           <button
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-[color:var(--moby-600)] px-5 font-medium text-[14px] text-white transition-colors hover:bg-[color:var(--moby-700)] disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!(dirty && name.trim()) || saving}
-            onClick={() => void handleSave()}
             type="button"
+            onClick={() => void handleSave()}
+            disabled={!dirty || !name.trim() || saving}
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-[color:var(--moby-600)] px-5 text-[14px] font-medium text-white transition-colors hover:bg-[color:var(--moby-700)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving && <Loader2 className="animate-spin" size={15} />}
             บันทึกการเปลี่ยนแปลง
@@ -208,17 +175,17 @@ export function ProfileView() {
 
       {/* Danger zone */}
       <section className="mt-6 rounded-2xl border border-[color:var(--danger)]/30 bg-white p-6">
-        <h3 className="font-semibold text-[13px] text-[color:var(--danger)] uppercase tracking-[.1em]">
+        <h3 className="text-[13px] font-semibold uppercase tracking-[.1em] text-[color:var(--danger)]">
           ลบบัญชี
         </h3>
-        <p className="mt-2 text-[13px] text-[color:var(--ink-4)] leading-6">
+        <p className="mt-2 text-[13px] leading-6 text-[color:var(--ink-4)]">
           การลบบัญชีจะลบข้อมูลผู้ใช้ของคุณและออกจากทุกอุปกรณ์อย่างถาวร ไม่สามารถกู้คืนได้
         </p>
         <div className="mt-4">
           <button
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-[color:var(--danger)]/40 px-5 font-medium text-[14px] text-[color:var(--danger)] transition-colors hover:bg-red-50"
-            onClick={() => setConfirmDelete(true)}
             type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-[color:var(--danger)]/40 px-5 text-[14px] font-medium text-[color:var(--danger)] transition-colors hover:bg-red-50"
           >
             <Trash2 size={15} /> ลบบัญชีของฉัน
           </button>
@@ -227,33 +194,25 @@ export function ProfileView() {
 
       {confirmDelete && (
         <StatusDialog
-          cancelLabel="ยกเลิก"
-          confirmLabel="ลบบัญชี"
-          loading={deleting}
+          open
+          tone="warning"
+          title="ยืนยันการลบบัญชี"
           message="คุณต้องการลบบัญชีนี้อย่างถาวรใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้"
+          confirmLabel="ลบบัญชี"
+          cancelLabel="ยกเลิก"
+          loading={deleting}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => void handleDelete()}
-          open
-          title="ยืนยันการลบบัญชี"
-          tone="warning"
         />
       )}
     </div>
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block font-medium text-[12px] text-[color:var(--ink-3)]">
-        {label}
-      </span>
+      <span className="mb-1.5 block text-[12px] font-medium text-[color:var(--ink-3)]">{label}</span>
       {children}
     </label>
   );
@@ -262,9 +221,7 @@ function Field({
 function ReadOnly({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <span className="mb-1.5 block font-medium text-[12px] text-[color:var(--ink-3)]">
-        {label}
-      </span>
+      <span className="mb-1.5 block text-[12px] font-medium text-[color:var(--ink-3)]">{label}</span>
       <div className="flex h-11 items-center rounded-xl bg-gray-50 px-3 text-[14px] text-[color:var(--ink-2)]">
         {value?.trim() || "—"}
       </div>

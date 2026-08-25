@@ -11,11 +11,11 @@ export function MetricCell({
 }) {
   return (
     <div className={alignRight ? "xl:text-right" : undefined}>
-      <p className="font-semibold text-[11px] text-[color:var(--ink-5)] uppercase tracking-[.12em] xl:hidden">
+      <p className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] xl:hidden">
         {label}
       </p>
       <p
-        className="num mt-0.5 font-semibold text-[14px] xl:mt-0"
+        className="num mt-0.5 text-[14px] font-semibold xl:mt-0"
         style={valueColor ? { color: valueColor } : undefined}
       >
         {value}
@@ -27,7 +27,7 @@ export function MetricCell({
 export function LifecycleRowPill({ stage }: { stage: string }) {
   return (
     <span
-      className="inline-flex h-[26px] w-[92px] items-center justify-center rounded-full font-semibold text-[11px] text-white"
+      className="inline-flex h-[26px] w-[92px] items-center justify-center rounded-full text-[11px] font-semibold text-white"
       style={{ backgroundColor: lifecycleButtonColor(stage) }}
     >
       {stage}
@@ -36,18 +36,10 @@ export function LifecycleRowPill({ stage }: { stage: string }) {
 }
 
 export function lifecycleButtonColor(stage: string): string {
-  if (stage === "Active Paid") {
-    return "#006bff";
-  }
-  if (stage === "Active Free") {
-    return "#ffa400";
-  }
-  if (stage === "Churned") {
-    return "#fc4c02";
-  }
-  if (stage === "Ghost") {
-    return "#9ca3af";
-  }
+  if (stage === "Active Paid") return "#006bff";
+  if (stage === "Active Free") return "#ffa400";
+  if (stage === "Churned") return "#fc4c02";
+  if (stage === "Ghost") return "#9ca3af";
   return "#9ca3af";
 }
 
@@ -58,11 +50,9 @@ export function isHighValueTier(tier: string | null): boolean {
 export function HighValueMedal() {
   return (
     <img
+      src="/assets/images/achievement-award-medal-icon.svg"
       alt="High value customer"
       className="h-5 w-5 shrink-0"
-      height={20}
-      src="/assets/images/achievement-award-medal-icon.svg"
-      width={20}
     />
   );
 }

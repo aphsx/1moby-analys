@@ -12,9 +12,7 @@ export async function abortTrainDataSource(sourceId: string): Promise<void> {
 }
 
 export async function abortPredictDataSource(sourceId: string): Promise<void> {
-  await db
-    .delete(predictDataSources)
-    .where(eq(predictDataSources.id, sourceId));
+  await db.delete(predictDataSources).where(eq(predictDataSources.id, sourceId));
 }
 
 /** Remove catalogs left in importing/cleaning after server/docker stopped. */
@@ -31,13 +29,8 @@ export async function releaseStaleTrainImports(): Promise<number> {
       )
     );
 
-  if (stale.length > 0) {
-    await db.delete(trainDataSources).where(
-      inArray(
-        trainDataSources.id,
-        stale.map((row) => row.id)
-      )
-    );
+  for (const row of stale) {
+    await abortTrainDataSource(row.id);
   }
   return stale.length;
 }
@@ -56,13 +49,8 @@ export async function releaseStalePredict(): Promise<number> {
       )
     );
 
-  if (stale.length > 0) {
-    await db.delete(predictDataSources).where(
-      inArray(
-        predictDataSources.id,
-        stale.map((row) => row.id)
-      )
-    );
+  for (const row of stale) {
+    await abortPredictDataSource(row.id);
   }
   return stale.length;
 }

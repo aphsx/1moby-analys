@@ -6,48 +6,48 @@
 
 /** Raw Drizzle row shape selected by both `train-data` and `predict-data` routes. */
 export interface DataSourceRow {
-  cleanedAt: Date | null;
-  cleanManifest: unknown;
+  id: string;
+  name: string;
   clientLabel: string | null;
-  createdAt: Date;
-  errorMessage: string | null;
+  originalFilename: string;
   fileChecksumSha256: string;
   fileSizeBytes: number | null;
-  id: string;
-  importedAt: Date | null;
-  importedBy: string | null;
-  importerEmail?: string | null;
-  importerName?: string | null;
   importStatus: string;
-  name: string;
-  notes: string | null;
-  originalFilename: string;
+  importedAt: Date | null;
   sheetManifest: unknown;
+  cleanManifest: unknown;
+  cleanedAt: Date | null;
+  notes: string | null;
+  errorMessage: string | null;
+  importedBy: string | null;
+  createdAt: Date;
+  importerName?: string | null;
+  importerEmail?: string | null;
 }
 
 /** Maps a data-source DB row to the snake_case API response shape. */
 export function mapDataSourceRow(row: DataSourceRow) {
   return {
+    id: row.id,
+    name: row.name,
+    client_label: row.clientLabel,
+    original_filename: row.originalFilename,
+    file_checksum_sha256: row.fileChecksumSha256,
+    file_size_bytes: row.fileSizeBytes,
+    import_status: row.importStatus,
+    imported_at: row.importedAt?.toISOString() ?? null,
+    sheet_manifest: row.sheetManifest,
     clean_manifest: row.cleanManifest,
     cleaned_at: row.cleanedAt?.toISOString() ?? null,
-    client_label: row.clientLabel,
-    created_at: row.createdAt.toISOString(),
+    notes: row.notes,
+    error_message: row.errorMessage,
+    imported_by: row.importedBy,
+    importer_name: row.importerName ?? null,
+    importer_email: row.importerEmail ?? null,
     // Uniform creator contract (matches prediction/training runs).
     created_by: row.importedBy,
     created_by_name: row.importerName ?? row.importerEmail ?? null,
-    error_message: row.errorMessage,
-    file_checksum_sha256: row.fileChecksumSha256,
-    file_size_bytes: row.fileSizeBytes,
-    id: row.id,
-    import_status: row.importStatus,
-    imported_at: row.importedAt?.toISOString() ?? null,
-    imported_by: row.importedBy,
-    importer_email: row.importerEmail ?? null,
-    importer_name: row.importerName ?? null,
-    name: row.name,
-    notes: row.notes,
-    original_filename: row.originalFilename,
-    sheet_manifest: row.sheetManifest,
+    created_at: row.createdAt.toISOString(),
   };
 }
 

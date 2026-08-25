@@ -13,19 +13,12 @@ const DEFAULT_ML_INTERNAL_TIMEOUT_MS = 30_000;
 
 function mlInternalTimeoutMs(): number {
   const parsed = Number(process.env.ML_INTERNAL_TIMEOUT_MS);
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : DEFAULT_ML_INTERNAL_TIMEOUT_MS;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ML_INTERNAL_TIMEOUT_MS;
 }
 
-export async function triggerMlJob(
-  path: string,
-  payload: object
-): Promise<void> {
+export async function triggerMlJob(path: string, payload: object): Promise<void> {
   const token = process.env.INTERNAL_SERVICE_TOKEN?.trim();
-  if (!token) {
-    throw new Error("INTERNAL_SERVICE_TOKEN environment variable is not set");
-  }
+  if (!token) throw new Error("INTERNAL_SERVICE_TOKEN environment variable is not set");
 
   const base = process.env.ML_INTERNAL_URL ?? "http://localhost:8000";
   const timeoutMs = mlInternalTimeoutMs();
@@ -35,12 +28,12 @@ export async function triggerMlJob(
   let res: Response;
   try {
     res = await fetch(`${base}${path}`, {
-      body: JSON.stringify(payload),
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-internal-token": token,
       },
-      method: "POST",
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
   } catch (e) {

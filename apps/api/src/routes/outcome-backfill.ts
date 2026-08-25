@@ -8,16 +8,15 @@
  * ml_model_evaluations (evaluation_type='production_holdout'). Per-run
  * evidence (including failures) lands in ml_data_validation_reports.
  */
-
-import type { OutcomeBackfillResponse } from "@moby/types";
-import { eq } from "drizzle-orm";
 import Elysia, { t } from "elysia";
+import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { mlPredictionRuns } from "../db/schema";
-import { denyNotFound } from "../lib/access-control";
 import { requireAdmin } from "../lib/auth-middleware";
-import { RUN_STATUS, UUID_RE } from "../lib/constants";
+import { denyNotFound } from "../lib/access-control";
 import { triggerMlJob } from "../lib/ml-internal";
+import { RUN_STATUS, UUID_RE } from "../lib/constants";
+import type { OutcomeBackfillResponse } from "@moby/types";
 
 export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })
   .use(requireAdmin)
@@ -34,22 +33,17 @@ export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })
           .from(mlPredictionRuns)
           .where(eq(mlPredictionRuns.id, body.prediction_run_id))
           .limit(1);
-        if (!run) {
-          return denyNotFound(set, "Prediction run not found");
-        }
+        if (!run) return denyNotFound(set, "Prediction run not found");
         if (run.status !== RUN_STATUS.COMPLETED) {
           set.status = 400;
-          return {
-            message:
-              "Only completed prediction runs can be measured against realized outcomes",
-          };
+          return { message: "Only completed prediction runs can be measured against realized outcomes" };
         }
       }
 
       try {
         await triggerMlJob("/internal/outcome-backfill", {
-          force: body.force ?? false,
           prediction_run_id: body.prediction_run_id ?? null,
+          force: body.force ?? false,
         });
       } catch (e) {
         // No run row owns this job's status — surface the trigger failure to
@@ -60,15 +54,15 @@ export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })
 
       const response: OutcomeBackfillResponse = {
         accepted: true,
-        force: body.force ?? false,
         prediction_run_id: body.prediction_run_id ?? null,
+        force: body.force ?? false,
       };
       return response;
     },
     {
       body: t.Object({
-        force: t.Optional(t.Boolean()),
         prediction_run_id: t.Optional(t.String()),
+        force: t.Optional(t.Boolean()),
       }),
     }
   );

@@ -1,32 +1,19 @@
 "use client";
-
 /**
  * Prediction runs list (redesigned, slim). 5 columns: run (+ source subtitle),
  * status (with inline progress / error), customers, when (relative), actions.
  * Polling while in_progress lives in RunsView.
  */
 
-import { ChevronRight, ListChecks, RefreshCw, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronRight, ListChecks, RefreshCw, Trash2 } from "lucide-react";
 import { StatusDialog } from "@/components/status-dialog";
 import {
-  EmptyState,
-  ProgressMeter,
-  SectionCard,
-  Skeleton,
-  StatusPill,
+  EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill,
 } from "@/components/ui";
-import {
-  CREATOR_OR_ADMIN_TITLE,
-  canMutateAsCreator,
-  useIsAdmin,
-} from "@/lib/auth";
-import {
-  deletePredictionRun,
-  type PredictionRun,
-  retryPredictionRun,
-} from "@/lib/ml-api";
+import { deletePredictionRun, retryPredictionRun, type PredictionRun } from "@/lib/ml-api";
+import { canMutateAsCreator, CREATOR_OR_ADMIN_TITLE, useIsAdmin } from "@/lib/auth";
 import { getDisplayError } from "@/lib/ui-error";
 import { useRunStore } from "@/stores/run-store";
 import { formatRelative, runStatusLabel, runStatusTone } from "./runs-utils";
@@ -41,8 +28,8 @@ export function isAutoRun(run: Pick<PredictionRun, "name">): boolean {
 function AutoRunBadge() {
   return (
     <span
-      className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-[color:var(--moby-50)] px-1.5 font-semibold text-[10px] text-[color:var(--moby-600)] uppercase tracking-[.08em]"
       title="run นี้ถูกสร้างอัตโนมัติหลัง import ข้อมูล predict"
+      className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-[color:var(--moby-50)] px-1.5 text-[10px] font-semibold uppercase tracking-[.08em] text-[color:var(--moby-600)]"
     >
       Auto
     </span>
@@ -66,8 +53,7 @@ export function RunsTable({
   const { isAdmin, userId } = useIsAdmin();
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [pendingDeleteRun, setPendingDeleteRun] =
-    useState<PredictionRun | null>(null);
+  const [pendingDeleteRun, setPendingDeleteRun] = useState<PredictionRun | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const openRun = (run: PredictionRun) => {
@@ -106,8 +92,8 @@ export function RunsTable({
     <>
       <SectionCard
         eyebrow="Run history"
-        hint="หนึ่งแถวต่อหนึ่งรอบทำนาย — เปิด run ที่ completed เพื่อดู dashboard"
         title="run ล่าสุด"
+        hint="หนึ่งแถวต่อหนึ่งรอบทำนาย — เปิด run ที่ completed เพื่อดู dashboard"
       >
         {error && (
           <div className="mb-4 rounded-2xl border border-[color:var(--danger)] bg-[color:var(--danger-bg)] px-4 py-3 text-[13px] text-[color:var(--danger)]">
@@ -117,15 +103,15 @@ export function RunsTable({
 
         {loading ? (
           <div className="space-y-2">
-            {[...new Array(4)].map((_, i) => (
-              <Skeleton className="h-8" key={i} />
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-8" />
             ))}
           </div>
         ) : runs.length === 0 ? (
           <EmptyState
-            hint="เลือก predict source ที่ ready แล้วกด รัน ด้านบน"
             icon={ListChecks}
             title="ยังไม่มี prediction run — import ข้อมูลและสร้าง run แรก"
+            hint="เลือก predict source ที่ ready แล้วกด รัน ด้านบน"
           />
         ) : (
           <div className="overflow-x-auto rounded-[22px] border border-gray-200">
@@ -136,24 +122,20 @@ export function RunsTable({
                   <th>Status</th>
                   <th className="text-right">Customers</th>
                   <th>เมื่อไหร่</th>
-                  <th />
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {runs.map((run) => (
                   <RunRow
-                    canMutate={canMutateAsCreator(
-                      isAdmin,
-                      userId,
-                      run.created_by
-                    )}
-                    deleting={deletingId === run.id}
                     key={run.id}
-                    onDelete={() => setPendingDeleteRun(run)}
+                    run={run}
+                    canMutate={canMutateAsCreator(isAdmin, userId, run.created_by)}
+                    retrying={retryingId === run.id}
+                    deleting={deletingId === run.id}
                     onOpen={() => openRun(run)}
                     onRetry={() => void retry(run)}
-                    retrying={retryingId === run.id}
-                    run={run}
+                    onDelete={() => setPendingDeleteRun(run)}
                   />
                 ))}
               </tbody>
@@ -164,14 +146,14 @@ export function RunsTable({
 
       {pendingDeleteRun && (
         <StatusDialog
-          cancelLabel="ยกเลิก"
+          open
+          tone="warning"
+          title="ยืนยันการลบผลลัพธ์ทำนายรอบนี้"
           confirmLabel="ลบ run"
+          cancelLabel="ยกเลิก"
           loading={deletingId === pendingDeleteRun.id}
           onCancel={() => setPendingDeleteRun(null)}
           onConfirm={() => void remove(pendingDeleteRun)}
-          open
-          title="ยืนยันการลบผลลัพธ์ทำนายรอบนี้"
-          tone="warning"
         />
       )}
     </>
@@ -212,7 +194,7 @@ function RunRow({
       <td>
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
-            <StatusPill loading={inProgress} tone={runStatusTone(run.status)}>
+            <StatusPill tone={runStatusTone(run.status)} loading={inProgress}>
               {runStatusLabel(run.status)}
             </StatusPill>
             {run.status === "failed" && run.error_message && (
@@ -226,54 +208,42 @@ function RunRow({
           </div>
           {inProgress && run.progress && (
             <div className="max-w-[240px]">
-              <ProgressMeter
-                label={run.progress.step}
-                value={run.progress.pct}
-              />
+              <ProgressMeter value={run.progress.pct} label={run.progress.step} />
             </div>
           )}
         </div>
       </td>
-      <td className="num text-right">
-        {run.total_customers?.toLocaleString() ?? "—"}
-      </td>
+      <td className="text-right num">{run.total_customers?.toLocaleString() ?? "—"}</td>
       <td className="text-[color:var(--ink-3)]">
         {formatRelative(run.finished_at ?? run.created_at)}
       </td>
       <td className="text-right">
         <div className="flex items-center justify-end gap-1.5">
           {run.status === "completed" && (
-            <button className={actionBtnCls} onClick={onOpen} type="button">
+            <button type="button" onClick={onOpen} className={actionBtnCls}>
               เปิด <ChevronRight size={11} />
             </button>
           )}
           {run.status === "failed" && (
             <button
-              className={actionBtnCls}
-              disabled={retrying || !canMutate}
-              onClick={onRetry}
-              title={canMutate ? undefined : CREATOR_OR_ADMIN_TITLE}
               type="button"
+              onClick={onRetry}
+              disabled={retrying || !canMutate}
+              title={canMutate ? undefined : CREATOR_OR_ADMIN_TITLE}
+              className={actionBtnCls}
             >
-              <RefreshCw
-                className={retrying ? "animate-spin" : undefined}
-                size={11}
-              />
+              <RefreshCw size={11} className={retrying ? "animate-spin" : undefined} />
               ลองใหม่
             </button>
           )}
           <button
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[color:var(--ink-4)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={deleting || !canMutate}
-            onClick={onDelete}
-            title={canMutate ? "ลบ run" : CREATOR_OR_ADMIN_TITLE}
             type="button"
+            onClick={onDelete}
+            disabled={deleting || !canMutate}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[color:var(--ink-4)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
+            title={canMutate ? "ลบ run" : CREATOR_OR_ADMIN_TITLE}
           >
-            {deleting ? (
-              <RefreshCw className="animate-spin" size={13} />
-            ) : (
-              <Trash2 size={13} />
-            )}
+            {deleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
           </button>
         </div>
       </td>

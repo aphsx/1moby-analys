@@ -5,9 +5,9 @@
  * (see features/dashboard/palette.ts for derived gradients/palettes).
  */
 export const MOBY_BRAND = {
+  dark: "#1D1F2A",
   blue: "#006BFF",
   blueLight: "#1893F0",
-  dark: "#1D1F2A",
   orange: "#FC4C02",
   orangeWarm: "#FFA400",
   radialGlow: "rgba(7, 29, 126, 0.608)",

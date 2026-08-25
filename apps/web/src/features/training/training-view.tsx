@@ -15,8 +15,8 @@ import { Skeleton } from "@/components/ui";
 import {
   deleteTrainDataSource,
   fetchTrainDataSources,
-  type TrainDataSource,
   uploadTrainDataFileWithProgress,
+  type TrainDataSource,
 } from "@/lib/api";
 import {
   createTrainingRun,
@@ -29,11 +29,10 @@ import { getDisplayError } from "@/lib/ui-error";
 import { ModelStatusCards } from "./model-status-cards";
 import { TrainPanel } from "./train-panel";
 import { TrainingHistoryTable } from "./training-history-table";
-import { promotedSummary } from "./training-run-utils";
 import { getTimestamp, wait } from "./training-utils";
+import { promotedSummary } from "./training-run-utils";
 
-const POLL_INTERVAL_MS = 3000;
-const XLSX_EXTENSION_RE = /\.xlsx$/i;
+const POLL_INTERVAL_MS = 3_000;
 
 function isActiveRunStatus(status: RunStatus) {
   return status === "in_progress" || status === "pending";
@@ -54,24 +53,22 @@ function applyTrainingRuns(
       knownStatuses.set(run.id, run.status);
       continue;
     }
-    if (previous === run.status) {
-      continue;
-    }
+    if (previous === run.status) continue;
 
     if (isActiveRunStatus(previous) && run.status === "completed") {
       const promoted = promotedSummary(run.results);
       notifyStatusDialog({
+        tone: "success",
+        title: "เทรนโมเดลสำเร็จ",
         message: promoted
           ? `Training pipeline เสร็จแล้ว (${promoted})`
           : "Training pipeline เสร็จแล้ว — ดูผลลัพธ์ด้านล่าง",
-        title: "เทรนโมเดลสำเร็จ",
-        tone: "success",
       });
     } else if (isActiveRunStatus(previous) && run.status === "failed") {
       notifyStatusDialog({
-        message: run.error_message ?? "เกิดข้อผิดพลาดระหว่าง training pipeline",
-        title: "เทรนโมเดลไม่สำเร็จ",
         tone: "error",
+        title: "เทรนโมเดลไม่สำเร็จ",
+        message: run.error_message ?? "เกิดข้อผิดพลาดระหว่าง training pipeline",
       });
     }
 
@@ -95,8 +92,7 @@ export function TrainingView() {
 
   // Delete-source state
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [pendingDeleteSource, setPendingDeleteSource] =
-    useState<TrainDataSource | null>(null);
+  const [pendingDeleteSource, setPendingDeleteSource] = useState<TrainDataSource | null>(null);
 
   // Training-run state
   const [runs, setRuns] = useState<TrainingRun[]>([]);
@@ -110,9 +106,7 @@ export function TrainingView() {
   const loadSources = useCallback(async () => {
     setLoadError(null);
     try {
-      const sources = await fetchTrainDataSources().catch(
-        () => [] as TrainDataSource[]
-      );
+      const sources = await fetchTrainDataSources().catch(() => [] as TrainDataSource[]);
       setTrainSources(Array.isArray(sources) ? sources : []);
     } catch (e) {
       setTrainSources([]);
@@ -142,21 +136,14 @@ export function TrainingView() {
     [readySources]
   );
   const selectedSource =
-    sortedReady.find((source) => source.id === selectedSourceId) ??
-    sortedReady[0] ??
-    null;
+    sortedReady.find((source) => source.id === selectedSourceId) ?? sortedReady[0] ?? null;
 
   useEffect(() => {
     if (sortedReady.length === 0) {
       setSelectedSourceId(null);
       return;
     }
-    if (
-      selectedSourceId &&
-      sortedReady.some((source) => source.id === selectedSourceId)
-    ) {
-      return;
-    }
+    if (selectedSourceId && sortedReady.some((source) => source.id === selectedSourceId)) return;
     setSelectedSourceId(sortedReady[0]?.id ?? null);
   }, [selectedSourceId, sortedReady]);
 
@@ -165,15 +152,11 @@ export function TrainingView() {
   useEffect(() => {
     setSuggestedCutoff(null);
     setLatestDataDate(null);
-    if (!selectedSourceId2) {
-      return;
-    }
+    if (!selectedSourceId2) return;
     let alive = true;
     fetchTrainSuggestedCutoff(selectedSourceId2)
       .then(({ suggested_cutoff, latest_data_date }) => {
-        if (!alive) {
-          return;
-        }
+        if (!alive) return;
         setSuggestedCutoff(suggested_cutoff);
         setLatestDataDate(latest_data_date);
       })
@@ -205,15 +188,13 @@ export function TrainingView() {
     (run) => run.status === "in_progress" || run.status === "pending"
   );
   useEffect(() => {
-    if (!hasActiveRun) {
-      return;
-    }
+    if (!hasActiveRun) return;
     const timer = setInterval(() => void loadRuns(), POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [hasActiveRun, loadRuns]);
 
   const handleUpload = async (file: File) => {
-    const datasetName = file.name.replace(XLSX_EXTENSION_RE, "");
+    const datasetName = file.name.replace(/\.xlsx$/i, "");
     setImporting(true);
     setImportProgress(1);
     setImportStep("Uploading Excel file...");
@@ -226,9 +207,7 @@ export function TrainingView() {
         (event) => {
           setImportProgress(event.progress);
           setImportStep(event.step);
-          if (event.phase) {
-            setImportPhase(event.phase);
-          }
+          if (event.phase) setImportPhase(event.phase);
         },
         undefined
       );
@@ -237,9 +216,9 @@ export function TrainingView() {
       await wait(450);
       await loadSources();
       notifyStatusDialog({
-        message: "ระบบ import และ clean data เสร็จเรียบร้อย",
-        title: "นำเข้าข้อมูลสำเร็จ",
         tone: "success",
+        title: "นำเข้าข้อมูลสำเร็จ",
+        message: "ระบบ import และ clean data เสร็จเรียบร้อย",
       });
     } catch (e) {
       setImportProgress(0);
@@ -247,13 +226,12 @@ export function TrainingView() {
       setImportPhase(null);
       const err = e as Error & { code?: string };
       notifyStatusDialog({
+        tone: "error",
+        title: "นำเข้าข้อมูลไม่สำเร็จ",
         message:
           err.code === "DUPLICATE_FILE"
             ? "ไฟล์นี้ถูกนำเข้าแล้ว เลือก dataset เดิมจากรายการได้เลย"
-            : (getDisplayError(e, "นำเข้าข้อมูลไม่สำเร็จ") ??
-              "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง"),
-        title: "นำเข้าข้อมูลไม่สำเร็จ",
-        tone: "error",
+            : getDisplayError(e, "นำเข้าข้อมูลไม่สำเร็จ") ?? "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
       });
     } finally {
       setImporting(false);
@@ -268,32 +246,25 @@ export function TrainingView() {
       setTrainSources((prev) => prev.filter((item) => item.id !== source.id));
     } catch (e) {
       notifyStatusDialog({
-        message:
-          getDisplayError(e, "ลบ dataset ไม่สำเร็จ") ??
-          "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
-        title: "ลบ dataset ไม่สำเร็จ",
         tone: "error",
+        title: "ลบ dataset ไม่สำเร็จ",
+        message: getDisplayError(e, "ลบ dataset ไม่สำเร็จ") ?? "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
       });
     } finally {
       setDeletingId(null);
     }
   };
 
-  const handleTrain = async (input: {
-    cutoff_date: string;
-    horizon_days: number;
-  }) => {
-    if (!selectedSource) {
-      return;
-    }
+  const handleTrain = async (input: { cutoff_date: string; horizon_days: number }) => {
+    if (!selectedSource) return;
     setCreating(true);
     setTrainError(null);
     try {
       const run = await createTrainingRun({
-        cutoff_date: input.cutoff_date,
-        dataset_name: selectedSource.name,
-        horizon_days: input.horizon_days,
         train_source_id: selectedSource.id,
+        dataset_name: selectedSource.name,
+        cutoff_date: input.cutoff_date,
+        horizon_days: input.horizon_days,
       });
       knownStatusesRef.current.set(run.id, run.status);
       setRuns((prev) => [run, ...prev.filter((item) => item.id !== run.id)]);
@@ -305,9 +276,7 @@ export function TrainingView() {
   };
 
   const latestCompleted =
-    runs.find(
-      (run) => run.status === "completed" && (run.results?.length ?? 0) > 0
-    ) ?? null;
+    runs.find((run) => run.status === "completed" && (run.results?.length ?? 0) > 0) ?? null;
 
   if (loading) {
     return (
@@ -330,40 +299,37 @@ export function TrainingView() {
         )}
 
         <TrainPanel
-          creating={creating}
-          importing={importing}
-          importPhase={importPhase}
-          importProgress={importProgress}
-          importStep={importStep}
-          latestDataDate={latestDataDate}
-          onDeleteSource={(source) => setPendingDeleteSource(source)}
-          onSelect={(id) => setSelectedSourceId(id)}
-          onTrain={handleTrain}
-          onUpload={(file) => void handleUpload(file)}
           readySources={sortedReady}
           selectedSource={selectedSource}
+          onSelect={(id) => setSelectedSourceId(id)}
+          onDeleteSource={(source) => setPendingDeleteSource(source)}
+          onUpload={(file) => void handleUpload(file)}
+          importing={importing}
+          importProgress={importProgress}
+          importStep={importStep}
+          importPhase={importPhase}
           suggestedCutoff={suggestedCutoff}
+          latestDataDate={latestDataDate}
+          creating={creating}
+          onTrain={handleTrain}
         />
 
-        <ModelStatusCards
-          key={latestCompleted?.finished_at ?? "none"}
-          latestRun={latestCompleted}
-        />
+        <ModelStatusCards key={latestCompleted?.finished_at ?? "none"} latestRun={latestCompleted} />
 
-        <TrainingHistoryTable loading={runsLoading} runs={runs} />
+        <TrainingHistoryTable runs={runs} loading={runsLoading} />
       </div>
 
       {pendingDeleteSource && (
         <StatusDialog
-          cancelLabel="ยกเลิก"
-          confirmLabel="ลบ dataset"
-          loading={deletingId === pendingDeleteSource.id}
+          open
+          tone="warning"
+          title="ยืนยันการลบ dataset"
           message="ข้อมูล raw และ clean ทั้งหมดของ dataset นี้จะถูกลบถาวร"
+          confirmLabel="ลบ dataset"
+          cancelLabel="ยกเลิก"
+          loading={deletingId === pendingDeleteSource.id}
           onCancel={() => setPendingDeleteSource(null)}
           onConfirm={() => void deleteSource(pendingDeleteSource)}
-          open
-          title="ยืนยันการลบ dataset"
-          tone="warning"
         />
       )}
     </main>

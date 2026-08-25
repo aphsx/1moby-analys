@@ -3,26 +3,25 @@
  * and Redis progress streaming. Extracted from routes/train-data.ts so the route
  * file stays thin (HTTP concerns only).
  */
-
-import { abortTrainDataSource } from "./abort-data-source";
-import { MAX_UPLOAD_BYTES } from "./constants";
-import { cleanTrainFromRaw } from "./train-clean";
 import { importTrainExcel, type TrainImportResult } from "./train-import";
 import type { TrainImportProgressEvent } from "./train-import-progress";
+import { abortTrainDataSource } from "./abort-data-source";
+import { cleanTrainFromRaw } from "./train-clean";
+import { mapRawImportProgress } from "./train-pipeline-progress";
 import {
   publishTrainImportDone,
   publishTrainImportError,
   publishTrainPipelineProgress,
 } from "./train-import-stream";
-import { mapRawImportProgress } from "./train-pipeline-progress";
+import { MAX_UPLOAD_BYTES } from "./constants";
 
 export interface TrainImportParams {
   buffer: Buffer;
-  client_label: string | null;
   filename: string;
-  imported_by: string;
   name: string;
+  client_label: string | null;
   notes: string | null;
+  imported_by: string;
 }
 
 /** Reads an uploaded file into a Buffer, enforcing the upload size limit. */
@@ -39,11 +38,11 @@ async function publishRawProgress(
   event: TrainImportProgressEvent
 ): Promise<void> {
   await publishTrainPipelineProgress(sourceId, {
-    phase: "raw",
     progress: mapRawImportProgress(event.progress),
-    rows: event.rows,
-    sheet: event.sheet,
     step: event.step,
+    phase: "raw",
+    sheet: event.sheet,
+    rows: event.rows,
   });
 }
 
@@ -53,22 +52,19 @@ export async function runTrainImportPipeline(
 ): Promise<TrainImportResult> {
   const sourceId = params.sourceId;
   try {
-    await publishRawProgress(sourceId, {
-      progress: 0,
-      step: "Reading workbook…",
-    });
+    await publishRawProgress(sourceId, { progress: 0, step: "Reading workbook…" });
     const rawResult = await importTrainExcel({
       buffer: params.buffer,
-      client_label: params.client_label,
-      deferReadyCatalog: true,
       filename: params.filename,
-      imported_by: params.imported_by,
       name: params.name,
+      client_label: params.client_label,
       notes: params.notes,
+      imported_by: params.imported_by,
+      sourceId,
+      deferReadyCatalog: true,
       onProgress: (event) => {
         void publishRawProgress(sourceId, event);
       },
-      sourceId,
     });
 
     const cleanManifest = await cleanTrainFromRaw(sourceId, (event) => {
@@ -77,8 +73,8 @@ export async function runTrainImportPipeline(
 
     return {
       ...rawResult,
-      clean_manifest: cleanManifest,
       import_status: "ready",
+      clean_manifest: cleanManifest,
     };
   } catch (e) {
     const err = e as Error & { code?: string };
@@ -90,19 +86,14 @@ export async function runTrainImportPipeline(
 }
 
 /** Fire-and-forget background variant for the async import endpoint. */
-export function runTrainImportJob(
-  sourceId: string,
-  params: TrainImportParams
-): void {
+export function runTrainImportJob(sourceId: string, params: TrainImportParams): void {
   void (async () => {
     try {
       const result = await runTrainImportPipeline({ ...params, sourceId });
       await publishTrainImportDone(sourceId, result);
     } catch (e) {
       const err = e as Error & { code?: string; source_id?: string };
-      if (err.code === "DUPLICATE_FILE") {
-        return;
-      }
+      if (err.code === "DUPLICATE_FILE") return;
       await publishTrainImportError(sourceId, err.message ?? "Import failed");
       await abortTrainDataSource(sourceId);
     }

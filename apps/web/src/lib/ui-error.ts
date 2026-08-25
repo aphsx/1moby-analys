@@ -1,4 +1,6 @@
-const HIDDEN_UI_ERROR_MESSAGES = new Set(["API returned invalid JSON"]);
+const HIDDEN_UI_ERROR_MESSAGES = new Set([
+  "API returned invalid JSON",
+]);
 
 export function getDisplayError(
   error: unknown,

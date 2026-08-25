@@ -19,8 +19,6 @@
  *   OLLAMA_API_KEY → LLM_API_KEY   OLLAMA_HOST → LLM_BASE_URL   OLLAMA_MODEL → LLM_MODEL
  */
 
-const TRAILING_SLASHES_RE = /\/+$/;
-
 export type LLMProvider = "openai" | "ollama";
 
 export type LLMConfig = {
@@ -34,15 +32,15 @@ export type LLMConfig = {
 type ProviderDefaults = { baseUrl: string; model: string; embedModel: string };
 
 const PROVIDER_DEFAULTS: Record<LLMProvider, ProviderDefaults> = {
-  ollama: {
-    baseUrl: "http://localhost:11434",
-    embedModel: "nomic-embed-text",
-    model: "qwen3.5:397b-cloud",
-  },
   openai: {
     baseUrl: "https://api.openai.com/v1",
-    embedModel: "text-embedding-3-small",
     model: "gpt-4o",
+    embedModel: "text-embedding-3-small",
+  },
+  ollama: {
+    baseUrl: "http://localhost:11434",
+    model: "qwen3.5:397b-cloud",
+    embedModel: "nomic-embed-text",
   },
 };
 
@@ -53,30 +51,28 @@ export function getLLMConfig(): LLMConfig {
 
   const apiKey =
     process.env.LLM_API_KEY?.trim() ||
-    (provider === "ollama" ? (process.env.OLLAMA_API_KEY?.trim() ?? "") : "") ||
+    (provider === "ollama" ? process.env.OLLAMA_API_KEY?.trim() ?? "" : "") ||
     "";
 
   const baseUrl = (
     process.env.LLM_BASE_URL?.trim() ||
-    (provider === "ollama" ? (process.env.OLLAMA_HOST?.trim() ?? "") : "") ||
+    (provider === "ollama" ? process.env.OLLAMA_HOST?.trim() ?? "" : "") ||
     d.baseUrl
-  ).replace(TRAILING_SLASHES_RE, "");
+  ).replace(/\/+$/, "");
 
   const model =
     process.env.LLM_MODEL?.trim() ||
-    (provider === "ollama" ? (process.env.OLLAMA_MODEL?.trim() ?? "") : "") ||
+    (provider === "ollama" ? process.env.OLLAMA_MODEL?.trim() ?? "" : "") ||
     d.model;
 
   const embedModel = process.env.LLM_EMBED_MODEL?.trim() || d.embedModel;
 
-  return { apiKey, baseUrl, embedModel, model, provider };
+  return { provider, apiKey, baseUrl, model, embedModel };
 }
 
 /** True when the provider looks configured enough to attempt a call. */
 export function isLLMConfigured(): boolean {
   const c = getLLMConfig();
-  if (c.provider === "openai") {
-    return c.apiKey.length > 0;
-  }
+  if (c.provider === "openai") return c.apiKey.length > 0;
   return true; // Ollama: key optional for local, runtime error surfaces if missing for Cloud
 }

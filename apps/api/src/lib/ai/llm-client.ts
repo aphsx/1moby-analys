@@ -27,14 +27,12 @@ export type CompletionOptions = {
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 /** Non-streaming completion. Returns the full response text. */
-export function complete(
+export async function complete(
   messages: ChatMessage[],
   opts: CompletionOptions = {}
 ): Promise<string> {
   const c = opts.config ?? getLLMConfig();
-  if (c.provider === "openai") {
-    return completeOpenAI(messages, c, opts);
-  }
+  if (c.provider === "openai") return completeOpenAI(messages, c, opts);
   return completeOllama(messages, c, opts);
 }
 
@@ -64,8 +62,8 @@ type OpenAIRequest = {
 
 function openAIHeaders(config: LLMConfig): Record<string, string> {
   return {
-    Authorization: `Bearer ${config.apiKey}`,
     "Content-Type": "application/json",
+    Authorization: `Bearer ${config.apiKey}`,
   };
 }
 
@@ -76,17 +74,13 @@ function openAIBody(
   opts: CompletionOptions
 ): OpenAIRequest {
   const body: OpenAIRequest = {
-    messages,
     model: config.model,
+    messages,
     stream: streaming,
     temperature: opts.temperature ?? 0.25,
   };
-  if (opts.maxTokens) {
-    body.max_tokens = opts.maxTokens;
-  }
-  if (opts.jsonMode) {
-    body.response_format = { type: "json_object" };
-  }
+  if (opts.maxTokens) body.max_tokens = opts.maxTokens;
+  if (opts.jsonMode) body.response_format = { type: "json_object" };
   return body;
 }
 
@@ -96,9 +90,9 @@ async function completeOpenAI(
   opts: CompletionOptions
 ): Promise<string> {
   const res = await fetch(`${config.baseUrl}/chat/completions`, {
-    body: JSON.stringify(openAIBody(config, messages, false, opts)),
-    headers: openAIHeaders(config),
     method: "POST",
+    headers: openAIHeaders(config),
+    body: JSON.stringify(openAIBody(config, messages, false, opts)),
   });
 
   if (!res.ok) {
@@ -118,18 +112,16 @@ async function* streamOpenAI(
   opts: CompletionOptions
 ): AsyncGenerator<string> {
   const res = await fetch(`${config.baseUrl}/chat/completions`, {
-    body: JSON.stringify(openAIBody(config, messages, true, opts)),
-    headers: openAIHeaders(config),
     method: "POST",
+    headers: openAIHeaders(config),
+    body: JSON.stringify(openAIBody(config, messages, true, opts)),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new LLMError(`OpenAI stream ${res.status}`, text, config.provider);
   }
-  if (!res.body) {
-    throw new LLMError("No response body", "", config.provider);
-  }
+  if (!res.body) throw new LLMError("No response body", "", config.provider);
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -138,9 +130,7 @@ async function* streamOpenAI(
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
+      if (done) break;
       buf += decoder.decode(value, { stream: true });
 
       const lines = buf.split("\n");
@@ -148,22 +138,16 @@ async function* streamOpenAI(
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) {
-          continue;
-        }
+        if (!trimmed.startsWith("data: ")) continue;
         const payload = trimmed.slice(6);
-        if (payload === "[DONE]") {
-          return;
-        }
+        if (payload === "[DONE]") return;
 
         try {
           const parsed = JSON.parse(payload) as {
             choices?: Array<{ delta?: { content?: string } }>;
           };
           const token = parsed.choices?.[0]?.delta?.content;
-          if (token) {
-            yield token;
-          }
+          if (token) yield token;
         } catch {
           // skip malformed line
         }
@@ -186,9 +170,7 @@ type OllamaRequest = {
 
 function ollamaHeaders(config: LLMConfig): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (config.apiKey) {
-    h.Authorization = `Bearer ${config.apiKey}`;
-  }
+  if (config.apiKey) h.Authorization = `Bearer ${config.apiKey}`;
   return h;
 }
 
@@ -198,24 +180,12 @@ function ollamaBody(
   streaming: boolean,
   opts: CompletionOptions
 ): OllamaRequest {
-  const body: OllamaRequest = {
-    messages,
-    model: config.model,
-    stream: streaming,
-  };
+  const body: OllamaRequest = { model: config.model, messages, stream: streaming };
   const options: OllamaRequest["options"] = {};
-  if (opts.temperature !== undefined) {
-    options.temperature = opts.temperature;
-  }
-  if (opts.maxTokens) {
-    options.num_predict = opts.maxTokens;
-  }
-  if (Object.keys(options).length) {
-    body.options = options;
-  }
-  if (opts.jsonMode) {
-    body.format = "json";
-  }
+  if (opts.temperature !== undefined) options.temperature = opts.temperature;
+  if (opts.maxTokens) options.num_predict = opts.maxTokens;
+  if (Object.keys(options).length) body.options = options;
+  if (opts.jsonMode) body.format = "json";
   return body;
 }
 
@@ -225,9 +195,9 @@ async function completeOllama(
   opts: CompletionOptions
 ): Promise<string> {
   const res = await fetch(`${config.baseUrl}/api/chat`, {
-    body: JSON.stringify(ollamaBody(config, messages, false, opts)),
-    headers: ollamaHeaders(config),
     method: "POST",
+    headers: ollamaHeaders(config),
+    body: JSON.stringify(ollamaBody(config, messages, false, opts)),
   });
 
   if (!res.ok) {
@@ -245,18 +215,16 @@ async function* streamOllama(
   opts: CompletionOptions
 ): AsyncGenerator<string> {
   const res = await fetch(`${config.baseUrl}/api/chat`, {
-    body: JSON.stringify(ollamaBody(config, messages, true, opts)),
-    headers: ollamaHeaders(config),
     method: "POST",
+    headers: ollamaHeaders(config),
+    body: JSON.stringify(ollamaBody(config, messages, true, opts)),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new LLMError(`Ollama stream ${res.status}`, text, config.provider);
   }
-  if (!res.body) {
-    throw new LLMError("No response body", "", config.provider);
-  }
+  if (!res.body) throw new LLMError("No response body", "", config.provider);
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -265,9 +233,7 @@ async function* streamOllama(
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
+      if (done) break;
       buf += decoder.decode(value, { stream: true });
 
       const lines = buf.split("\n");
@@ -275,21 +241,15 @@ async function* streamOllama(
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed) {
-          continue;
-        }
+        if (!trimmed) continue;
         try {
           const parsed = JSON.parse(trimmed) as {
             message?: { content?: string };
             done?: boolean;
           };
           const token = parsed.message?.content;
-          if (token) {
-            yield token;
-          }
-          if (parsed.done) {
-            return;
-          }
+          if (token) yield token;
+          if (parsed.done) return;
         } catch {
           // skip malformed NDJSON line
         }
@@ -315,18 +275,10 @@ export class LLMError extends Error {
   /** Map to a stable error code for the API response. */
   get code(): string {
     const m = this.detail.toLowerCase();
-    if (m.includes("subscription") || m.includes("upgrade for access")) {
-      return "llm_subscription_required";
-    }
-    if (m.includes("model") && m.includes("not found")) {
-      return "llm_model_not_found";
-    }
-    if (m.includes("rate limit") || m.includes("rate_limit")) {
-      return "llm_rate_limit";
-    }
-    if (m.includes("context length") || m.includes("context_length")) {
-      return "llm_context_too_long";
-    }
+    if (m.includes("subscription") || m.includes("upgrade for access")) return "llm_subscription_required";
+    if (m.includes("model") && m.includes("not found")) return "llm_model_not_found";
+    if (m.includes("rate limit") || m.includes("rate_limit")) return "llm_rate_limit";
+    if (m.includes("context length") || m.includes("context_length")) return "llm_context_too_long";
     return "llm_request_failed";
   }
 }

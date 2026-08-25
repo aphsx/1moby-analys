@@ -1,6 +1,6 @@
 import Elysia, { t } from "elysia";
-import { createRunInsight, getRunInsight } from "../../lib/ai";
 import { requireUser } from "../../lib/auth-middleware";
+import { createRunInsight, getRunInsight } from "../../lib/ai";
 import { fetchRun, requireRunFound } from "./_helpers";
 
 /**
@@ -15,10 +15,8 @@ export const insightRoutes = new Elysia()
     async ({ params, set }) => {
       const run = await fetchRun(params.id);
       const denied = requireRunFound(run, set);
-      if (denied || !run) {
-        return denied;
-      }
-      return getRunInsight(run.id);
+      if (denied) return denied;
+      return getRunInsight(run!.id);
     },
     { params: t.Object({ id: t.String() }) }
   )
@@ -27,15 +25,13 @@ export const insightRoutes = new Elysia()
     async ({ params, body, set }) => {
       const run = await fetchRun(params.id);
       const denied = requireRunFound(run, set);
-      if (denied || !run) {
-        return denied;
-      }
-      if (run.status !== "completed") {
+      if (denied) return denied;
+      if (run!.status !== "completed") {
         set.status = 400;
         return { message: "Run must be completed before generating insight" };
       }
 
-      const result = await createRunInsight(run.id, body.force ?? false);
+      const result = await createRunInsight(run!.id, body.force ?? false);
       if ("status" in result) {
         set.status = result.status;
         return result.body;
@@ -43,7 +39,7 @@ export const insightRoutes = new Elysia()
       return result;
     },
     {
-      body: t.Object({ force: t.Optional(t.Boolean()) }),
       params: t.Object({ id: t.String() }),
+      body: t.Object({ force: t.Optional(t.Boolean()) }),
     }
   );

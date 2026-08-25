@@ -26,10 +26,7 @@ type ServiceError = {
 };
 
 const outputWhere = (runId: string, accId: number) =>
-  and(
-    eq(mlPredictionOutputs.predictionRunId, runId),
-    eq(mlPredictionOutputs.accId, accId)
-  );
+  and(eq(mlPredictionOutputs.predictionRunId, runId), eq(mlPredictionOutputs.accId, accId));
 
 export async function createCustomerAiExplanation(
   run: RunRow,
@@ -39,18 +36,12 @@ export async function createCustomerAiExplanation(
 ): Promise<CustomerAiExplanationResponse | ServiceError> {
   if (output.ai_status === "completed" && output.ai_explanation && !force) {
     return {
-      body: {
-        code: "ai_already_exists",
-        message: "AI explanation already exists",
-      },
       status: 409,
+      body: { message: "AI explanation already exists", code: "ai_already_exists" },
     };
   }
 
-  await db
-    .update(mlPredictionOutputs)
-    .set({ aiStatus: "pending" })
-    .where(outputWhere(run.id, accId));
+  await db.update(mlPredictionOutputs).set({ aiStatus: "pending" }).where(outputWhere(run.id, accId));
 
   try {
     const context = await buildCustomerAiContext(run, accId, output);
@@ -61,43 +52,38 @@ export async function createCustomerAiExplanation(
     // grounded in. Keeps a structured, queryable record next to the free text
     // and lets the UI fall back to facts if the narrative is ever unavailable.
     const reasoningJson = {
-      churn_factors: output.churn_factors ?? null,
       signals: context.signals,
+      churn_factors: output.churn_factors ?? null,
     };
 
     const [updated] = await db
       .update(mlPredictionOutputs)
       .set({
-        aiExplanation: explanation,
-        aiGeneratedAt: generatedAt,
-        aiModel: model,
-        aiReasoningJson: reasoningJson,
         aiStatus: "completed",
+        aiExplanation: explanation,
+        aiReasoningJson: reasoningJson,
+        aiModel: model,
+        aiGeneratedAt: generatedAt,
       })
       .where(outputWhere(run.id, accId))
       .returning({
         accId: mlPredictionOutputs.accId,
-        aiExplanation: mlPredictionOutputs.aiExplanation,
         aiStatus: mlPredictionOutputs.aiStatus,
+        aiExplanation: mlPredictionOutputs.aiExplanation,
       });
 
     return {
       acc_id: updated.accId,
-      ai_explanation: updated.aiExplanation,
-      ai_generated_at: generatedAt.toISOString(),
-      ai_model: model,
       ai_status: updated.aiStatus as PredictionOutput["ai_status"],
+      ai_explanation: updated.aiExplanation,
+      ai_model: model,
+      ai_generated_at: generatedAt.toISOString(),
     };
   } catch (e) {
-    await db
-      .update(mlPredictionOutputs)
-      .set({ aiStatus: "failed" })
-      .where(outputWhere(run.id, accId));
+    await db.update(mlPredictionOutputs).set({ aiStatus: "failed" }).where(outputWhere(run.id, accId));
     return {
-      body: {
-        message: (e as Error).message || "Failed to generate AI explanation",
-      },
       status: 500,
+      body: { message: (e as Error).message || "Failed to generate AI explanation" },
     };
   }
 }
