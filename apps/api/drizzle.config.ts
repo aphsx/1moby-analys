@@ -1,10 +1,15 @@
 import type { Config } from "drizzle-kit";
 
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL environment variable is not set");
+}
+
 export default {
-  dialect: "postgresql",
-  schema: "./src/db/schema.ts",
-  out: "./drizzle",
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
+    url: databaseUrl,
   },
+  dialect: "postgresql",
+  out: "./drizzle",
+  schema: "./src/db/schema.ts",
 } satisfies Config;

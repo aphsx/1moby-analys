@@ -1,9 +1,10 @@
 /**
  * Redis Stream progress for async train import (polled via GET /import/progress).
  */
+
+import { getRedis } from "./redis";
 import type { TrainImportResult } from "./train-import";
 import type { TrainPipelineProgressEvent } from "./train-pipeline-progress";
-import { getRedis } from "./redis";
 
 const STREAM_TTL_SEC = 3600;
 
@@ -17,12 +18,20 @@ export async function publishTrainPipelineProgress(
 ): Promise<void> {
   const redis = getRedis();
   const fields: string[] = [
-    "progress", String(event.progress),
-    "step", event.step,
-    "phase", event.phase,
+    "progress",
+    String(event.progress),
+    "step",
+    event.step,
+    "phase",
+    event.phase,
   ];
-  if (event.sheet) fields.push("sheet", event.sheet);
-  if (event.rows != null) fields.push("rows", String(event.rows));
+  if (event.sheet) {
+    fields.push("sheet", event.sheet);
+  }
+  // biome-ignore lint/suspicious/noEqualsToNull: event.rows is `number | undefined`, not `| null`.
+  if (event.rows != null) {
+    fields.push("rows", String(event.rows));
+  }
   await redis.xadd(trainImportStreamKey(sourceId), "*", ...fields);
   await redis.expire(trainImportStreamKey(sourceId), STREAM_TTL_SEC);
 }
@@ -35,10 +44,14 @@ export async function publishTrainImportDone(
   await redis.xadd(
     trainImportStreamKey(sourceId),
     "*",
-    "progress", "100",
-    "step", "Ready for model training",
-    "status", "done",
-    "payload", JSON.stringify(result)
+    "progress",
+    "100",
+    "step",
+    "Ready for model training",
+    "status",
+    "done",
+    "payload",
+    JSON.stringify(result)
   );
   await redis.expire(trainImportStreamKey(sourceId), STREAM_TTL_SEC);
 }
@@ -49,9 +62,22 @@ export async function publishTrainImportError(
   extra?: { code?: string; source_id?: string }
 ): Promise<void> {
   const redis = getRedis();
-  const fields: string[] = ["progress", "0", "step", `failed: ${message}`, "status", "failed", "message", message];
-  if (extra?.code) fields.push("code", extra.code);
-  if (extra?.source_id) fields.push("source_id", extra.source_id);
+  const fields: string[] = [
+    "progress",
+    "0",
+    "step",
+    `failed: ${message}`,
+    "status",
+    "failed",
+    "message",
+    message,
+  ];
+  if (extra?.code) {
+    fields.push("code", extra.code);
+  }
+  if (extra?.source_id) {
+    fields.push("source_id", extra.source_id);
+  }
   await redis.xadd(trainImportStreamKey(sourceId), "*", ...fields);
   await redis.expire(trainImportStreamKey(sourceId), STREAM_TTL_SEC);
 }
@@ -83,7 +109,9 @@ export async function readLatestTrainImportStreamEntry(
     1
   )) as [string, string[]][];
 
-  if (entries.length === 0) return { kind: "empty" };
+  if (entries.length === 0) {
+    return { kind: "empty" };
+  }
 
   const fieldMap = fieldsToMap(entries[0][1]);
   const status = fieldMap.get("status");
@@ -92,28 +120,33 @@ export async function readLatestTrainImportStreamEntry(
     const payloadRaw = fieldMap.get("payload");
     const result = payloadRaw
       ? (JSON.parse(payloadRaw) as TrainImportResult)
-      : ({ source_id: sourceId, import_status: "ready", sheet_manifest: {} } as TrainImportResult);
+      : ({
+          import_status: "ready",
+          sheet_manifest: {},
+          source_id: sourceId,
+        } as TrainImportResult);
     return { kind: "done", result };
   }
 
   if (status === "failed") {
     return {
-      kind: "failed",
-      message: fieldMap.get("message") ?? fieldMap.get("step") ?? "Import failed",
       code: fieldMap.get("code"),
+      kind: "failed",
+      message:
+        fieldMap.get("message") ?? fieldMap.get("step") ?? "Import failed",
       source_id: fieldMap.get("source_id"),
     };
   }
 
   const phaseRaw = fieldMap.get("phase");
   return {
-    kind: "progress",
     event: {
-      progress: Number(fieldMap.get("progress") ?? "0"),
-      step: fieldMap.get("step") ?? "",
       phase: phaseRaw === "clean" ? "clean" : "raw",
-      sheet: fieldMap.get("sheet"),
+      progress: Number(fieldMap.get("progress") ?? "0"),
       rows: fieldMap.get("rows") ? Number(fieldMap.get("rows")) : undefined,
+      sheet: fieldMap.get("sheet"),
+      step: fieldMap.get("step") ?? "",
     },
+    kind: "progress",
   };
 }

@@ -5,11 +5,11 @@
 export type PipelinePhase = "raw" | "clean";
 
 export interface TrainPipelineProgressEvent {
-  progress: number;
-  step: string;
   phase: PipelinePhase;
-  sheet?: string;
+  progress: number;
   rows?: number;
+  sheet?: string;
+  step: string;
 }
 
 const RAW_END = 45;
@@ -23,15 +23,19 @@ export function mapRawImportProgress(rawPct: number): number {
 }
 
 export function progressCleanStart(): TrainPipelineProgressEvent {
-  return { progress: CLEAN_START, step: "Starting clean (for model training)…", phase: "clean" };
+  return {
+    phase: "clean",
+    progress: CLEAN_START,
+    step: "Starting clean (for model training)…",
+  };
 }
 
 export function progressCleanCustomers(): TrainPipelineProgressEvent {
-  return { progress: 52, step: "Clean: writing customers…", phase: "clean" };
+  return { phase: "clean", progress: 52, step: "Clean: writing customers…" };
 }
 
 export function progressCleanPayments(): TrainPipelineProgressEvent {
-  return { progress: 65, step: "Clean: writing payments…", phase: "clean" };
+  return { phase: "clean", progress: 65, step: "Clean: writing payments…" };
 }
 
 export function progressCleanUsageSheet(
@@ -41,19 +45,25 @@ export function progressCleanUsageSheet(
   rows: number
 ): TrainPipelineProgressEvent {
   if (sheetCount <= 0) {
-    return { progress: 75, step: `Clean: ${sheetName}`, phase: "clean", sheet: sheetName, rows };
+    return {
+      phase: "clean",
+      progress: 75,
+      rows,
+      sheet: sheetName,
+      step: `Clean: ${sheetName}`,
+    };
   }
   const span = CLEAN_END - 75;
   const pct = 75 + Math.round(((sheetIndex + 1) / sheetCount) * span);
   return {
-    progress: pct,
-    step: `Clean: ${sheetName} (${rows.toLocaleString()} rows)`,
     phase: "clean",
-    sheet: sheetName,
+    progress: pct,
     rows,
+    sheet: sheetName,
+    step: `Clean: ${sheetName} (${rows.toLocaleString()} rows)`,
   };
 }
 
 export function progressPipelineDone(): TrainPipelineProgressEvent {
-  return { progress: 100, step: "Ready for model training", phase: "clean" };
+  return { phase: "clean", progress: 100, step: "Ready for model training" };
 }

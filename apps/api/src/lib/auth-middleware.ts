@@ -1,6 +1,6 @@
-import { Elysia } from "elysia";
-import { eq } from "drizzle-orm";
 import { USER_ROLE, type UserRole } from "@moby/types";
+import { eq } from "drizzle-orm";
+import { Elysia } from "elysia";
 import { auth } from "../auth";
 import { db } from "../db/client";
 import { user } from "../db/schema";
@@ -19,8 +19,8 @@ const ADMIN_EMAILS: ReadonlySet<string> = new Set(
 
 /** Minimal session-user shape we read (Better Auth returns additionalFields). */
 interface SessionUser {
-  id: string;
   email?: string | null;
+  id: string;
   role?: string | null;
 }
 
@@ -37,7 +37,9 @@ function resolveRole(sessionUser: SessionUser): UserRole {
     }
     return USER_ROLE.ADMIN;
   }
-  return sessionUser.role === USER_ROLE.ADMIN ? USER_ROLE.ADMIN : USER_ROLE.MEMBER;
+  return sessionUser.role === USER_ROLE.ADMIN
+    ? USER_ROLE.ADMIN
+    : USER_ROLE.MEMBER;
 }
 
 /**
@@ -53,13 +55,17 @@ export const userPlugin = new Elysia({ name: "user-plugin" }).derive(
       .catch(() => null);
     const sessionUser = (sessionData?.user ?? null) as SessionUser | null;
     if (!sessionUser) {
-      return { userId: null, userRole: null as UserRole | null, isAdmin: false };
+      return {
+        isAdmin: false,
+        userId: null,
+        userRole: null as UserRole | null,
+      };
     }
     const userRole = resolveRole(sessionUser);
     return {
+      isAdmin: userRole === USER_ROLE.ADMIN,
       userId: sessionUser.id,
       userRole: userRole as UserRole | null,
-      isAdmin: userRole === USER_ROLE.ADMIN,
     };
   }
 );
@@ -97,8 +103,8 @@ export const requireAdmin = new Elysia({ name: "require-admin" })
     if (!isAdmin) {
       set.status = 403;
       return {
-        message: "This action requires the admin role",
         error_code: "admin_role_required",
+        message: "This action requires the admin role",
       };
     }
   });

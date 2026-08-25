@@ -17,22 +17,34 @@ export const DEFAULT_STALE_RUN_TIMEOUT_MINUTES = 120;
 export const STALE_RUN_ERROR_MESSAGE = "timed out — marked failed by reaper";
 
 /** Statuses a healthy run must eventually leave. */
-const NON_TERMINAL_STATUSES: string[] = [RUN_STATUS.PENDING, RUN_STATUS.IN_PROGRESS];
+const NON_TERMINAL_STATUSES: string[] = [
+  RUN_STATUS.PENDING,
+  RUN_STATUS.IN_PROGRESS,
+];
 
 function staleRunTimeoutMinutes(): number {
   const parsed = Number(process.env.STALE_RUN_TIMEOUT_MINUTES);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_STALE_RUN_TIMEOUT_MINUTES;
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_STALE_RUN_TIMEOUT_MINUTES;
 }
 
 /** Mark stale non-terminal runs failed. Returns how many rows each table lost. */
-export async function reapStaleRuns(): Promise<{ prediction: number; training: number }> {
+export async function reapStaleRuns(): Promise<{
+  prediction: number;
+  training: number;
+}> {
   const minutes = staleRunTimeoutMinutes();
   const now = new Date();
 
   const [prediction, training] = await Promise.all([
     db
       .update(mlPredictionRuns)
-      .set({ status: RUN_STATUS.FAILED, errorMessage: STALE_RUN_ERROR_MESSAGE, finishedAt: now })
+      .set({
+        errorMessage: STALE_RUN_ERROR_MESSAGE,
+        finishedAt: now,
+        status: RUN_STATUS.FAILED,
+      })
       .where(
         and(
           inArray(mlPredictionRuns.status, NON_TERMINAL_STATUSES),
@@ -42,7 +54,11 @@ export async function reapStaleRuns(): Promise<{ prediction: number; training: n
       .returning({ id: mlPredictionRuns.id }),
     db
       .update(mlTrainingRuns)
-      .set({ status: RUN_STATUS.FAILED, errorMessage: STALE_RUN_ERROR_MESSAGE, finishedAt: now })
+      .set({
+        errorMessage: STALE_RUN_ERROR_MESSAGE,
+        finishedAt: now,
+        status: RUN_STATUS.FAILED,
+      })
       .where(
         and(
           inArray(mlTrainingRuns.status, NON_TERMINAL_STATUSES),
@@ -69,7 +85,9 @@ export function startStaleRunReaper(): void {
           );
         }
       })
-      .catch((e: unknown) => console.error("[reaper] Failed to reap stale runs:", e));
+      .catch((e: unknown) =>
+        console.error("[reaper] Failed to reap stale runs:", e)
+      );
   };
   tick();
   const timer = setInterval(tick, STALE_RUN_REAPER_INTERVAL_MS);

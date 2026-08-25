@@ -1,20 +1,24 @@
 {
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "ultracite": "7.9.3",
+    "@biomejs/biome": "2.5.2"
+  },
   "name": "moby-analytics",
-  "version": "0.0.0",
-  "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
   },
-  "devDependencies": {
-    "turbo": "^2.0.0"
-  },
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "private": true,
   "packageManager": "bun@1.0.0"
 }

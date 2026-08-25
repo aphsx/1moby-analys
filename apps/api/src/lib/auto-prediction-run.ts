@@ -14,18 +14,18 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { mlPredictionRuns } from "../db/schema";
 import { getPredictCutoffSuggestion } from "./clean-cutoff";
-import { triggerMlJob } from "./ml-internal";
 import { RUN_STATUS } from "./constants";
+import { triggerMlJob } from "./ml-internal";
 
 /** Prefix for auto-created run names: "Auto — {source} {YYYY-MM-DD}". */
 export const AUTO_RUN_NAME_PREFIX = "Auto";
 
 export interface AutoPredictionRunOptions {
+  /** The importing user — the auto run is attributed to them. */
+  createdBy: string;
   predictSourceId: string;
   /** Display name of the source (falls back to the uploaded filename upstream). */
   sourceName: string;
-  /** The importing user — the auto run is attributed to them. */
-  createdBy: string;
 }
 
 /**
@@ -49,28 +49,34 @@ export async function createAutoPredictionRun(
     const [inserted] = await db
       .insert(mlPredictionRuns)
       .values({
-        predictSourceId: opts.predictSourceId,
-        name: `${AUTO_RUN_NAME_PREFIX} — ${opts.sourceName} ${today}`,
-        cutoffDate: suggested.cutoff_date,
-        status: RUN_STATUS.PENDING,
         createdBy: opts.createdBy,
+        cutoffDate: suggested.cutoff_date,
+        name: `${AUTO_RUN_NAME_PREFIX} — ${opts.sourceName} ${today}`,
+        predictSourceId: opts.predictSourceId,
+        status: RUN_STATUS.PENDING,
       })
       .returning({ id: mlPredictionRuns.id });
     runId = inserted.id;
 
-    await triggerMlJob("/internal/prediction-runs", { prediction_run_id: runId });
+    await triggerMlJob("/internal/prediction-runs", {
+      prediction_run_id: runId,
+    });
     return runId;
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Auto prediction run failed";
+    const message =
+      e instanceof Error ? e.message : "Auto prediction run failed";
     console.error(`[auto-run] Source ${opts.predictSourceId}: ${message}`);
     if (runId) {
       try {
         await db
           .update(mlPredictionRuns)
-          .set({ status: RUN_STATUS.FAILED, errorMessage: message })
+          .set({ errorMessage: message, status: RUN_STATUS.FAILED })
           .where(eq(mlPredictionRuns.id, runId));
       } catch (updateError) {
-        console.error(`[auto-run] Failed to mark run ${runId} failed:`, updateError);
+        console.error(
+          `[auto-run] Failed to mark run ${runId} failed:`,
+          updateError
+        );
       }
     }
     return runId;

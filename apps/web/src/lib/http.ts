@@ -26,7 +26,10 @@ export function isApiError(data: unknown): data is { message: string } {
  * fetch() with cookie credentials that redirects to /login on 401 (browser only).
  * Used for JSON GETs and for file-upload / SSE / streaming responses.
  */
-export async function redirectingFetch(url: string, opts?: RequestInit): Promise<Response> {
+export async function redirectingFetch(
+  url: string,
+  opts?: RequestInit
+): Promise<Response> {
   const res = await fetch(url, { credentials: "include", ...opts });
   if (res.status === 401 && typeof window !== "undefined") {
     window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;

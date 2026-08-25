@@ -21,42 +21,42 @@ export const TRAIN_ALL_SHEETS = TRAIN_REQUIRED_SHEETS;
 export type TrainSheetName = (typeof TRAIN_ALL_SHEETS)[number];
 
 export interface TrainSheetConfig {
-  table: string;
   requiredHeaders: string[];
+  table: string;
 }
 
 export const TRAIN_SHEET_CONFIG: Record<TrainSheetName, TrainSheetConfig> = {
-  "Users+User_profile": {
-    table: "train_raw_sheet_users_user_profile",
-    requiredHeaders: ["acc_id"],
-  },
-  "Backend_payment": {
-    table: "train_raw_sheet_backend_payment",
+  Backend_payment: {
     requiredHeaders: ["uid", "payment_date", "acc_id", "amount", "credit_add"],
-  },
-  "SMS_usage (BC)": {
-    table: "train_raw_sheet_sms_usage_bc",
-    requiredHeaders: ["year", "month", "acc_id", "usage"],
-  },
-  "SMS_usage (API)": {
-    table: "train_raw_sheet_sms_usage_api",
-    requiredHeaders: ["year", "month", "acc_id", "usage"],
-  },
-  "SMS_usage (OTP)": {
-    table: "train_raw_sheet_sms_usage_otp",
-    requiredHeaders: ["year", "month", "acc_id", "usage"],
-  },
-  "Email_usage (BC)": {
-    table: "train_raw_sheet_email_usage_bc",
-    requiredHeaders: ["year", "month", "acc_id", "usage"],
+    table: "train_raw_sheet_backend_payment",
   },
   "Email_usage (API)": {
-    table: "train_raw_sheet_email_usage_api",
     requiredHeaders: ["year", "month", "acc_id", "usage"],
+    table: "train_raw_sheet_email_usage_api",
+  },
+  "Email_usage (BC)": {
+    requiredHeaders: ["year", "month", "acc_id", "usage"],
+    table: "train_raw_sheet_email_usage_bc",
   },
   "Email_usage (OTP)": {
-    table: "train_raw_sheet_email_usage_otp",
     requiredHeaders: ["year", "month", "acc_id", "usage"],
+    table: "train_raw_sheet_email_usage_otp",
+  },
+  "SMS_usage (API)": {
+    requiredHeaders: ["year", "month", "acc_id", "usage"],
+    table: "train_raw_sheet_sms_usage_api",
+  },
+  "SMS_usage (BC)": {
+    requiredHeaders: ["year", "month", "acc_id", "usage"],
+    table: "train_raw_sheet_sms_usage_bc",
+  },
+  "SMS_usage (OTP)": {
+    requiredHeaders: ["year", "month", "acc_id", "usage"],
+    table: "train_raw_sheet_sms_usage_otp",
+  },
+  "Users+User_profile": {
+    requiredHeaders: ["acc_id"],
+    table: "train_raw_sheet_users_user_profile",
   },
 };
 

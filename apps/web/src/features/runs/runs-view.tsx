@@ -18,32 +18,43 @@ export function RunsView() {
   const [runsLoading, setRunsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
-    if (!quiet) {
-      setRunsLoading(true);
-    }
-    setError(null);
-    try {
-      const [nextSources, nextRuns] = await Promise.all([
-        fetchPredictDataSources(),
-        fetchPredictionRuns(),
-      ]);
-      setSources(nextSources);
-      setRuns(nextRuns);
-    } catch (e) {
-      setError(getDisplayError(e, "โหลด prediction runs ไม่สำเร็จ") ?? "โหลด prediction runs ไม่สำเร็จ");
-    } finally {
-      setRunsLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async ({ quiet = false }: { quiet?: boolean } = {}) => {
+      if (!quiet) {
+        setRunsLoading(true);
+      }
+      setError(null);
+      try {
+        const [nextSources, nextRuns] = await Promise.all([
+          fetchPredictDataSources(),
+          fetchPredictionRuns(),
+        ]);
+        setSources(nextSources);
+        setRuns(nextRuns);
+      } catch (e) {
+        setError(
+          getDisplayError(e, "โหลด prediction runs ไม่สำเร็จ") ??
+            "โหลด prediction runs ไม่สำเร็จ"
+        );
+      } finally {
+        setRunsLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    if (!runs.some((run) => run.status === "in_progress")) return undefined;
-    const timer = window.setInterval(() => void load({ quiet: true }), RUN_POLL_MS);
+    if (!runs.some((run) => run.status === "in_progress")) {
+      return;
+    }
+    const timer = window.setInterval(
+      () => void load({ quiet: true }),
+      RUN_POLL_MS
+    );
     return () => window.clearInterval(timer);
   }, [load, runs]);
 
@@ -56,12 +67,15 @@ export function RunsView() {
           </div>
         )}
 
-        <CreateRunPanel sources={sources} onRefresh={() => load({ quiet: true })} />
+        <CreateRunPanel
+          onRefresh={() => load({ quiet: true })}
+          sources={sources}
+        />
 
         <RunsTable
-          runs={runs}
           loading={runsLoading}
           onRefresh={() => load({ quiet: true })}
+          runs={runs}
         />
       </div>
     </main>

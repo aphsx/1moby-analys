@@ -15,15 +15,9 @@
  *   thinking · token · evidence · title · done · error
  */
 
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { aiConversations, aiMessages, mlPredictionRuns } from "../../db/schema";
-import { and, eq, desc } from "drizzle-orm";
-import { complete, stream, LLMError, type ChatMessage } from "./llm-client";
-import { getLLMConfig, isLLMConfigured } from "./llm-config";
-import { checkUserQuestionSafety, renderGuardrails } from "./safety";
-import { getAiUserRole } from "./semantic-layer";
-import { loadUserScope } from "./scope";
-import { runSqlAgent, type BoundRun, type SqlAgentResult } from "./sql-agent";
 import {
   DEFAULT_CONVERSATION_TITLE,
   ERROR_CODE,
@@ -34,6 +28,12 @@ import {
   STATUS_COPY,
   STEP,
 } from "./constants";
+import { type ChatMessage, complete, LLMError, stream } from "./llm-client";
+import { getLLMConfig, isLLMConfigured } from "./llm-config";
+import { checkUserQuestionSafety, renderGuardrails } from "./safety";
+import { loadUserScope } from "./scope";
+import { getAiUserRole } from "./semantic-layer";
+import { type BoundRun, runSqlAgent, type SqlAgentResult } from "./sql-agent";
 
 // ── SSE envelope ─────────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ function sseEvent(event: string, data: unknown): string {
 }
 
 export function sseThinking(step: string, message: string): string {
-  return sseEvent(SSE_EVENT.THINKING, { step, message });
+  return sseEvent(SSE_EVENT.THINKING, { message, step });
 }
 export function sseToken(text: string): string {
   return sseEvent(SSE_EVENT.TOKEN, { text });
@@ -66,8 +66,11 @@ export function sseTitle(title: string): string {
 export function sseDone(message_id: number): string {
   return sseEvent(SSE_EVENT.DONE, { message_id });
 }
-export function sseError(message: string, code: string = ERROR_CODE.ORCHESTRATOR_ERROR): string {
-  return sseEvent(SSE_EVENT.ERROR, { message, code });
+export function sseError(
+  message: string,
+  code: string = ERROR_CODE.ORCHESTRATOR_ERROR
+): string {
+  return sseEvent(SSE_EVENT.ERROR, { code, message });
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -85,20 +88,32 @@ export type OrchestratorOptions = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Resolve a run the user owns into the agent's BoundRun, or null if foreign. */
-async function resolveBoundRun(runId: string | null, userId: string): Promise<BoundRun | null> {
-  if (!runId) return null;
+async function resolveBoundRun(
+  runId: string | null,
+  userId: string
+): Promise<BoundRun | null> {
+  if (!runId) {
+    return null;
+  }
   const [row] = await db
     .select({
+      createdBy: mlPredictionRuns.createdBy,
+      cutoffDate: mlPredictionRuns.cutoffDate,
       id: mlPredictionRuns.id,
       name: mlPredictionRuns.name,
-      cutoffDate: mlPredictionRuns.cutoffDate,
-      createdBy: mlPredictionRuns.createdBy,
     })
     .from(mlPredictionRuns)
-    .where(and(eq(mlPredictionRuns.id, runId), eq(mlPredictionRuns.createdBy, userId)))
+    .where(
+      and(
+        eq(mlPredictionRuns.id, runId),
+        eq(mlPredictionRuns.createdBy, userId)
+      )
+    )
     .limit(1);
-  if (!row) return null;
-  return { id: row.id, name: row.name, cutoffDate: row.cutoffDate };
+  if (!row) {
+    return null;
+  }
+  return { cutoffDate: row.cutoffDate, id: row.id, name: row.name };
 }
 
 function answerStatusLabel(result: SqlAgentResult): string {
@@ -117,11 +132,15 @@ function buildAnswerMessages(
   boundRun: BoundRun | null
 ): ChatMessage[] {
   const evidenceText = result.query
-    ? JSON.stringify({ columns: result.query.columns, rows: result.query.rows }, null, 2)
+    ? JSON.stringify(
+        { columns: result.query.columns, rows: result.query.rows },
+        null,
+        2
+      )
     : result.directContext || MESSAGE.NO_EVIDENCE;
   const clampedEvidence =
     evidenceText.length > MAX_EVIDENCE_CHARS
-      ? evidenceText.slice(0, MAX_EVIDENCE_CHARS) + "\n[...truncated]"
+      ? `${evidenceText.slice(0, MAX_EVIDENCE_CHARS)}\n[...truncated]`
       : evidenceText;
 
   const system = [
@@ -138,13 +157,14 @@ function buildAnswerMessages(
     .join("\n");
 
   return [
-    { role: "system", content: system },
+    { content: system, role: "system" },
     ...history,
-    { role: "user", content: userMessage },
+    { content: userMessage, role: "user" },
     {
-      role: "user",
       content: [
-        result.sql ? `SQL ที่ใช้:\n\`\`\`sql\n${result.sql}\n\`\`\`` : "SQL: ไม่ได้ query ฐานข้อมูล",
+        result.sql
+          ? `SQL ที่ใช้:\n\`\`\`sql\n${result.sql}\n\`\`\``
+          : "SQL: ไม่ได้ query ฐานข้อมูล",
         result.warnings.length ? `คำเตือน: ${result.warnings.join("; ")}` : "",
         "<evidence>",
         clampedEvidence,
@@ -153,13 +173,16 @@ function buildAnswerMessages(
       ]
         .filter(Boolean)
         .join("\n\n"),
+      role: "user",
     },
   ];
 }
 
 // ── Main orchestrator ──────────────────────────────────────────────────────────
 
-export async function* orchestrate(opts: OrchestratorOptions): AsyncGenerator<string> {
+export async function* orchestrate(
+  opts: OrchestratorOptions
+): AsyncGenerator<string> {
   const config = getLLMConfig();
 
   if (!isLLMConfigured()) {
@@ -169,26 +192,29 @@ export async function* orchestrate(opts: OrchestratorOptions): AsyncGenerator<st
 
   const safety = checkUserQuestionSafety(opts.userMessage);
   if (!safety.ok) {
-    yield sseError(safety.blockedReason ?? MESSAGE.SAFETY_BLOCKED, ERROR_CODE.AI_SAFETY_BLOCKED);
+    yield sseError(
+      safety.blockedReason ?? MESSAGE.SAFETY_BLOCKED,
+      ERROR_CODE.AI_SAFETY_BLOCKED
+    );
     return;
   }
 
   // Load history (oldest→newest) for context.
   const dbMessages = await db
-    .select({ role: aiMessages.role, content: aiMessages.content })
+    .select({ content: aiMessages.content, role: aiMessages.role })
     .from(aiMessages)
     .where(eq(aiMessages.conversationId, opts.conversationId))
     .orderBy(desc(aiMessages.id))
     .limit(HISTORY_TURNS);
   const history: ChatMessage[] = dbMessages
     .reverse()
-    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+    .map((m) => ({ content: m.content, role: m.role as "user" | "assistant" }));
 
   // Persist the user message.
   await db.insert(aiMessages).values({
+    content: opts.userMessage,
     conversationId: opts.conversationId,
     role: "user",
-    content: opts.userMessage,
   });
 
   // Kick off auto-title concurrently (first turn only) so it never delays the
@@ -204,7 +230,13 @@ export async function* orchestrate(opts: OrchestratorOptions): AsyncGenerator<st
 
   // Self-correcting Text-to-SQL agent.
   let result: SqlAgentResult | null = null;
-  for await (const ev of runSqlAgent({ question: opts.userMessage, history, role, scope, boundRun })) {
+  for await (const ev of runSqlAgent({
+    boundRun,
+    history,
+    question: opts.userMessage,
+    role,
+    scope,
+  })) {
     if (ev.type === "thinking") {
       yield sseThinking(ev.step, ev.message);
     } else {
@@ -219,39 +251,53 @@ export async function* orchestrate(opts: OrchestratorOptions): AsyncGenerator<st
 
   // Compose the grounded answer.
   yield sseThinking(STEP.ANSWER, answerStatusLabel(result));
-  const answerMessages = buildAnswerMessages(opts.userMessage, history, result, boundRun);
+  const answerMessages = buildAnswerMessages(
+    opts.userMessage,
+    history,
+    result,
+    boundRun
+  );
 
   let fullContent = "";
   try {
-    for await (const token of stream(answerMessages, { config, temperature: 0.3 })) {
+    for await (const token of stream(answerMessages, {
+      config,
+      temperature: 0.3,
+    })) {
       fullContent += token;
       yield sseToken(token);
     }
   } catch (e) {
-    if (e instanceof LLMError) yield sseError(e.message, e.code);
-    else yield sseError(e instanceof Error ? e.message : "LLM stream failed", ERROR_CODE.LLM_STREAM_FAILED);
+    if (e instanceof LLMError) {
+      yield sseError(e.message, e.code);
+    } else {
+      yield sseError(
+        e instanceof Error ? e.message : "LLM stream failed",
+        ERROR_CODE.LLM_STREAM_FAILED
+      );
+    }
     return;
   }
 
   // Persist assistant message + evidence; bump conversation timestamp.
   const evidencePayload: EvidenceEvent = {
+    columns: result.query?.columns ?? [],
     mode: result.mode,
-    sql: result.sql,
     row_count: result.query?.row_count ?? 0,
     rows: result.query?.rows ?? [],
-    columns: result.query?.columns ?? [],
-    warnings: result.warnings,
     sources: [],
+    sql: result.sql,
+    warnings: result.warnings,
   };
 
   const [saved] = await db
     .insert(aiMessages)
     .values({
-      conversationId: opts.conversationId,
-      role: "assistant",
       content: fullContent,
+      conversationId: opts.conversationId,
       evidenceJson: evidencePayload,
       model: config.model,
+      role: "assistant",
     })
     .returning({ id: aiMessages.id });
 
@@ -260,7 +306,9 @@ export async function* orchestrate(opts: OrchestratorOptions): AsyncGenerator<st
   let titleUpdate: { title: string } | null = null;
   if (titlePromise) {
     const title = await titlePromise.catch(() => DEFAULT_CONVERSATION_TITLE);
-    if (title && title !== DEFAULT_CONVERSATION_TITLE) titleUpdate = { title };
+    if (title && title !== DEFAULT_CONVERSATION_TITLE) {
+      titleUpdate = { title };
+    }
   }
 
   await db
@@ -269,24 +317,30 @@ export async function* orchestrate(opts: OrchestratorOptions): AsyncGenerator<st
     .where(eq(aiConversations.id, opts.conversationId));
 
   yield sseEvidence(evidencePayload);
-  if (titleUpdate) yield sseTitle(titleUpdate.title);
+  if (titleUpdate) {
+    yield sseTitle(titleUpdate.title);
+  }
   yield sseDone(saved?.id ?? 0);
 }
 
 // ── Auto-title helper ──────────────────────────────────────────────────────────
 
 /** Generate a short title from the first user message. Never throws. */
-export async function generateConversationTitle(firstMessage: string): Promise<string> {
+export async function generateConversationTitle(
+  firstMessage: string
+): Promise<string> {
   try {
     const messages: ChatMessage[] = [
       {
-        role: "system",
         content:
           "สรุปข้อความต่อไปนี้เป็น title สั้นๆ ไม่เกิน 6 คำ ไม่ต้องมีเครื่องหมายคำพูด ไม่ต้องอธิบาย ตอบเป็นภาษาไทย",
+        role: "system",
       },
-      { role: "user", content: firstMessage.slice(0, 400) },
+      { content: firstMessage.slice(0, 400), role: "user" },
     ];
-    const title = (await complete(messages, { temperature: 0.5, maxTokens: 30 })).trim();
+    const title = (
+      await complete(messages, { maxTokens: 30, temperature: 0.5 })
+    ).trim();
     return title.slice(0, 60) || DEFAULT_CONVERSATION_TITLE;
   } catch {
     return DEFAULT_CONVERSATION_TITLE;

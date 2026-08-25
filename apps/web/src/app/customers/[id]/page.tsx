@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { CustomerDetailClient } from "@/features/customers/customer-detail-client";
 
-export const metadata: Metadata = { title: "Customer 360 · 1Moby Intelligence" };
+export const metadata: Metadata = {
+  title: "Customer 360 · 1Moby Intelligence",
+};
 
 type CustomerDetailSearchParams = {
   run?: string | string[];
@@ -20,14 +22,18 @@ const CUSTOMER_LIST_QUERY_KEYS = [
 ] as const;
 
 function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
-function customersHrefFromParams(searchParams: CustomerDetailSearchParams): string {
+function customersHrefFromParams(
+  searchParams: CustomerDetailSearchParams
+): string {
   const params = new URLSearchParams();
   CUSTOMER_LIST_QUERY_KEYS.forEach((key) => {
     const value = firstParam(searchParams[key]);
-    if (value) params.set(key, value);
+    if (value) {
+      params.set(key, value);
+    }
   });
 
   const query = params.toString();
@@ -47,8 +53,8 @@ export default async function CustomerDetailPage({
   return (
     <CustomerDetailClient
       accId={id}
-      requestedRunId={run}
       customersHref={customersHrefFromParams(resolvedSearchParams)}
+      requestedRunId={run}
     />
   );
 }

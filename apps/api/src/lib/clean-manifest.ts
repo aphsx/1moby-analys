@@ -9,12 +9,12 @@ export interface CleanSkipped {
 }
 
 export interface CleanManifest {
-  raw: Record<string, number>;
   clean: {
     customers: number;
     payments: number;
     usage: number;
   };
+  raw: Record<string, number>;
   skipped: CleanSkipped;
   warnings: string[];
 }

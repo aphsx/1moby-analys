@@ -41,7 +41,9 @@ export function requireFoundForRead(
   set: { status?: number | string },
   notFoundMessage = "Not found"
 ): DenyBody | null {
-  if (!record) return denyNotFound(set, notFoundMessage);
+  if (!record) {
+    return denyNotFound(set, notFoundMessage);
+  }
   return null;
 }
 
@@ -58,8 +60,12 @@ export function requireCreatorOrAdminForMutation(
   set: { status?: number | string },
   messages: { notFound?: string; forbidden?: string } = {}
 ): DenyBody | null {
-  if (!record) return denyNotFound(set, messages.notFound ?? "Not found");
-  if (isAdmin) return null;
+  if (!record) {
+    return denyNotFound(set, messages.notFound ?? "Not found");
+  }
+  if (isAdmin) {
+    return null;
+  }
   if (!canMutateOwnedRecord(userId, ownerUserId)) {
     return denyMutation(set, messages.forbidden);
   }

@@ -3,8 +3,8 @@
  * Parallel to predict-import.ts and moby-data-prep/scripts/import_train_raw.py.
  */
 import { createHash } from "node:crypto";
-import type { PgTable } from "drizzle-orm/pg-core";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import * as XLSX from "xlsx";
 import { db } from "../db/client";
 import {
@@ -19,56 +19,69 @@ import {
   trainRawSheetUsersUserProfile,
 } from "../db/schema";
 import {
+  type CellJson,
+  insertSheetRows as insertSheetRowsCore,
+  parseSheetRows as parseSheetRowsCore,
+  validateWorkbookSheets as validateWorkbookSheetsCore,
+} from "./data-import/excel-core";
+import type { TrainCleanManifest } from "./train-clean";
+import {
   TRAIN_IMPORT_BATCH_SIZE,
   TRAIN_REQUIRED_SHEETS,
   TRAIN_SHEET_CONFIG,
   type TrainSheetName,
 } from "./train-excel-contract";
 import {
-  type TrainImportProgressEvent,
   progressAfterSheet,
   progressAfterValidate,
   progressBeforeSheet,
   progressFinalize,
+  type TrainImportProgressEvent,
 } from "./train-import-progress";
-import type { TrainCleanManifest } from "./train-clean";
-import {
-  validateWorkbookSheets as validateWorkbookSheetsCore,
-  parseSheetRows as parseSheetRowsCore,
-  insertSheetRows as insertSheetRowsCore,
-  type CellJson,
-} from "./data-import/excel-core";
 
 type TrainRawInsertTable = PgTable;
 
 const TRAIN_RAW_TABLE_BY_NAME: Record<string, TrainRawInsertTable> = {
-  train_raw_sheet_users_user_profile: trainRawSheetUsersUserProfile,
   train_raw_sheet_backend_payment: trainRawSheetBackendPayment,
-  train_raw_sheet_sms_usage_bc: trainRawSheetSmsUsageBc,
-  train_raw_sheet_sms_usage_api: trainRawSheetSmsUsageApi,
-  train_raw_sheet_sms_usage_otp: trainRawSheetSmsUsageOtp,
-  train_raw_sheet_email_usage_bc: trainRawSheetEmailUsageBc,
   train_raw_sheet_email_usage_api: trainRawSheetEmailUsageApi,
+  train_raw_sheet_email_usage_bc: trainRawSheetEmailUsageBc,
   train_raw_sheet_email_usage_otp: trainRawSheetEmailUsageOtp,
+  train_raw_sheet_sms_usage_api: trainRawSheetSmsUsageApi,
+  train_raw_sheet_sms_usage_bc: trainRawSheetSmsUsageBc,
+  train_raw_sheet_sms_usage_otp: trainRawSheetSmsUsageOtp,
+  train_raw_sheet_users_user_profile: trainRawSheetUsersUserProfile,
 };
 
 export interface TrainImportResult {
-  source_id: string;
+  clean_manifest?: TrainCleanManifest;
+  file_checksum_sha256: string;
   import_status: string;
   sheet_manifest: Record<string, number>;
-  file_checksum_sha256: string;
-  clean_manifest?: TrainCleanManifest;
+  source_id: string;
 }
 
 function validateWorkbookSheets(sheetNames: string[]): void {
-  validateWorkbookSheetsCore(sheetNames, TRAIN_SHEET_CONFIG, TRAIN_REQUIRED_SHEETS);
+  validateWorkbookSheetsCore(
+    sheetNames,
+    TRAIN_SHEET_CONFIG,
+    TRAIN_REQUIRED_SHEETS
+  );
 }
 
-function parseSheetRows(wb: XLSX.WorkBook, sheetName: TrainSheetName, skipEmpty: boolean) {
-  return parseSheetRowsCore(wb, sheetName, TRAIN_SHEET_CONFIG[sheetName].requiredHeaders, skipEmpty);
+function parseSheetRows(
+  wb: XLSX.WorkBook,
+  sheetName: TrainSheetName,
+  skipEmpty: boolean
+) {
+  return parseSheetRowsCore(
+    wb,
+    sheetName,
+    TRAIN_SHEET_CONFIG[sheetName].requiredHeaders,
+    skipEmpty
+  );
 }
 
-async function insertSheetRows(
+function insertSheetRows(
   table: TrainRawInsertTable,
   sourceId: string,
   rows: { excel_row: number; row_payload: Record<string, CellJson> }[]
@@ -87,7 +100,7 @@ export async function prepareTrainDataSource(params: {
 }): Promise<string> {
   const checksum = createHash("sha256").update(params.buffer).digest("hex");
 
-  const wb = XLSX.read(params.buffer, { type: "buffer", cellDates: true });
+  const wb = XLSX.read(params.buffer, { cellDates: true, type: "buffer" });
   validateWorkbookSheets(wb.SheetNames);
 
   const existing = await db
@@ -97,7 +110,9 @@ export async function prepareTrainDataSource(params: {
     .limit(1);
 
   if (existing.length > 0) {
-    const err = new Error("This file was already imported (checksum match)") as Error & {
+    const err = new Error(
+      "This file was already imported (checksum match)"
+    ) as Error & {
       code: string;
       source_id: string;
     };
@@ -109,14 +124,14 @@ export async function prepareTrainDataSource(params: {
   const [created] = await db
     .insert(trainDataSources)
     .values({
-      name: params.name,
       clientLabel: params.client_label ?? null,
-      originalFilename: params.filename,
       fileChecksumSha256: checksum,
       fileSizeBytes: params.buffer.length,
-      importStatus: "importing",
       importedBy: params.imported_by,
+      importStatus: "importing",
+      name: params.name,
       notes: params.notes ?? null,
+      originalFilename: params.filename,
     })
     .returning({ id: trainDataSources.id });
 
@@ -152,7 +167,7 @@ export async function importTrainExcel(params: {
   } else {
     emit?.({ progress: 0, step: "Reading workbook…" });
 
-    const wb = XLSX.read(params.buffer, { type: "buffer", cellDates: true });
+    const wb = XLSX.read(params.buffer, { cellDates: true, type: "buffer" });
     validateWorkbookSheets(wb.SheetNames);
 
     const existing = await db
@@ -162,7 +177,9 @@ export async function importTrainExcel(params: {
       .limit(1);
 
     if (existing.length > 0) {
-      const err = new Error("This file was already imported (checksum match)") as Error & {
+      const err = new Error(
+        "This file was already imported (checksum match)"
+      ) as Error & {
         code: string;
         source_id: string;
       };
@@ -174,14 +191,14 @@ export async function importTrainExcel(params: {
     const [created] = await db
       .insert(trainDataSources)
       .values({
-        name: params.name,
         clientLabel: params.client_label ?? null,
-        originalFilename: params.filename,
         fileChecksumSha256: checksum,
         fileSizeBytes: params.buffer.length,
-        importStatus: "importing",
         importedBy: params.imported_by,
+        importStatus: "importing",
+        name: params.name,
         notes: params.notes ?? null,
+        originalFilename: params.filename,
       })
       .returning({ id: trainDataSources.id });
 
@@ -194,23 +211,25 @@ export async function importTrainExcel(params: {
   }
 
   const manifest: Record<string, number> = {};
-  const wb = XLSX.read(params.buffer, { type: "buffer", cellDates: true });
+  const wb = XLSX.read(params.buffer, { cellDates: true, type: "buffer" });
 
   try {
     const sheetOrder = wb.SheetNames.filter(
       (n): n is TrainSheetName => n in TRAIN_SHEET_CONFIG
     );
 
-    for (let i = 0; i < sheetOrder.length; i++) {
+    for (let i = 0; i < sheetOrder.length; i += 1) {
       const sheetName = sheetOrder[i];
       const cfg = TRAIN_SHEET_CONFIG[sheetName];
       const table = TRAIN_RAW_TABLE_BY_NAME[cfg.table];
-      if (!table) throw new Error(`No table mapping for ${cfg.table}`);
+      if (!table) {
+        throw new Error(`No table mapping for ${cfg.table}`);
+      }
 
       emit?.({
         progress: progressBeforeSheet(i, sheetOrder.length),
-        step: `Importing: ${sheetName}…`,
         sheet: sheetName,
+        step: `Importing: ${sheetName}…`,
       });
 
       const rows = parseSheetRows(wb, sheetName, true);
@@ -219,9 +238,9 @@ export async function importTrainExcel(params: {
 
       emit?.({
         progress: progressAfterSheet(i, sheetOrder.length),
-        step: `Imported: ${sheetName} (${rowCount.toLocaleString()} rows)`,
-        sheet: sheetName,
         rows: rowCount,
+        sheet: sheetName,
+        step: `Imported: ${sheetName} (${rowCount.toLocaleString()} rows)`,
       });
     }
 
@@ -239,8 +258,8 @@ export async function importTrainExcel(params: {
       await db
         .update(trainDataSources)
         .set({
-          importStatus: "ready",
           importedAt: new Date(),
+          importStatus: "ready",
           sheetManifest: manifest,
         })
         .where(eq(trainDataSources.id, sourceId));
@@ -248,10 +267,10 @@ export async function importTrainExcel(params: {
     }
 
     return {
-      source_id: sourceId,
+      file_checksum_sha256: checksum,
       import_status: params.deferReadyCatalog ? "importing" : "ready",
       sheet_manifest: manifest,
-      file_checksum_sha256: checksum,
+      source_id: sourceId,
     };
   } catch (e) {
     await db.delete(trainDataSources).where(eq(trainDataSources.id, sourceId));

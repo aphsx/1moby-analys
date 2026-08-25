@@ -5,8 +5,10 @@
  * This finds the first balanced `{...}` object (respecting string escaping)
  * and parses it. Throws if no complete object is present.
  */
+const FENCED_JSON_RE = /```(?:json)?\s*([\s\S]*?)```/i;
+
 export function extractJsonObject(text: string): unknown {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const fenced = text.match(FENCED_JSON_RE)?.[1];
   const candidate = fenced ?? text;
   const start = candidate.indexOf("{");
   if (start < 0) {
@@ -23,12 +25,12 @@ export function extractJsonObject(text: string): unknown {
         escaped = false;
       } else if (char === "\\") {
         escaped = true;
-      } else if (char === "\"") {
+      } else if (char === '"') {
         inString = false;
       }
       continue;
     }
-    if (char === "\"") {
+    if (char === '"') {
       inString = true;
     } else if (char === "{") {
       depth += 1;

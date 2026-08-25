@@ -43,9 +43,7 @@ export type UserScope = {
   sourceIds: string[];
 };
 
-export type ScopeCheck =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type ScopeCheck = { ok: true } | { ok: false; reason: string };
 
 /**
  * Load the ids the current user is allowed to query, in one round-trip each.
@@ -101,7 +99,9 @@ export function enforceScope(
   const lower = sql.toLowerCase();
   const touchesRun = referencesAny(lower, RUN_SCOPED_TABLES);
   const touchesSource = referencesAny(lower, SOURCE_SCOPED_TABLES);
-  if (!touchesRun && !touchesSource) return { ok: true };
+  if (!(touchesRun || touchesSource)) {
+    return { ok: true };
+  }
 
   const allowedRuns = new Set(scope.runIds.map((id) => id.toLowerCase()));
   const allowedSources = new Set(scope.sourceIds.map((id) => id.toLowerCase()));
@@ -109,7 +109,7 @@ export function enforceScope(
 
   // No foreign ids: every UUID literal must be one of the user's own ids.
   for (const id of present) {
-    if (!allowedRuns.has(id) && !allowedSources.has(id)) {
+    if (!(allowedRuns.has(id) || allowedSources.has(id))) {
       return {
         ok: false,
         reason:
@@ -134,8 +134,9 @@ export function enforceScope(
     if (boundRunId && !presentSet.has(boundRunId.toLowerCase())) {
       return {
         ok: false,
-        reason: `This conversation is scoped to run ${boundRunId}. ` +
-          `Filter ml_prediction_* strictly by that run id.`,
+        reason:
+          `This conversation is scoped to run ${boundRunId}. ` +
+          "Filter ml_prediction_* strictly by that run id.",
       };
     }
   }
