@@ -5,7 +5,8 @@
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Calendar, ChevronDown } from "lucide-react";
+import { Calendar } from "lucide-react";
+import { Select } from "@/components/select";
 import { useRunStore } from "@/stores/run-store";
 import { fetchPredictionRuns, type PredictionRun } from "@/lib/ml-api";
 
@@ -59,23 +60,20 @@ export default function RunSelector() {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="relative">
-        <select
-          value={runId}
-          onChange={(e) => setRunId(e.target.value)}
-          disabled={loading}
-          className="appearance-none h-9 pl-9 pr-9 rounded-lg border border-gray-200 bg-white text-[13px] text-[color:var(--ink-2)] hover:border-[color:var(--moby-200)] cursor-pointer min-w-[230px]"
-        >
-          {loading && <option value="">Loading runs…</option>}
-          {runs.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name} · cutoff {r.cutoff_date}
-            </option>
-          ))}
-        </select>
-        <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--ink-4)] pointer-events-none" />
-        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--ink-4)] pointer-events-none" />
-      </div>
+      <Select
+        value={runId}
+        onChange={setRunId}
+        disabled={loading}
+        size="md"
+        className="min-w-[230px]"
+        leftIcon={<Calendar size={14} />}
+        placeholder={loading ? "Loading runs…" : "เลือก run"}
+        aria-label="Prediction run"
+        options={runs.map((r) => ({
+          value: r.id,
+          label: `${r.name} · cutoff ${r.cutoff_date}`,
+        }))}
+      />
     </div>
   );
 }

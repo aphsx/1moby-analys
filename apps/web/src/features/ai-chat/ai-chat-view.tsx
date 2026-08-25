@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { TypingDots } from "@/components/chat/typing-dots";
+import { Select } from "@/components/select";
 import { fetchPredictionRuns, type PredictionRun } from "@/lib/ml-api";
 import {
   useChatStore, formatTime, type ChatEvidence, type Conversation,
@@ -140,20 +141,21 @@ function Sidebar({ runs }: { runs: PredictionRun[] }) {
     <aside className="flex h-full w-[240px] shrink-0 flex-col border-r border-gray-200 bg-[#fafafa]">
       <div className="space-y-2 p-3">
         {/* Scope picker for the next new chat */}
-        <div className="relative">
-          <select
-            value={pendingRunId ?? ""}
-            onChange={(e) => setPendingRun(e.target.value || null)}
-            className="h-8 w-full appearance-none rounded-lg border border-gray-200 bg-white pl-2.5 pr-7 text-[11.5px] text-[color:var(--ink-3)] outline-none hover:border-[color:var(--moby-200)]"
-            title="ขอบเขตข้อมูลของแชทใหม่"
-          >
-            <option value="">ทุก run (global)</option>
-            {runs.map((r) => (
-              <option key={r.id} value={r.id}>{r.name} · {r.cutoff_date}</option>
-            ))}
-          </select>
-          <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[color:var(--ink-5)]" />
-        </div>
+        <Select
+          value={pendingRunId ?? ""}
+          onChange={(next) => setPendingRun(next || null)}
+          size="sm"
+          title="ขอบเขตข้อมูลของแชทใหม่"
+          aria-label="ขอบเขตข้อมูลของแชทใหม่"
+          placeholder="ทุก run (global)"
+          options={[
+            { value: "", label: "ทุก run (global)" },
+            ...runs.map((r) => ({
+              value: r.id,
+              label: `${r.name} · ${r.cutoff_date}`,
+            })),
+          ]}
+        />
 
         <button
           onClick={() => createConversation()}

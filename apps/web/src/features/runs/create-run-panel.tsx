@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
+import { Select } from "@/components/select";
 import { SectionCard } from "@/components/ui";
 import { uploadPredictDataFile, type PredictDataSource } from "@/lib/api";
 import { ADMIN_ONLY_TITLE, useIsAdmin } from "@/lib/auth";
@@ -167,20 +168,19 @@ export function CreateRunPanel({
         <div className="relative">
           <span className="type-label">แหล่งข้อมูล</span>
           <div className="mt-1.5 flex items-center gap-2">
-            <select
+            <Select
               value={sourceId}
-              onChange={(e) => setSourceId(e.target.value)}
+              onChange={setSourceId}
               disabled={creating || readySources.length === 0}
-              className="h-11 min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white px-3.5 text-[13px] text-[color:var(--ink-2)] shadow-[var(--shadow-1)] outline-none transition-colors focus:border-[color:var(--moby-500)] disabled:opacity-50"
-            >
-              {readySources.length === 0 && <option value="">ยังไม่มี source ที่ ready</option>}
-              {readySources.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.client_label ? ` · ${s.client_label}` : ""}
-                </option>
-              ))}
-            </select>
+              size="lg"
+              className="min-w-0 flex-1"
+              placeholder="ยังไม่มี source ที่ ready"
+              aria-label="Predict data source"
+              options={readySources.map((s) => ({
+                value: s.id,
+                label: s.client_label ? `${s.name} · ${s.client_label}` : s.name,
+              }))}
+            />
             <ImportToggleButton onImported={onRefresh} />
           </div>
           {selected && (
@@ -234,22 +234,23 @@ export function CreateRunPanel({
                     <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ink-5)]">
                       {modelType}
                     </span>
-                    <select
+                    <Select
                       value={overrides[modelType]}
-                      onChange={(e) =>
-                        setOverrides((prev) => ({ ...prev, [modelType]: e.target.value }))
+                      onChange={(next) =>
+                        setOverrides((prev) => ({ ...prev, [modelType]: next }))
                       }
                       disabled={creating}
-                      className={fieldCls}
-                    >
-                      <option value="">Production (ปัจจุบัน)</option>
-                      {versionsByType[modelType].map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.version}
-                          {v.is_active ? " · production" : ""} · {v.algorithm || "—"}
-                        </option>
-                      ))}
-                    </select>
+                      size="lg"
+                      className="mt-1.5"
+                      aria-label={`${modelType} model version`}
+                      options={[
+                        { value: "", label: "Production (ปัจจุบัน)" },
+                        ...versionsByType[modelType].map((v) => ({
+                          value: v.id,
+                          label: `${v.version}${v.is_active ? " · production" : ""} · ${v.algorithm || "—"}`,
+                        })),
+                      ]}
+                    />
                   </label>
                 ))}
               </div>

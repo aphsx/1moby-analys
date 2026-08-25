@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { SectionCard } from "@/components/ui";
+import { Select } from "@/components/select";
 import type { TrainDataSource } from "@/lib/api";
 import { ADMIN_ONLY_TITLE, useIsAdmin } from "@/lib/auth";
 import { ProgressCard } from "./progress-card";
@@ -104,20 +105,19 @@ export function TrainPanel({
       <div className="relative">
         <span className="type-label">dataset</span>
         <div className="mt-1.5 flex items-center gap-2">
-          <select
+          <Select
             value={selectedSource?.id ?? ""}
-            onChange={(e) => onSelect(e.target.value)}
+            onChange={onSelect}
             disabled={creating || readySources.length === 0}
-            className="h-11 min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white px-3.5 text-[13px] text-[color:var(--ink-2)] shadow-[var(--shadow-1)] outline-none transition-colors focus:border-[color:var(--moby-500)] disabled:opacity-50"
-          >
-            {readySources.length === 0 && <option value="">ยังไม่มี dataset ที่ ready</option>}
-            {readySources.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.client_label ? ` · ${s.client_label}` : ""}
-              </option>
-            ))}
-          </select>
+            size="lg"
+            className="min-w-0 flex-1"
+            placeholder="ยังไม่มี dataset ที่ ready"
+            aria-label="Training dataset"
+            options={readySources.map((s) => ({
+              value: s.id,
+              label: s.client_label ? `${s.name} · ${s.client_label}` : s.name,
+            }))}
+          />
           {selectedSource && (
             <button
               type="button"
