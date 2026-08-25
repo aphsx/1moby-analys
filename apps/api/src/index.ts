@@ -62,7 +62,7 @@ const app = new Elysia()
       message: "ML v2 API: prediction-runs, training-runs, model-performance.",
     };
   })
-  .listen(PORT);
+  .listen({ hostname: "::", port: PORT }); // ponytail: "::" is dual-stack; Railway private net is IPv6-only
 
 console.log(`[api] Elysia listening on port ${PORT}`);
 
