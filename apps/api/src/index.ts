@@ -10,6 +10,7 @@ import { modelPerformanceRoutes } from "./routes/model-performance";
 import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
 import { releaseStaleTrainImports, releaseStalePredict } from "./lib/abort-data-source";
 import { startStaleRunReaper } from "./lib/run-reaper";
+import { seedLocalAdmin } from "./lib/seed-local-admin";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -25,6 +26,8 @@ Promise.all([releaseStaleTrainImports(), releaseStalePredict()])
     }
   })
   .catch((e) => console.error("[api] Failed to release stale imports:", e));
+
+seedLocalAdmin().catch((e) => console.error("[api] Failed to seed local admin:", e));
 
 // Mark runs stuck in a non-terminal status as failed — now and every 5 minutes.
 startStaleRunReaper();

@@ -16,7 +16,8 @@ predict customer churn, segment customers by CLV / value tier, and forecast cred
 authenticated user. Two roles on `user.role`: `admin` (import train data, trigger training, delete
 anything, pin/delete model versions, trigger outcome backfill) and `member` (default — view
 everything, import predict data, create prediction runs, AI chat). Bootstrap admins via
-`ADMIN_EMAILS` env.
+`ADMIN_EMAILS` env. Local Docker/dev seeds `admin@example.com` / `123` (role=admin) on API boot
+when `SEED_LOCAL_ADMIN` is enabled (default outside production); type `admin` on the login form.
 Deletes are creator-or-admin. AI chat conversations stay private per user, but Text-to-SQL
 queries are scoped org-wide (deterministic id allowlist in `apps/api/src/lib/ai/scope.ts`).
 
@@ -337,6 +338,7 @@ INTERNAL_SERVICE_TOKEN   # shared with ml service
 ML_INTERNAL_URL          # http://ml:8000
 ML_INTERNAL_TIMEOUT_MS   # Elysia → FastAPI call timeout (default 30000)
 ADMIN_EMAILS             # comma-separated bootstrap admins (role=admin)
+SEED_LOCAL_ADMIN         # seed admin@example.com / 123 on API boot (default on unless production)
 STALE_RUN_TIMEOUT_MINUTES # reaper threshold for stuck runs (default 120)
 MODEL_DIR                # /app/models
 OLLAMA_API_KEY / OLLAMA_HOST / OLLAMA_MODEL        # AI chat + insights

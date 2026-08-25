@@ -1,13 +1,22 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, Mail } from "lucide-react";
 import { signIn, sanitizeRedirectParam } from "@/lib/auth";
 import { LoginBackground } from "@/components/login-background";
 import { INTRO_ASSETS, MOBY_BRAND } from "@/lib/login-brand-colors";
 
 type Provider = "google";
+
+/** Local seed accepts "admin" as shorthand for admin@example.com. */
+function normalizeEmail(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.includes("@")) return trimmed;
+  if (trimmed.toLowerCase() === "admin") return "admin@example.com";
+  return `${trimmed}@example.com`;
+}
 
 export default function LoginPage() {
   return (
@@ -18,19 +27,49 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
+  const router = useRouter();
   const sp = useSearchParams();
   const callbackURL = sanitizeRedirectParam(sp.get("redirect"));
-  const [busy, setBusy] = useState<Provider | null>(null);
+  const [busy, setBusy] = useState<Provider | "email" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const handle = async (provider: Provider) => {
+  const handleGoogle = async (provider: Provider) => {
     try {
       setBusy(provider);
       setError(null);
-
       await signIn.social({ provider, callbackURL });
-    } catch (e: any) {
-      setError(e?.message || "Sign-in failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Sign-in failed");
+      setBusy(null);
+    }
+  };
+
+  const handleEmail = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    const normalized = normalizeEmail(email);
+    if (!normalized || !password) {
+      setError("Enter email and password");
+      return;
+    }
+    try {
+      setBusy("email");
+      setError(null);
+      const result = await signIn.email({
+        email: normalized,
+        password,
+        callbackURL,
+      });
+      if (result.error) {
+        setError(result.error.message || "Invalid email or password");
+        setBusy(null);
+        return;
+      }
+      router.replace(callbackURL);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sign-in failed");
       setBusy(null);
     }
   };
@@ -56,20 +95,50 @@ function LoginForm() {
             </p>
           </div>
 
-          <div className="mt-7 space-y-3">
-            <MockField icon={<Mail size={18} strokeWidth={1.75} />} placeholder="Email" />
-            <MockField icon={<Lock size={18} strokeWidth={1.75} />} placeholder="Password" />
-          </div>
+          <form className="mt-7 space-y-3" onSubmit={(ev) => void handleEmail(ev)}>
+            <label className="flex h-12 items-center gap-3 rounded-2xl px-4" style={{ background: "#F3F4F8" }}>
+              <Mail size={18} strokeWidth={1.75} style={{ color: "#B0B5C3" }} />
+              <input
+                type="text"
+                name="email"
+                autoComplete="username"
+                placeholder="Email"
+                value={email}
+                onChange={(ev) => setEmail(ev.target.value)}
+                disabled={busy !== null}
+                className="h-full w-full bg-transparent text-sm outline-none placeholder:text-[#B0B5C3]"
+                style={{ color: MOBY_BRAND.dark }}
+              />
+            </label>
+            <label className="flex h-12 items-center gap-3 rounded-2xl px-4" style={{ background: "#F3F4F8" }}>
+              <Lock size={18} strokeWidth={1.75} style={{ color: "#B0B5C3" }} />
+              <input
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                placeholder="Password"
+                value={password}
+                onChange={(ev) => setPassword(ev.target.value)}
+                disabled={busy !== null}
+                className="h-full w-full bg-transparent text-sm outline-none placeholder:text-[#B0B5C3]"
+                style={{ color: MOBY_BRAND.dark }}
+              />
+            </label>
 
+            <button
+              type="submit"
+              disabled={busy !== null}
+              className="mt-2 h-12 w-full rounded-2xl text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: MOBY_BRAND.blue }}
+            >
+              {busy === "email" ? "Signing in..." : "Login"}
+            </button>
+          </form>
 
-          <button
-            type="button"
-            disabled
-            className="mt-5 h-12 w-full rounded-2xl text-sm font-semibold text-white opacity-90"
-            style={{ background: MOBY_BRAND.blue }}
-          >
-            Login
-          </button>
+          <p className="mt-3 text-center text-[11px] leading-4" style={{ color: "#B0B5C3" }}>
+            Local admin: <span style={{ color: "#8A8F9E" }}>admin</span> /{" "}
+            <span style={{ color: "#8A8F9E" }}>123</span>
+          </p>
 
           <div className="my-5 flex items-center gap-3">
             <div className="h-px flex-1 bg-[#E8EAEF]" />
@@ -80,7 +149,8 @@ function LoginForm() {
           </div>
 
           <button
-            onClick={() => handle("google")}
+            type="button"
+            onClick={() => void handleGoogle("google")}
             disabled={busy !== null}
             className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl border px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60"
             style={{
@@ -110,23 +180,9 @@ function LoginForm() {
               {error}
             </div>
           )}
-
-          
         </div>
       </section>
     </main>
-  );
-}
-
-function MockField({ icon, placeholder }: { icon: React.ReactNode; placeholder: string }) {
-  return (
-    <div
-      className="flex h-12 items-center gap-3 rounded-2xl px-4"
-      style={{ background: "#F3F4F8", color: "#B0B5C3" }}
-    >
-      {icon}
-      <span className="text-sm">{placeholder}</span>
-    </div>
   );
 }
 
