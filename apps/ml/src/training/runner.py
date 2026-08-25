@@ -367,14 +367,31 @@ def _train_and_register_churn(
     progress("churn: evaluate candidates + promotion policy", 35)
     incumbent_backtests = _incumbent_backtests("churn")
     attempts: list[dict[str, Any]] = []
+    n_candidates = len(training.candidates)
+    n_backtests = len(backtest_sets)
+    candidate_span = 12 / max(n_candidates, 1)
     for attempt_index, candidate in enumerate(training.candidates):
+        base_pct = 35 + attempt_index * candidate_span
+        progress(
+            f"churn: {candidate.name} finalize ({attempt_index + 1}/{n_candidates})",
+            int(base_pct),
+        )
         print(f"churn: evaluating candidate {candidate.name} (#{attempt_index + 1})")
         result = finalize_churn_candidate(training, candidate, progress=lambda m: print(m))
+        progress(
+            f"churn: {candidate.name} leakage suite",
+            int(base_pct + candidate_span * 0.35),
+        )
         leakage = run_leakage_suite(
             dataset, preprocessor, candidate, result.validation_metrics["roc_auc"]
         )
         backtest_rows: list[dict[str, Any]] = []
-        for bt in backtest_sets:
+        for bt_idx, bt in enumerate(backtest_sets):
+            progress(
+                f"churn: {candidate.name} backtest {bt.cutoff_date.date()} "
+                f"({bt_idx + 1}/{n_backtests})",
+                int(base_pct + candidate_span * (0.35 + 0.65 * (bt_idx + 1) / max(n_backtests, 1))),
+            )
             bt_preproc = fit_preprocessor(
                 bt.churn.features("train"), _feature_schema_for_dataset(bt, bt.churn)
             )
