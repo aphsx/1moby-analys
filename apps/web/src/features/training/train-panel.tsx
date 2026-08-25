@@ -102,7 +102,7 @@ export function TrainPanel({
         </button>
       }
     >
-      <div className="relative">
+      <div>
         <span className="type-label">dataset</span>
         <div className="mt-1.5 flex items-center gap-2">
           <Select
@@ -225,7 +225,7 @@ function UploadForm({
   const [file, setFile] = useState<File | null>(null);
 
   return (
-    <div className="absolute left-0 right-0 top-full z-10 mt-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_20px_48px_rgba(13,17,35,0.12)]">
+    <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-[var(--shadow-1)]">
       <div className="flex items-center justify-between">
         <span className="type-label">นำเข้า dataset ใหม่ (.xlsx 8 sheets)</span>
         <button
