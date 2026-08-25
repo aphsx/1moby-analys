@@ -61,6 +61,7 @@ export function CreateRunPanel({
   // not user-editable — there is no legitimate non-replay reason to override it.
   const [cutoff, setCutoff] = useState(todayISO());
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Per-run model selection. "" = use the production champion for that type.
@@ -164,7 +165,7 @@ export function CreateRunPanel({
       }
     >
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        <div className="relative">
+        <div>
           <span className="type-label">แหล่งข้อมูล</span>
           <div className="mt-1.5 flex items-center gap-2">
             <Select
@@ -180,7 +181,14 @@ export function CreateRunPanel({
                 label: s.client_label ? `${s.name} · ${s.client_label}` : s.name,
               }))}
             />
-            <ImportToggleButton onImported={onRefresh} />
+            <button
+              type="button"
+              onClick={() => setShowImport((v) => !v)}
+              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50"
+            >
+              <Plus size={14} />
+              import ใหม่
+            </button>
           </div>
           {selected && (
             <p className="mt-2 text-[12px] text-[color:var(--ink-5)]">
@@ -206,6 +214,16 @@ export function CreateRunPanel({
           />
         </label>
       </div>
+
+      {showImport && (
+        <InlineImportForm
+          onClose={() => setShowImport(false)}
+          onImported={async () => {
+            await onRefresh();
+            setShowImport(false);
+          }}
+        />
+      )}
 
       <div className="mt-4 border-t border-gray-100 pt-4">
         <button
@@ -267,32 +285,6 @@ export function CreateRunPanel({
   );
 }
 
-/** "+ import ใหม่" toggle that reveals an inline upload form (any authenticated user). */
-function ImportToggleButton({ onImported }: { onImported: () => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50"
-      >
-        <Plus size={14} />
-        import ใหม่
-      </button>
-      {open && (
-        <InlineImportForm
-          onClose={() => setOpen(false)}
-          onImported={async () => {
-            await onImported();
-            setOpen(false);
-          }}
-        />
-      )}
-    </>
-  );
-}
-
 function InlineImportForm({
   onClose,
   onImported,
@@ -332,7 +324,7 @@ function InlineImportForm({
   };
 
   return (
-    <div className="absolute left-0 right-0 top-full z-10 mt-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_20px_48px_rgba(13,17,35,0.12)]">
+    <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[var(--shadow-1)]">
       <div className="flex items-center justify-between">
         <span className="type-label">นำเข้า predict data ใหม่ (.xlsx 8 sheets)</span>
         <button
