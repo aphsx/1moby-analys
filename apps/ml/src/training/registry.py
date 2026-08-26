@@ -293,7 +293,10 @@ def delete_model_version(
     Guardrails:
       - the version must exist and belong to `model_type`;
       - the current production champion (is_active / status='production') can
-        NEVER be deleted — switch champion first.
+        NEVER be deleted — switch champion first;
+      - any prediction run that served this version (model_versions_json by
+        version string, or model_overrides_json by version id) blocks delete
+        until those prediction runs are removed.
 
     Removes the on-disk artifact directory, then deletes the
     `ml_model_versions` row. FK cascades clean up `ml_model_evaluations` and
@@ -317,12 +320,42 @@ def delete_model_version(
             {"version_id": model_version_id, "model_type": model_type},
         ).mappings().first()
 
-    if row is None:
-        raise ValueError(f"No {model_type} model version {model_version_id}")
-    if row["is_active"] or row["status"] == "production":
+        if row is None:
+            raise ValueError(f"No {model_type} model version {model_version_id}")
+        if row["is_active"] or row["status"] == "production":
+            raise ValueError(
+                f"{model_type} version {row['version']} is the production champion — "
+                "switch the production model to another version before deleting it"
+            )
+
+        # Prediction runs record the served version string and optional override id.
+        referencing = conn.execute(
+            text(
+                """
+                SELECT id::text AS id, name
+                FROM ml_prediction_runs
+                WHERE model_versions_json ->> :model_type = :version
+                   OR model_overrides_json ->> :model_type = :version_id
+                ORDER BY created_at DESC
+                LIMIT 5
+                """
+            ),
+            {
+                "model_type": model_type,
+                "version": row["version"],
+                "version_id": model_version_id,
+            },
+        ).mappings().all()
+
+    if referencing:
+        names = ", ".join(
+            (r["name"] or r["id"][:8]) for r in referencing
+        )
+        more = "…" if len(referencing) == 5 else ""
         raise ValueError(
-            f"{model_type} version {row['version']} is the production champion — "
-            "switch the production model to another version before deleting it"
+            f"Cannot delete {model_type} version {row['version']} — "
+            f"still used by prediction run(s): {names}{more}. "
+            "Delete those prediction results first."
         )
 
     artifact_path = row["artifact_path"]

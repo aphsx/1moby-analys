@@ -29,7 +29,12 @@ import {
   type TrainingRun,
   type TrainingRunResult,
 } from "@/lib/ml-api";
-import { ADMIN_ONLY_TITLE, useIsAdmin } from "@/lib/auth";
+import {
+  ADMIN_ONLY_TITLE,
+  CREATOR_OR_ADMIN_TITLE,
+  canMutateAsCreator,
+  useIsAdmin,
+} from "@/lib/auth";
 import { MODEL_TYPE_LABELS, beatsBaseline, formatMetric } from "./training-run-utils";
 
 const MODEL_TYPES = ["churn", "clv", "credit"] as const;
@@ -82,8 +87,9 @@ function ModelStatusCard({
 }) {
   const [versions, setVersions] = useState<ModelVersionSummary[] | null>(null);
   const [expanded, setExpanded] = useState(false);
-  // Pin/delete model versions is admin-only (the API returns 403 for members).
-  const { isAdmin, loading: roleLoading } = useIsAdmin();
+  // Pin-to-production is admin-only; delete is creator-or-admin (blocked while
+  // prediction runs still reference the version).
+  const { isAdmin, userId, loading: roleLoading } = useIsAdmin();
   const adminLocked = !roleLoading && !isAdmin;
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -201,7 +207,10 @@ function ModelStatusCard({
           {versions?.length === 0 && (
             <p className="text-[11px] text-[color:var(--ink-5)]">ยังไม่มีเวอร์ชัน</p>
           )}
-          {versions?.map((v) => (
+          {versions?.map((v) => {
+            const canDelete =
+              roleLoading || canMutateAsCreator(isAdmin, userId, v.created_by);
+            return (
             <div
               key={v.id}
               className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-1.5"
@@ -232,9 +241,13 @@ function ModelStatusCard({
                   </button>
                   <button
                     type="button"
-                    disabled={busy || adminLocked}
+                    disabled={busy || !canDelete}
                     onClick={() => setPendingDelete(v)}
-                    title={adminLocked ? ADMIN_ONLY_TITLE : "ลบเวอร์ชันนี้"}
+                    title={
+                      canDelete
+                        ? "ลบเวอร์ชันนี้ (ต้องไม่มี prediction ที่ใช้เวอร์ชันนี้)"
+                        : CREATOR_OR_ADMIN_TITLE
+                    }
                     className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--ink-5)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Trash2 size={12} />
@@ -242,7 +255,8 @@ function ModelStatusCard({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -251,7 +265,7 @@ function ModelStatusCard({
           open
           tone="warning"
           title={`ยืนยันการลบเวอร์ชัน ${pendingDelete.version}`}
-          message="ไฟล์โมเดล (.pkl) และผลประเมินของเวอร์ชันนี้จะถูกลบถาวร กู้คืนไม่ได้ — เวอร์ชัน production ปัจจุบันจะไม่ถูกแตะต้อง"
+          message="ไฟล์โมเดล (.pkl) และผลประเมินของเวอร์ชันนี้จะถูกลบถาวร กู้คืนไม่ได้ — ถ้ายังมี prediction run ที่ใช้เวอร์ชันนี้ ต้องลบผล prediction นั้นก่อน และเวอร์ชัน production จะลบไม่ได้จนกว่าจะสลับไปเวอร์ชันอื่น"
           confirmLabel="ลบเวอร์ชัน"
           cancelLabel="ยกเลิก"
           loading={deletingId === pendingDelete.id}
