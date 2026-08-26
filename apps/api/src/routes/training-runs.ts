@@ -3,12 +3,20 @@
  * Response contract mirrors apps/web/src/lib/mlApi.ts (snake_case keys).
  *
  * Org-shared model: reads are org-wide for any authenticated user; triggering
- * training is admin-only; deleting a (failed) run is creator-or-admin.
+ * training is admin-only; deleting a finished run is creator-or-admin (blocked
+ * while any of its model versions are production or still referenced by a
+ * prediction run).
  */
 import Elysia, { t } from "elysia";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import { mlTrainingRuns, trainDataSources, user } from "../db/schema";
+import {
+  mlModelVersions,
+  mlPredictionRuns,
+  mlTrainingRuns,
+  trainDataSources,
+  user,
+} from "../db/schema";
 import { requireAdmin, requireUser } from "../lib/auth-middleware";
 import { denyNotFound, requireFoundForRead } from "../lib/access-control";
 import { triggerMlJob } from "../lib/ml-internal";
@@ -232,9 +240,9 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
     },
     { params: t.Object({ id: t.String() }) }
   )
-  // Delete a training run from history. Only FAILED runs may be removed — a
-  // completed run is an audit record of a model that was (or could be) served,
-  // and deleting it would cascade to its ml_model_versions. Creator or admin.
+  // Delete a training run from history (and cascade its model versions).
+  // Creator or admin. Active/pending runs stay; production champions and
+  // versions still referenced by prediction runs must be cleared first.
   .delete(
     "/:id",
     async ({ params, userId, isAdmin, set }) => {
@@ -244,10 +252,85 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
         set.status = 403;
         return { message: "Only the creator of this training run or an admin can delete it." };
       }
-      if (run.status !== RUN_STATUS.FAILED) {
+      if (run.status === RUN_STATUS.PENDING || run.status === RUN_STATUS.IN_PROGRESS) {
         set.status = 409;
-        return { message: "Only failed training runs can be deleted" };
+        return { message: "Cannot delete a training run that is still running" };
       }
+
+      const versions = await db
+        .select({
+          id: mlModelVersions.id,
+          modelType: mlModelVersions.modelType,
+          version: mlModelVersions.version,
+          isActive: mlModelVersions.isActive,
+          status: mlModelVersions.status,
+        })
+        .from(mlModelVersions)
+        .where(eq(mlModelVersions.trainingRunId, run.id));
+
+      const production = versions.filter((v) => v.isActive || v.status === "production");
+      if (production.length > 0) {
+        const names = production.map((v) => `${v.modelType} ${v.version}`).join(", ");
+        set.status = 409;
+        return {
+          message: `Cannot delete — still production champion: ${names}. Switch production to another version first.`,
+          error_code: "training_run_has_production_models",
+        };
+      }
+
+      if (versions.length > 0) {
+        const refs = await db
+          .select({
+            id: mlPredictionRuns.id,
+            name: mlPredictionRuns.name,
+          })
+          .from(mlPredictionRuns)
+          .where(
+            sql`EXISTS (
+              SELECT 1 FROM ml_model_versions mv
+              WHERE mv.training_run_id = ${run.id}::uuid
+                AND (
+                  ${mlPredictionRuns.modelVersionsJson} ->> mv.model_type = mv.version
+                  OR ${mlPredictionRuns.modelOverridesJson} ->> mv.model_type = mv.id::text
+                )
+            )`
+          )
+          .orderBy(desc(mlPredictionRuns.createdAt))
+          .limit(5);
+
+        if (refs.length > 0) {
+          const names = refs.map((r) => r.name || r.id.slice(0, 8)).join(", ");
+          const more = refs.length === 5 ? "…" : "";
+          set.status = 409;
+          return {
+            message: `ยังมี prediction run ที่ใช้โมเดลจากรอบนี้: ${names}${more} — ลบผล prediction เหล่านั้นก่อน`,
+            error_code: "training_run_in_use_by_predictions",
+            prediction_run_ids: refs.map((r) => r.id),
+          };
+        }
+
+        // Remove artifacts + registry rows via ML service before cascading the
+        // training run (DB cascade alone would leave orphan .pkl directories).
+        for (const version of versions) {
+          try {
+            await triggerMlJob("/internal/model-delete", {
+              model_type: version.modelType,
+              model_version_id: version.id,
+              created_by: userId ?? null,
+            });
+          } catch (error) {
+            const upstream = (error as { upstreamStatus?: number }).upstreamStatus;
+            set.status = upstream === 400 ? 409 : 502;
+            return {
+              message:
+                error instanceof Error
+                  ? error.message
+                  : `Failed to delete model version ${version.version}`,
+            };
+          }
+        }
+      }
+
       await db.delete(mlTrainingRuns).where(eq(mlTrainingRuns.id, run.id));
       return { deleted: true };
     },
