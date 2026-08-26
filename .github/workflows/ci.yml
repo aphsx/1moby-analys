@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  # Railway's "Wait for CI" needs a check on the main commit itself, not just the PR.
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.0.0"
+      - run: bun install --frozen-lockfile
+      # ponytail: typecheck+next build only. No tests exist to run; add a test
+      # step here when the repo grows one.
+      - run: bun run build
+        env:
+          NEXT_PUBLIC_AUTH_URL: http://localhost:3000
