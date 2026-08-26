@@ -1,25 +1,40 @@
 name: CI
 
+# Railway "Wait for CI" requires a `push` trigger and looks at checks on the
+# commit SHA being deployed — not the GitHub PR merge commit.
+# `pull_request` (unfiltered) is what actually puts a check on every PR,
+# including drafts marked ready. Existing PRs opened before this workflow
+# existed never got an event; `workflow_dispatch` covers a manual backfill.
 on:
-  pull_request:
-    branches: [main]
-  # Railway's "Wait for CI" needs a check on the main commit itself, not just the PR.
   push:
-    branches: [main]
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           # Matches oven/bun:1-alpine in the Dockerfiles. NOT package.json's
           # packageManager (bun@1.0.0) — that predates the bun.lock text format.
-          bun-version: latest
+          bun-version: "1.4.0"
       - run: bun install --frozen-lockfile
       # ponytail: typecheck+next build only. No tests exist to run; add a test
       # step here when the repo grows one.
       - run: bun run build
         env:
           NEXT_PUBLIC_AUTH_URL: http://localhost:3000
+          NEXT_TELEMETRY_DISABLED: "1"
