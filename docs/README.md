@@ -8,6 +8,9 @@ Every doc in this repo and what it answers. Start at the top.
 |---|---|---|
 | [`../README.md`](../README.md) | Project intro, stack, how to run, ports, data flow | EN |
 | [`../claude.md`](../claude.md) | **Architecture source of truth** — schema, routes, conventions, what-not-to-change | EN |
+| [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) | **Plain-English end-to-end walkthrough** — services, import, features, training run, prediction run, output row, web, AI, ops | EN |
+| [`MODEL-CHURN-DEEP-DIVE.md`](MODEL-CHURN-DEEP-DIVE.md) | The churn model line by line — label, features, candidates, CV, calibration, thresholds, leakage suite, promotion, serving, worked example | EN |
+| [`MODEL-CLV-CREDIT-DEEP-DIVE.md`](MODEL-CLV-CREDIT-DEEP-DIVE.md) | CLV (BG-NBD / Tweedie / Hurdle, p_alive, tail blend) and credit (quantile regression, CQR, AFT top-up timing) | EN |
 
 ## ML v2 (canonical — follow over any legacy code)
 
