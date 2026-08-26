@@ -282,6 +282,9 @@ Data sources
 Training / models
   POST   /training-runs                         [admin] trigger training { train_source_id, cutoff_date, horizon_days }
   GET    /training-runs / :id                   history + progress + gate results + metrics
+  DELETE /training-runs/:id                     creator or admin; blocked while running,
+                                                if any version is production, or if a
+                                                prediction run still references its models
   GET    /model-performance                     champion per model_type + evaluations + baselines
   POST   /model-performance/:type/activate      [admin] pin a version to production
   DELETE /model-performance/:type/versions/:id  creator or admin; blocked if production

@@ -256,7 +256,7 @@ export async function fetchTrainingRuns(): Promise<TrainingRun[]> {
   return getJson("/api/training-runs");
 }
 
-/** DELETE /training-runs/:id — remove a failed training run from history. */
+/** DELETE /training-runs/:id — remove a finished training run (+ its model versions). */
 export async function deleteTrainingRun(id: string): Promise<{ deleted: boolean }> {
   if (IS_ML_MOCK) return { deleted: true };
   return sendJson(`/api/training-runs/${id}`, "DELETE");

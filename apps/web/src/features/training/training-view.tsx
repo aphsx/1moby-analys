@@ -97,6 +97,7 @@ export function TrainingView() {
   // Training-run state
   const [runs, setRuns] = useState<TrainingRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(true);
+  const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [creating, setCreating] = useState(false);
   const [trainError, setTrainError] = useState<string | null>(null);
   const [suggestedCutoff, setSuggestedCutoff] = useState<string | null>(null);
@@ -314,9 +315,19 @@ export function TrainingView() {
           onTrain={handleTrain}
         />
 
-        <ModelStatusCards key={latestCompleted?.finished_at ?? "none"} latestRun={latestCompleted} />
+        <ModelStatusCards
+          key={`${latestCompleted?.finished_at ?? "none"}-${modelsRefreshKey}`}
+          latestRun={latestCompleted}
+        />
 
-        <TrainingHistoryTable runs={runs} loading={runsLoading} />
+        <TrainingHistoryTable
+          runs={runs}
+          loading={runsLoading}
+          onDeleted={() => {
+            setModelsRefreshKey((k) => k + 1);
+            void loadRuns();
+          }}
+        />
       </div>
 
       {pendingDeleteSource && (
