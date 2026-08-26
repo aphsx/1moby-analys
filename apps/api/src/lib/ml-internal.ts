@@ -40,7 +40,8 @@ export async function triggerMlJob(path: string, payload: object): Promise<void>
     if (controller.signal.aborted) {
       throw new Error(`ML job trigger ${path} timed out after ${timeoutMs}ms`);
     }
-    throw e;
+    const why = e instanceof Error ? e.message : String(e);
+    throw new Error(`ML job trigger ${path} could not reach ${base}${path}: ${why}`);
   } finally {
     clearTimeout(timeout);
   }
