@@ -440,9 +440,10 @@ el_credit = stage ∈ {"Active Paid", "Active Free"}
 2. **Random Forest** — `n_estimators=500, min_samples_leaf=5, max_features="sqrt", class_weight="balanced", n_jobs=-1`
 3. **LightGBM** — จูนด้วย Optuna `LGBM_TRIALS=100`
 4. **XGBoost** — จูนด้วย Optuna `XGB_TRIALS=50`
-5. **TabICLv2** (`tabicl`) — tabular foundation model **ไม่ต้องจูน** (in-context learner) เพิ่มต่อเมื่อ
-   (ก) `len(y_train) ≤ 500,000` และ (ข) import package `tabicl` ได้; device = CUDA ถ้ามี ไม่งั้น CPU
-   ถ้าไม่มี package/GPU จะ **degrade เงียบ ๆ** (try/except) — **ไม่มี SHAP** (ข้าม global importance)
+5. **TabICLv2** (`tabicl`) — tabular foundation model **ไม่ต้องจูน** (in-context learner);
+   อยู่ใน default pool กับ logistic_regression / lightgbm (**required** — ขาด package หรือ fit พัง = run fail).
+   device = CUDA → MPS → CPU (`TABICL_DEVICE` override); in-context rows ถูก cap ที่ `TABICL_MAX_ROWS`
+   (default 2000). ถ้าชนะ gate จะเป็น champion ได้ แต่ **ไม่มี per-row SHAP** (`churn_factors` = null)
 
 `scale_pos_weight = (#neg)/(#pos)` ใส่ให้ LightGBM และ XGBoost
 

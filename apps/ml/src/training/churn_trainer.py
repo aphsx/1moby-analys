@@ -79,14 +79,13 @@ EARLY_STOPPING_ROUNDS = 50
 # so it never lands in an unusable extreme.
 HIGH_THRESHOLD_BAND = (0.35, 0.85)
 
-# TabICLv2 (tabular foundation model) is an OPTIONAL extra candidate. It is a
+# TabICLv2 (tabular foundation model) is a required default candidate. It is a
 # pretrained in-context learner: no hyperparameter tuning, calibrated out of the
 # box, and shown to beat tuned GBMs on a majority of tabular benchmarks at our
 # data scale. It needs the `tabicl` package — runs on CUDA, Apple MPS, or CPU
 # (CPU is slow but supported so local Docker matches production steps). The CV +
 # promotion gate decides whether it actually beats LightGBM/XGBoost on the real
 # 1Moby data, exactly like every other candidate.
-TABICL_SAMPLE_LIMIT = 500_000
 
 # Default candidate pool — explicit list, not environment-detection.
 # Override via CHURN_CANDIDATES env var (comma-separated) or the
@@ -132,7 +131,7 @@ def _tabicl_device() -> str:
 def _new_tabicl_classifier() -> Any:
     """Construct a fresh TabICLv2 classifier (raises if `tabicl` is absent)."""
 
-    from tabicl import TabICLClassifier  # optional dependency, imported lazily
+    from tabicl import TabICLClassifier  # required dep; imported lazily to keep torch off cold paths
 
     return TabICLClassifier(random_state=RANDOM_SEED, device=_tabicl_device())
 
