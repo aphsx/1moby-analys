@@ -21,6 +21,6 @@ arq>=0.25
 msgpack>=1.0
 redis>=5.0
 boto3>=1.34           # R2/S3 model artifact storage (optional — only used when R2_BUCKET is set)
-# TabICLv2 (optional churn candidate) intentionally omitted: it pulls in torch
-# (~2GB) and churn_trainer auto-skips the candidate when the package is absent.
-# To re-enable: add `tabicl>=0.1` here and rebuild.
+# TabICLv2 tabular foundation model — churn candidate (required). Pulls in torch.
+# Same pool on every host: CUDA → MPS → CPU. TABICL_DEVICE overrides detection.
+tabicl>=0.1

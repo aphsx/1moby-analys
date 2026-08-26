@@ -18,8 +18,8 @@ has not beaten a tuned LightGBM in any backtest on this dataset. Add
 "random_forest" to CHURN_CANDIDATES to re-enable it.
 
 TabICLv2 is a pretrained tabular foundation model (no hyperparameter tuning).
-It is a first-class candidate: always attempted when listed. If the `tabicl`
-package is missing the candidate is skipped with a warning, not a crash.
+It is a first-class candidate in the default pool — same steps on every host
+(CUDA, MPS, or CPU). A missing `tabicl` install or fit failure fails the run.
 
 Candidates are ranked by 5-fold CV PR-AUC; calibration is fitted on
 out-of-fold predictions (Platt vs isotonic by Brier), threshold = max-F2.
@@ -30,7 +30,6 @@ champion.
 
 from __future__ import annotations
 
-import importlib.util
 import logging
 import os
 from dataclasses import dataclass
@@ -83,22 +82,19 @@ HIGH_THRESHOLD_BAND = (0.35, 0.85)
 # TabICLv2 (tabular foundation model) is an OPTIONAL extra candidate. It is a
 # pretrained in-context learner: no hyperparameter tuning, calibrated out of the
 # box, and shown to beat tuned GBMs on a majority of tabular benchmarks at our
-# data scale. It needs the `tabicl` package (and ideally a GPU) — when either is
-# missing the candidate is silently skipped so existing runs never break. The
-# CV + promotion gate decides whether it actually beats LightGBM/XGBoost on the
-# real 1Moby data, exactly like every other candidate.
+# data scale. It needs the `tabicl` package — runs on CUDA, Apple MPS, or CPU
+# (CPU is slow but supported so local Docker matches production steps). The CV +
+# promotion gate decides whether it actually beats LightGBM/XGBoost on the real
+# 1Moby data, exactly like every other candidate.
 TABICL_SAMPLE_LIMIT = 500_000
 
 # Default candidate pool — explicit list, not environment-detection.
 # Override via CHURN_CANDIDATES env var (comma-separated) or the
 # `candidates` kwarg on train_churn_candidates / train_churn.
-# TabICL is in the default pool and competes like any other candidate. It runs on
-# CPU or GPU; its in-context training set is capped (TABICL_MAX_ROWS) so a
-# panel-pooled churn set cannot blow up its runtime (the cause of an earlier
-# hang). Auto-skipped only when the `tabicl` package is absent. If it wins the
-# gate it is served as the production churn predictor; the prediction runner then
-# emits null per-row churn_factors because SHAP is not available for it at serve
-# time (predictions themselves are unaffected).
+# TabICL is in the default pool on every host (CUDA/MPS/CPU). In-context rows are
+# capped (TABICL_MAX_ROWS) so panel-pooled churn sets stay tractable; tree models
+# still use the full pooled set. If it wins the gate it is served as production
+# churn; per-row churn_factors are null at serve time (predictions unaffected).
 DEFAULT_CANDIDATES = ["logistic_regression", "lightgbm", "tabicl"]
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -115,7 +111,7 @@ def _resolve_candidates(candidates: list[str] | None) -> list[str]:
 
 
 def _tabicl_device() -> str:
-    """Pick a device: TABICL_DEVICE env override, else GPU when torch sees one."""
+    """Pick a device: TABICL_DEVICE env override, else CUDA → MPS → CPU."""
 
     override = os.getenv("TABICL_DEVICE")
     if override:
@@ -123,9 +119,14 @@ def _tabicl_device() -> str:
     try:
         import torch
 
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            return "cuda"
+        mps = getattr(torch.backends, "mps", None)
+        if mps and mps.is_available():
+            return "mps"
     except Exception:  # noqa: BLE001 - torch is a tabicl dependency; absence ⇒ cpu.
-        return "cpu"
+        pass
+    return "cpu"
 
 
 def _new_tabicl_classifier() -> Any:
@@ -302,17 +303,12 @@ def train_churn_candidates(
         fitted.append(_tune_xgboost(x_train, y_train, x_val, y_val, scale_pos_weight, xgb_trials))
 
     if "tabicl" in active:
-        if importlib.util.find_spec("tabicl") is None:
-            notify("churn: TabICLv2 skipped — `tabicl` package not installed (pip install tabicl)")
-        else:
-            notify(
-                f"churn: fitting TabICLv2 candidate (in-context; capped at "
-                f"{TABICL_MAX_ROWS} rows so a panel-pooled set stays tractable)"
-            )
-            try:
-                fitted.append(_fit_tabicl(x_train, y_train, x_val, y_val))
-            except Exception as exc:  # noqa: BLE001
-                notify(f"churn: TabICLv2 candidate failed ({type(exc).__name__}: {exc})")
+        device = _tabicl_device()
+        notify(
+            f"churn: fitting TabICLv2 candidate (device={device}; capped at "
+            f"{TABICL_MAX_ROWS} rows so a panel-pooled set stays tractable)"
+        )
+        fitted.append(_fit_tabicl(x_train, y_train, x_val, y_val))
 
     if not fitted:
         raise RuntimeError(f"No churn candidates were fitted. Check CHURN_CANDIDATES or `candidates` kwarg. Active list: {active}")

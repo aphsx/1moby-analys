@@ -77,11 +77,11 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _spawn_job(module: str, *args: str) -> int:
+    # Inherit stdout/stderr so training/prediction progress prints appear in
+    # `docker compose logs ml` — same pipeline everywhere, easier to debug on CPU.
     process = subprocess.Popen(
         [sys.executable, "-m", module, *args],
         cwd=str(APP_ROOT),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
     return process.pid
