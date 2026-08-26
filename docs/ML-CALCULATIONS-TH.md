@@ -33,6 +33,7 @@
 1. [หลักการเวลา (Point-in-time), cutoff และหน้าต่างเวลา](#1-หลักการเวลา)
 2. [Lifecycle Segmentation — Ghost / Churned / Active Paid / Active Free](#2-lifecycle-segmentation)
 3. [Model Eligibility — ใครได้ทำนายอะไร + การงดประเมิน churn (abstain)](#3-model-eligibility)
+3A. [Feature ทั้งหมด (Tier A) ที่ป้อนเข้าโมเดล](#3a-feature-ทั้งหมด-tier-a-ที่ป้อนเข้าโมเดล)
 4. [Churn — % ความเสี่ยงเลิกใช้ มาจากอะไร](#4-churn)
 5. [CLV — มูลค่าลูกค้า 6 เดือน และ p_alive](#5-clv)
 6. [Credit Forecast — ทำนายการใช้เครดิต 30/90 วัน และวันจนต้องเติม](#6-credit-forecast)
@@ -140,6 +141,65 @@ abstain = el_churn AND (customer_age_days < 90)
 
 - `customer_age_days = (cutoff − join_date).days` (`features.py` `build_profile_features()`)
 - เหตุผล: feature ของ churn หลายตัว (usage 90 วันล่าสุด, ความชัน 6 เดือน) จะถูกเติมศูนย์เพราะยังไม่มีประวัติพอ ทำให้คะแนนออกมาจาก "ค่า default" ไม่ใช่พฤติกรรมจริง → ยอมงดดีกว่าเดาให้เซลส์
+
+---
+
+## 3A. Feature ทั้งหมด (Tier A) ที่ป้อนเข้าโมเดล
+
+โมเดล churn/CLV/credit ทั้งหมดใช้ feature ชุด "Tier A" เดียวกัน (คำนวณ ณ cutoff จากข้อมูลก่อน cutoff เท่านั้น)
+โดย **churn และ CLV ใช้ 27 ตัวแรก (`BASE_TIER_A_FEATURES`)**, **credit ใช้ทั้ง 31 ตัว (`CREDIT_TIER_A_FEATURES`)**
+สูตรทุกตัวมาจาก `FEATURE_METADATA` ใน `features.py` — ชื่อ feature เหล่านี้คือสิ่งที่โผล่ใน `churn_factors` (SHAP) ด้วย
+
+### พฤติกรรมการจ่ายเงิน (payment)
+
+| feature | สูตร | หน้าต่าง |
+|---|---|---|
+| `customer_age_days` | `cutoff − join_date` | static |
+| `days_since_last_payment` | `cutoff − max(payment_date)` | all history |
+| `payment_count_all` | `count(payments)` | all history |
+| `payment_count_180d` | `count(payments ใน 180 วัน)` | 180d |
+| `total_revenue_all` | `Σ amount` | all history |
+| `total_revenue_180d` | `Σ amount ใน 180 วัน` | 180d |
+| `avg_transaction_value` | `mean(amount)` | all history |
+| `payment_interval_mean_days` | `mean(ระยะห่างวันจ่ายติดกัน)` | all history |
+| `payment_overdue_ratio` | `days_since_last_payment / payment_interval_mean_days` (เกินรอบจ่ายปกติแค่ไหน) | all history |
+| `payment_amount_cv` | `std(amount) / mean(amount)` (แยกคนจ่ายสม่ำเสมอ vs จ่ายกระชาก) | all history |
+
+### พฤติกรรมการใช้งาน (usage)
+
+| feature | สูตร | หน้าต่าง |
+|---|---|---|
+| `days_since_last_activity` | `cutoff − max(activity)` (activity = จ่าย หรือ usage>0) | all history |
+| `days_since_last_usage` | `cutoff − max(period ที่ usage>0)` | all history |
+| `usage_total_180d` | `Σ usage` | 180d |
+| `usage_recent_90d` | `Σ usage` | 90d ล่าสุด |
+| `usage_prev_90d` | `Σ usage` | 90–180 วันก่อน |
+| `usage_change_90d_pct` | `signed_log1p((recent90 − prev90)/prev90)` (โมเมนตัม) | 180d |
+| `usage_decay_ratio` | `signed_log1p(recent90 / prev90)` | 180d |
+| `usage_slope_6m` | ความชันเชิงเส้นของ usage รายเดือน 6 เดือน | 6 เดือน |
+| `usage_active_months_180d` | `count(เดือนที่ usage>0)` | 180d |
+| `usage_consistency_ratio` | `usage_active_months_180d / 6` | 180d |
+
+### สัดส่วนช่องทาง (channel mix)
+
+| feature | สูตร |
+|---|---|
+| `sms_usage_share` / `email_usage_share` | usage แต่ละช่องทาง ÷ usage รวม |
+| `bc_usage_share` / `api_usage_share` / `otp_usage_share` | usage แต่ละแหล่ง (Broadcast/API/OTP) ÷ usage รวม |
+| `channel_hhi` | `sms_share² + email_share²` (Herfindahl; 1.0 = ช่องทางเดียว, ~0.5 = สมดุล) |
+| `multichannel_flag` | 1 ถ้าใช้ทั้ง SMS และ Email (>0), ไม่งั้น 0 |
+
+### เครดิต (เฉพาะโมเดล credit — 4 ตัวเสริม)
+
+| feature | สูตร |
+|---|---|
+| `credit_added_180d` | `Σ credit_add ใน 180 วัน` |
+| `credit_balance_proxy` | `Σ credit_add − Σ usage` (ก่อน cutoff; **ไม่ใช้** snapshot credit_sms/credit_email เพราะสะท้อนเวลา export ไม่ใช่ ณ cutoff → กัน leakage) |
+| `credit_runway_months` | `credit_balance_proxy / (usage_recent_90d / 3)`, clip `[0, 24]` |
+| `credit_usage_decel` | `signed_log1p` ของการเปลี่ยนอัตราเผาต่อเดือน (เร่ง/ชะลอการใช้) |
+
+> **การเติมค่าว่าง (imputation):** feature กลุ่มนับ/ผลรวม (payment_count, usage_*, share, credit_*) ถ้าไม่มีข้อมูล = **0** (`ZERO_DEFAULT_FEATURES`); กลุ่มที่เป็นอัตรา/ระยะเวลา (age, days_since_*, avg_transaction_value, interval, overdue, cv) เป็น **null ได้** แล้ว preprocessor เติมด้วย median ที่ fit จาก train เท่านั้น (`NULLABLE_CONTRACT_FEATURES`)
+> `signed_log1p(x) = sign(x)·log(1+|x|)` — บีบค่าหางยาวโดยคงเครื่องหมาย
 
 ---
 
@@ -417,6 +477,27 @@ needs_review = ( churn ∈ {high,critical}
               AND active
 ```
 
+### 7.8 Descriptive fields (ข้อเท็จจริงลูกค้า — ไม่ใช่คำทำนาย)
+→ `runner.py` `_apply_descriptive()` ~661–756 (คิดจาก payment ก่อน cutoff)
+
+| field | สูตร |
+|---|---|
+| `n_purchases` | `count(payments ทั้งหมดก่อน cutoff)` (ไม่มี = 0) |
+| `total_revenue` | `Σ amount ทั้งหมดก่อน cutoff` |
+| `avg_transaction_value` | `total_revenue / n_purchases` (null ถ้าไม่เคยจ่าย) |
+| `usage_trend` | จาก `usage_change_90d_pct`: no_usage / increasing(>+10%) / declining(<−10%) / stable |
+| `credit_balance_total` | `credit_sms + credit_email` จาก snapshot profile (ใช้เป็นตัวหารใน heuristic วันจน top-up) |
+| `profile_snapshot` | snapshot โปรไฟล์ ณ cutoff: `{join_date, customer_age_days, status_sms, status_email, credit_sms, credit_email, expire_sms, expire_email, last_access, last_send, sms/email/bc/api/otp_usage_share, usage_total_180d}` — ให้ Customer 360 แสดงได้โดยไม่ต้อง join ตารางอื่น |
+
+### 7.9 Meta fields (audit / อธิบาย null)
+
+| field | ค่า |
+|---|---|
+| `output_status` | `predicted` (ครบ) / `partial` (บางโมเดล null) / `insufficient_data` |
+| `output_notes` | ข้อความอธิบายเพิ่มเมื่อบางโมเดลไม่ได้ค่า |
+| `model_eligibility_json` | `{churn:{eligible,status,reason}, clv:{...}, credit:{...}}` — status ∈ predicted/not_eligible/insufficient_data/failed (นี่คือที่มาของข้อความ "ทำไมคนนี้ไม่มีคะแนน") |
+| `model_versions_json` | `{churn:<version>, clv:<version>, credit:<version>}` — รู้เสมอว่าตัวเลขมาจากโมเดลเวอร์ชันไหน |
+
 ### 7.7 ตัวเลขระดับ run (Dashboard) — คำนวณด้วย SQL ไม่ใช่ Python
 → `apps/api/src/lib/run-aggregates.ts`
 - `expected_at_risk` = Σ `revenue_at_risk` เฉพาะ **Active Paid**
@@ -519,6 +600,20 @@ needs_review = ( churn ∈ {high,critical}
 | `pinball_p50_*` | pinball loss ที่ α=0.5 |
 | `winkler_p10_p90_*` | Winkler interval score (รางวัลช่วงแคบที่ยังครอบคลุมจริง) |
 | `pinball_composite_*` | เฉลี่ย pinball 5 quantile |
+
+### 9.4 Realized outcome — วัด "ความแม่นจริง" หลังเวลาผ่านไป
+→ `apps/ml/src/outcomes/metrics.py` + `runner.py` (สั่งด้วย `POST /outcome-backfill`)
+
+metric ตอนเทรน (ข้อ 9.1–9.3) วัดบน **test/backtest** ในอดีต ส่วนอันนี้วัดกับ **ผลจริงที่เกิดขึ้นแล้ว**
+เมื่อ horizon ของ run นั้นครบ (มี predict data ใหม่กว่ามายืนยัน):
+
+- **สร้าง label จริง** ด้วย label builder ชุดเดียวกับตอนเทรน (`labels.py`) แล้วจับคู่กับค่าที่เคยทำนายไว้
+- **ใช้ฟังก์ชัน metric ตัวเดียวกันเป๊ะ** (import จาก `training/metrics.py` ไม่ได้เขียนใหม่) → realized PR-AUC/Spearman/coverage เทียบกับ test ตอนเทรนได้ตรงๆ
+  - churn: `churn_metrics` ที่ **threshold ที่ใช้จริงตอน serve** + confusion matrix + calibration + lift table
+  - clv: `clv_metrics` (Spearman/MAE/top-decile) ระหว่างรายได้จริง vs `predicted_clv_6m`
+  - credit: MAE/SMAPE/pinball ของ p50 และ coverage p10–p90 ต่อ horizon
+- ต้องจับคู่ได้ ≥ `MIN_SAMPLES = 20` ราย ไม่งั้นถือเป็น noise ไม่รายงาน
+- เก็บเป็น `ml_model_evaluations` (`evaluation_type='production_holdout'`) อ่านผ่าน `GET /prediction-runs/:id/realized-outcomes`
 
 ---
 
