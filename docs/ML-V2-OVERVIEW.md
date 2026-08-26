@@ -94,4 +94,4 @@ Overview ▸ Customers ▸ Customer 360 ▸ Model Performance
 | G | Elysia routes: runs / summary / outputs / customer / model-performance | DASHBOARD §7 |
 | H | ต่อหน้าเว็บเข้า API จริง ถอด mock + ถอดของที่ไม่ใช้ | DASHBOARD §6 |
 | I | Realized-outcome loop (วัดผลจริงเมื่อครบ horizon) + retrain policy | TRAINING §15 |
-| Phase 2 | AI explanation (Gemini), R2 storage, Eden Treaty, email notification | — |
+| Phase 2 | AI explanation (Ollama), R2 storage, Eden Treaty, email notification | — |
