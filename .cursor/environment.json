@@ -1,0 +1,12 @@
+{
+  "name": "Moby Analytics",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "compose-logs",
+      "command": "sudo bash .cursor/dockerd-up.sh && sudo docker compose logs -f"
+    }
+  ],
+  "ports": [3000, 3001, 8001, 5433]
+}
