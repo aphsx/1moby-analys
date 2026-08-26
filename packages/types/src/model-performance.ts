@@ -29,6 +29,8 @@ export interface ModelVersionSummary {
   trained_at: string | null;
   primary_metric_name: string;
   primary_metric_value: number | null;
+  /** Owner of the training run that produced this version (for creator-or-admin delete). */
+  created_by: string | null;
 }
 
 export interface ModelPerfEntry {

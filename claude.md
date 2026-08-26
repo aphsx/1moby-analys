@@ -13,13 +13,15 @@ Used by internal staff across multiple teams (~10–50 users). Analyzes uploaded
 predict customer churn, segment customers by CLV / value tier, and forecast credit consumption.
 
 **Access model (org-shared):** all data sources, runs, and dashboards are visible to every
-authenticated user. Two roles on `user.role`: `admin` (import train data, trigger training, delete
-anything, pin/delete model versions, trigger outcome backfill) and `member` (default — view
-everything, import predict data, create prediction runs, AI chat). Bootstrap admins via
-`ADMIN_EMAILS` env. Local Docker/dev seeds `admin@example.com` / `123` (role=admin) on API boot
-when `SEED_LOCAL_ADMIN` is enabled (default outside production); type `admin` on the login form.
-Deletes are creator-or-admin. AI chat conversations stay private per user, but Text-to-SQL
-queries are scoped org-wide (deterministic id allowlist in `apps/api/src/lib/ai/scope.ts`).
+authenticated user. Two roles on `user.role`: `admin` (import train data, trigger training,
+pin production models, delete anything, trigger outcome backfill) and `member` (default —
+view everything, import predict data, create prediction runs, AI chat, delete own
+non-production model versions when no prediction run still references them). Bootstrap
+admins via `ADMIN_EMAILS` env. Local Docker/dev seeds `admin@example.com` / `123` (role=admin)
+on API boot when `SEED_LOCAL_ADMIN` is enabled (default outside production); type `admin` on
+the login form. Deletes are creator-or-admin. AI chat conversations stay private per user, but
+Text-to-SQL queries are scoped org-wide (deterministic id allowlist in
+`apps/api/src/lib/ai/scope.ts`).
 
 **Deployment target:** Local Docker first. Production decision deferred.
 
@@ -282,7 +284,9 @@ Training / models
   GET    /training-runs / :id                   history + progress + gate results + metrics
   GET    /model-performance                     champion per model_type + evaluations + baselines
   POST   /model-performance/:type/activate      [admin] pin a version to production
-  DELETE /model-performance/:type/versions/:id  [admin] delete a non-production version
+  DELETE /model-performance/:type/versions/:id  creator or admin; blocked if production
+                                                champion or any prediction run still
+                                                references the version (delete predicts first)
   POST   /outcome-backfill                      [admin] trigger realized-outcome backfill
 
 AI chat

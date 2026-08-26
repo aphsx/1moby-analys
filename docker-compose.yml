@@ -41,6 +41,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # Uvicorn `--host ::` is IPv6-only (unlike Bun). Compose DNS returns IPv4,
+      # so Elysia fetch(http://ml:8000) is connection-refused unless we bind
+      # 0.0.0.0. Railway IPv6-only can override with ML_HOST=::
+      ML_HOST: ${ML_HOST:-0.0.0.0}
     ports:
       - "8001:8000"
     volumes:
@@ -52,7 +57,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3).read()\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""]
       interval: 10s
       timeout: 5s
       retries: 5

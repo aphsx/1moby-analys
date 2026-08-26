@@ -1,8 +1,9 @@
 "use client";
-/**
- * Org-role helper for the shared-access model (see @moby/types USER_ROLE).
- * Admin = import data, trigger training, delete anything, manage model versions.
- * Member = view everything, create prediction runs, AI chat.
+/** Org-role helper for the shared-access model (see @moby/types USER_ROLE).
+ * Admin = import train data, trigger training, pin production models, delete
+ * anything, outcome backfill.
+ * Member = view everything, import predict data, create prediction runs, AI
+ * chat, delete own model versions (when no prediction run still references them).
  *
  * Usage:
  *   const { isAdmin, userId, loading } = useIsAdmin();

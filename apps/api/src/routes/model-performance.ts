@@ -4,10 +4,17 @@
  * and baselines from ml_model_evaluations. Contract: apps/web/src/lib/mlApi.ts.
  */
 import Elysia from "elysia";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import { mlModelAliases, mlModelEvaluations, mlModelVersions } from "../db/schema";
+import {
+  mlModelAliases,
+  mlModelEvaluations,
+  mlModelVersions,
+  mlPredictionRuns,
+  mlTrainingRuns,
+} from "../db/schema";
 import { requireAdmin, requireUser } from "../lib/auth-middleware";
+import { requireCreatorOrAdminForMutation } from "../lib/access-control";
 import {
   DEFAULT_RISK_THRESHOLDS,
   type CandidateResult,
@@ -214,8 +221,26 @@ interface VersionCard {
   algorithm?: string;
 }
 
-// Champion pinning and version deletion change what every user is served —
-// admin only, same pattern as data imports and training runs.
+/** Prediction runs that served this version (by version string or override id). */
+async function findReferencingPredictionRuns(
+  modelType: ModelType,
+  version: string,
+  versionId: string
+): Promise<{ id: string; name: string }[]> {
+  return db
+    .select({ id: mlPredictionRuns.id, name: mlPredictionRuns.name })
+    .from(mlPredictionRuns)
+    .where(
+      sql`(
+        ${mlPredictionRuns.modelVersionsJson} ->> ${modelType} = ${version}
+        OR ${mlPredictionRuns.modelOverridesJson} ->> ${modelType} = ${versionId}
+      )`
+    )
+    .orderBy(desc(mlPredictionRuns.createdAt))
+    .limit(5);
+}
+
+// Champion pinning changes what every user is served — admin only.
 const adminModelPerformanceRoutes = new Elysia()
   .use(requireAdmin)
   // Manually pin a version to production. Reuses the ML service's promotion
@@ -245,32 +270,6 @@ const adminModelPerformanceRoutes = new Elysia()
       return { message: error instanceof Error ? error.message : "Activation failed" };
     }
     return { ok: true };
-  })
-  // Permanently delete a non-production model version (artifacts + registry row).
-  // The ML service refuses to delete the current production champion.
-  .delete("/:modelType/versions/:id", async ({ params, userId, set }) => {
-    if (!isModelType(params.modelType)) {
-      set.status = 400;
-      return { message: "Unknown model type" };
-    }
-    if (!params.id) {
-      set.status = 400;
-      return { message: "model version id is required" };
-    }
-    try {
-      await triggerMlJob("/internal/model-delete", {
-        model_type: params.modelType,
-        model_version_id: params.id,
-        created_by: userId ?? null,
-      });
-    } catch (error) {
-      // The ML service rejects deleting the production champion with HTTP 400 —
-      // surface that as 409 Conflict (a state error), not a 502 gateway error.
-      const upstream = (error as { upstreamStatus?: number }).upstreamStatus;
-      set.status = upstream === 400 ? 409 : 502;
-      return { message: error instanceof Error ? error.message : "Delete failed" };
-    }
-    return { deleted: true };
   });
 
 export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" })
@@ -299,8 +298,10 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
         trainedAt: mlModelVersions.trainedAt,
         modelCardJson: mlModelVersions.modelCardJson,
         testMetricsJson: mlModelVersions.testMetricsJson,
+        createdBy: mlTrainingRuns.createdBy,
       })
       .from(mlModelVersions)
+      .leftJoin(mlTrainingRuns, eq(mlModelVersions.trainingRunId, mlTrainingRuns.id))
       .where(eq(mlModelVersions.modelType, params.modelType))
       .orderBy(desc(mlModelVersions.trainedAt));
 
@@ -316,7 +317,89 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
         trained_at: row.trainedAt?.toISOString() ?? null,
         primary_metric_name: primary.name,
         primary_metric_value: typeof metricValue === "number" ? metricValue : null,
+        created_by: row.createdBy ?? null,
       };
     });
+  })
+  // Permanently delete a non-production model version (artifacts + registry row).
+  // Creator of the training run or admin. Blocked while any prediction run
+  // still references the version — delete those prediction results first.
+  // The ML service also refuses the current production champion.
+  .delete("/:modelType/versions/:id", async ({ params, userId, isAdmin, set }) => {
+    if (!isModelType(params.modelType)) {
+      set.status = 400;
+      return { message: "Unknown model type" };
+    }
+    if (!params.id) {
+      set.status = 400;
+      return { message: "model version id is required" };
+    }
+
+    const [version] = await db
+      .select({
+        id: mlModelVersions.id,
+        version: mlModelVersions.version,
+        isActive: mlModelVersions.isActive,
+        status: mlModelVersions.status,
+        createdBy: mlTrainingRuns.createdBy,
+      })
+      .from(mlModelVersions)
+      .leftJoin(mlTrainingRuns, eq(mlModelVersions.trainingRunId, mlTrainingRuns.id))
+      .where(
+        and(eq(mlModelVersions.id, params.id), eq(mlModelVersions.modelType, params.modelType))
+      )
+      .limit(1);
+
+    const denied = requireCreatorOrAdminForMutation(
+      version,
+      version?.createdBy,
+      userId,
+      isAdmin,
+      set,
+      {
+        notFound: "Model version not found",
+        forbidden: "Only the trainer of this model version or an admin can delete it.",
+      }
+    );
+    if (denied) return denied;
+
+    if (version!.isActive || version!.status === "production") {
+      set.status = 409;
+      return {
+        message:
+          "This version is the production champion — switch production to another version before deleting it.",
+      };
+    }
+
+    const refs = await findReferencingPredictionRuns(
+      params.modelType,
+      version!.version,
+      version!.id
+    );
+    if (refs.length > 0) {
+      const names = refs.map((r) => r.name || r.id.slice(0, 8)).join(", ");
+      const more = refs.length === 5 ? "…" : "";
+      set.status = 409;
+      return {
+        message: `ยังมี prediction run ที่ใช้เวอร์ชันนี้: ${names}${more} — ลบผล prediction เหล่านั้นก่อน`,
+        error_code: "model_in_use_by_predictions",
+        prediction_run_ids: refs.map((r) => r.id),
+      };
+    }
+
+    try {
+      await triggerMlJob("/internal/model-delete", {
+        model_type: params.modelType,
+        model_version_id: params.id,
+        created_by: userId ?? null,
+      });
+    } catch (error) {
+      // The ML service rejects production / in-use versions with HTTP 400 —
+      // surface that as 409 Conflict (a state error), not a 502 gateway error.
+      const upstream = (error as { upstreamStatus?: number }).upstreamStatus;
+      set.status = upstream === 400 ? 409 : 502;
+      return { message: error instanceof Error ? error.message : "Delete failed" };
+    }
+    return { deleted: true };
   })
   .use(adminModelPerformanceRoutes);
