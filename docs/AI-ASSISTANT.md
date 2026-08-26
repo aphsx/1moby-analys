@@ -28,7 +28,7 @@ database operations.
 | **Streaming** | Yes — token-by-token via SSE |
 | **History** | Full Postgres persistence — multi-conversation, sidebar, rename/delete |
 | **Knowledge ingestion** | Auto-ingest existing docs on first boot + admin upload page |
-| **Conversations** | Per-user private (not shared across the ~5 internal users) |
+| **Conversations** | Per-user private (not shared org-wide) |
 
 ## 3. Architecture
 

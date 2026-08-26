@@ -2,7 +2,7 @@
 
 Internal analytics platform for **1Moby**, a B2B SaaS messaging company (SMS/Email).
 It ingests a fixed-schema Excel export, then predicts customer **churn**, segments customers by
-**CLV / value tier**, and forecasts **credit consumption** — for ~5 internal users.
+**CLV / value tier**, and forecasts **credit consumption** — for ~10–50 internal users.
 
 > **New here?** Start with [`claude.md`](claude.md) for the full architecture, then
 > [`docs/README.md`](docs/README.md) for the documentation map.
@@ -77,6 +77,7 @@ models were permanently cut.
 |---|---|
 | [`claude.md`](claude.md) | Architecture, schema, conventions — the project's source of truth |
 | [`docs/README.md`](docs/README.md) | Index of all docs |
+| [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) | End-to-end walkthrough of the running system |
 | [`docs/ML-V2-*.md`](docs/) | ML v2 design: overview, dashboard spec, output contract, training pipeline |
 | [`docs/AI-ASSISTANT.md`](docs/AI-ASSISTANT.md) | AI chat assistant architecture + build plan |
 | [`moby-data-prep/`](moby-data-prep/) | Excel import contract, naming convention, raw/clean schemas |

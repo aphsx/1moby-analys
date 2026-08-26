@@ -26,8 +26,10 @@ Every doc in this repo and what it answers. Start at the top.
 
 | Doc | What it covers | Language |
 |---|---|---|
+| [`CUSTOMER-SEGMENTS.md`](CUSTOMER-SEGMENTS.md) | CS/sales segments on top of ML outputs (`segment`, `priority_rank`) | EN |
 | [`AI-ASSISTANT.md`](AI-ASSISTANT.md) | AI chat assistant — architecture, governance, build plan & status | EN |
 | [`WEB-DEV-WORKFLOW.md`](WEB-DEV-WORKFLOW.md) | How to run / rebuild the `apps/web` frontend during dev | TH |
+| [`REMEDIATION-PLAN.md`](REMEDIATION-PLAN.md) | Accuracy audit backlog — P1 CLV log-space retrain still open | EN |
 
 ## Data preparation (Excel import → clean tables)
 
@@ -46,3 +48,7 @@ Every doc in this repo and what it answers. Start at the top.
 - The live database schema is **always** `db/init/001_schema.sql` — there is no migration framework.
 - ML v2 docs are written in Thai by design; infrastructure docs are in English.
 - If a doc disagrees with the code, the code wins — fix the doc.
+- Walkthroughs (`HOW-IT-WORKS.md`, `MODEL-*-DEEP-DIVE.md`) are the current
+  explanation of the running system. ML-V2 specs are the design contract;
+  if a number drifted (feature counts, serving policy), trust the walkthrough
+  and the code.

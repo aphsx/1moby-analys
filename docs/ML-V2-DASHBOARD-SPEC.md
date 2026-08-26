@@ -49,7 +49,7 @@
 **Header (เฉพาะหน้า `/`, `/customers`, `/customers/[id]`):**
 - **Run selector** — dropdown ของ run ที่ `status='completed'` เรียงใหม่→เก่า, default = ล่าสุด แสดง `ชื่อ run · cutoff DD MMM YYYY` — ทุกตัวเลขบน 3 หน้านี้ผูกกับ run ที่เลือก
 - ไม่มี run ที่ completed → header แสดง empty state + ลิงก์ไป `/runs` (ตาม §5)
-- Desktop-first — internal tool 5 คน ไม่ต้องทำ responsive จริงจัง
+- Desktop-first — internal tool ~10–50 คน ไม่ต้องทำ responsive จริงจัง
 
 ## §2.1 หน้า Overview (`/`)
 
@@ -208,7 +208,7 @@ name · status pill (pending / in_progress / completed / failed) · predict sour
 
 ```
 predict_clean_payments + predict_clean_usage            ข้อมูลจริงของลูกค้า
-  │  [P] runner สร้าง features 24 ตัว ณ cutoff (contract เดียวกับตอนเทรน)
+  │  [P] runner สร้าง features ตาม contract ของ champion (churn/CLV 27, credit 31) ณ cutoff
   ▼
 champion churn model (alias 'production')               [T] LightGBM ที่ผ่าน promotion gate
   │  raw score

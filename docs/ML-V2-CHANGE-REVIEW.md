@@ -119,17 +119,20 @@ CV PR-AUC and the OOF-fitted calibrator. `_cv_oof` now groups by `acc_id`
 (verified: a customer never spans folds). Final test/backtest metrics — what the
 gate decides on — were already clean.
 
-### 4.5 TabICL: default candidate, benchmark-only
-- `TabICL` is now in `DEFAULT_CANDIDATES`, so it **always competes** and is
-  visible in the candidate competition (previously opt-in via `CHURN_CANDIDATES`,
-  which was never set → it never appeared). Auto-skips cleanly when the `tabicl`
-  package is absent or the train set exceeds the in-context limit.
-- The runner treats it as **benchmark-only**: if TabICL tops the gate, the system
-  serves the best eligible **explainable** candidate (LightGBM/LR) instead.
-  TabICL cannot produce per-customer SHAP, so serving it would null
-  `churn_factors` for the whole population (the prediction runner degrades
-  gracefully to null factors, it does not crash). It can still be pinned manually
-  via the UI override if that trade-off is accepted.
+### 4.5 TabICL: default candidate (can be served)
+- `TabICL` is in `DEFAULT_CANDIDATES`, so it **always competes** (previously
+  opt-in via `CHURN_CANDIDATES`, which was never set → it never appeared).
+  A missing `tabicl` install or a fit failure **fails the run** — it is not
+  skipped. Panel-pooled rows are capped (`TABICL_MAX_ROWS`) so in-context
+  inference stays tractable.
+- If TabICL wins the gate it **is served**. It cannot produce per-customer SHAP,
+  so `churn_factors` are `null` for that champion and the model card stores
+  global permutation importance instead. The prediction runner degrades
+  gracefully (null factors, no crash).
+
+> June 2026 review originally called this "benchmark-only" (serve LightGBM/LR
+> if TabICL topped the gate). That policy did not land — code serves the gate
+> winner, including TabICL.
 
 ### 4.6 Bug fix — `refit_for_backtest` unpacking
 `_cv_oof` returns a 3-tuple `(mean, oof, fold_scores)`, but `refit_for_backtest`
@@ -180,8 +183,8 @@ contracts.
 1. **Rebuild the ML image** — the `ml` service does not bind-mount source
    (`docker compose build ml`, or `up --build ml`).
 2. **Run one full training run** and confirm: leakage suite green; churn
-   backtests complete; TabICL appears in the candidate competition; the served
-   champion is an explainable model.
+   backtests complete; TabICL appears in the candidate competition; if TabICL
+   wins the gate it is the served champion (`churn_factors` will be null).
 3. **Verify the `tabicl` package** is in the image:
    `docker compose exec ml python -c "import tabicl; print(tabicl.__version__)"`.
 4. On **real** (non-mockup) data, inspect churn SHAP to judge whether the new

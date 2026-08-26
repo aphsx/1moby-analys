@@ -119,4 +119,5 @@ Shipped in code:
   exposed in the outputs mapper, `priority_rank` added to the sort whitelist.
 
 Thresholds (0.80/0.50 value cuts, p_alive 0.20/0.50, momentum ±10%) are the tunable knobs.
-Reference implementation: `docs/segmentation.py`.
+Implemented in `apps/ml/src/prediction/runner.py` (`_apply_segments`) and
+`apps/ml/src/constants.py` (`Segment`).

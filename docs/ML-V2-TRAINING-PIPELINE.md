@@ -2,7 +2,7 @@
 
 > ตอบคำถาม: เทรนยังไงให้ไม่ leak, เลือกโมเดลตัวไหนเพราะอะไร ผสมดีกว่าไหม,
 > วัดผลด้วยอะไร (F1 ฯลฯ) แต่ละค่าหมายความว่าอะไร, retrain เมื่อไหร่ยังไง
-> ใช้แทนเอกสารเทรนเก่าทั้งหมด — legacy `apps/ml/src/models/` และ `train.py` ไม่ใช้ต่อ
+> Pipeline ที่รันจริงอยู่ที่ `apps/ml/src/training/` — ดู walkthrough ใน `HOW-IT-WORKS.md` / `MODEL-*-DEEP-DIVE.md` ถ้าสเปกนี้กับโค้ดขัดกัน
 
 ## §1 หลักการที่ห้ามละเมิด
 
@@ -20,14 +20,14 @@
  2. โหลด train_clean_*                          ✅ data.py
  3. Gate 1–3: readiness / schema / cutoff feasibility ✅ validation.py
  4. สร้าง labels ทุกโมเดล + Gate 4 (label viability)  ✅ labels.py
- 5. สร้าง features Tier A 24 ตัว + Gate 5 (leakage)   ✅ features.py
- 6. Dataset builder: join features+labels เฉพาะกลุ่ม eligible   ❌ ใหม่
- 7. Temporal split (§6)                                          ❌ ใหม่
+ 5. สร้าง features (churn/CLV 27, credit 31) + Gate 5 (leakage) ✅ features.py
+ 6. Dataset builder: join features+labels เฉพาะกลุ่ม eligible   ✅ datasets.py
+ 7. Temporal split (§6)                                          ✅ datasets.py
  8. Preprocess: fit บน train เท่านั้น ✅ preprocessing.py
- 9. เทรน baselines (§12) → eval → ลง ml_model_evaluations        ❌ ใหม่
-10. เทรน candidates + Optuna (§8–9) → calibrate (§10) → eval (§11) ❌ ใหม่
-11. Leakage tests หลังเทรน (§5.2)                                 ❌ ใหม่
-12. Multi-cutoff backtest (§3)                                    ❌ ใหม่
+ 9. เทรน baselines (§12) → eval → ลง ml_model_evaluations        ✅ baselines.py
+10. เทรน candidates + Optuna (§8–9) → calibrate (§10) → eval (§11) ✅ {churn,clv,credit}_trainer.py
+11. Leakage tests หลังเทรน (§5.2)                                 ✅ validation.py
+12. Multi-cutoff backtest (§3)                                    ✅ datasets.py / runner.py
 13. เลือก champion + promotion gate (§14) → artifacts (§16)
 14. activate alias "production" + บันทึก activation history
 15. ปิด run: completed / failed (+error_message เสมอ)
@@ -65,8 +65,8 @@ cutoff C1 (ล่าสุดที่ horizon ครบ) ── final model ─
 
 ### Features — model-specific Tier A contracts (`features.py` — contract verify แล้ว)
 
-- **Churn / CLV:** Tier A base 24 ตัว — recency (4), payment RFM (7), usage volume/trend/consistency (8), channel + source shares (5)
-- **Credit:** Tier A credit 27 ตัว — base 24 + credit balance/runway (3)
+- **Churn / CLV:** `tier_a_27` — recency (4), payment RFM (8), usage volume/trend/consistency (8), channel + source shares (7)
+- **Credit:** `tier_a_31` — base 27 + credit balance/runway (4): `credit_added_180d`, `credit_balance_proxy`, `credit_runway_months`, `credit_usage_decel`
 
 กลุ่ม credit balance/runway ใช้เฉพาะ Credit เพราะเพิ่มสัญญาณตรงกับ future usage แต่เพิ่ม noise ให้ Churn/CLV backtest. สร้างแบบ PIT-safe จาก event history เท่านั้น (`Σ credit_add ก่อน cutoff − Σ usage ก่อน cutoff`) — **ไม่ใช้** snapshot `credit_sms`/`credit_email`/`expire_*` ซึ่งเป็น Tier B
 
@@ -124,14 +124,14 @@ cutoff C1 (ล่าสุดที่ horizon ครบ) ── final model ─
 | Candidate | บทบาท |
 |---|---|
 | Logistic Regression | baseline ML — ถ้า LGBM ชนะไม่ขาด ใช้ LR ไปเลย (อธิบายง่ายกว่า) |
-| Random Forest | sanity check ความ non-linear |
-| **LightGBM** ⭐ | ตัวเต็งหลัก |
-| XGBoost | challenger ของ LGBM |
+| **LightGBM** ⭐ | ตัวเต็งหลัก (default candidate) |
+| **TabICLv2** | tabular foundation model — แข่งใน default set; ถ้าชนะ gate จะถูกเสิร์ฟ (SHAP เป็น `null`, ใช้ permutation importance) |
+| XGBoost / Random Forest | challenger (opt-in ผ่าน `CHURN_CANDIDATES`) |
 
 **ทำไม LightGBM เป็นตัวเต็ง:** ข้อมูลเรา tabular ~10⁴ แถว, มี missing values (recency ของคนไม่เคยจ่าย) ซึ่ง LGBM กินได้ตรง ๆ ไม่ต้อง impute เพิ่ม, เทรนเร็วพอจะทำ Optuna หลายร้อย trial + backtest หลาย cutoff, มี feature importance + SHAP ครบ — deep learning ไม่เหมาะกับข้อมูลขนาด/ทรงนี้ (tabular เล็ก = tree ensemble ชนะแทบเสมอ)
 
 **ผสมโมเดล (ensemble) ดีกว่าไหม?** — คำตอบ: **ยังไม่ทำ**
-- Stacking/blending ที่ data ~25k ลูกค้า ได้กำไรจริงราว 1–2% แต่แลกกับ: artifact ×2, calibration ซับซ้อนขึ้น, SHAP อธิบายยากขึ้น, retrain ช้าลง — สำหรับทีม 5 คนไม่คุ้ม
+- Stacking/blending ที่ data ~25k ลูกค้า ได้กำไรจริงราว 1–2% แต่แลกกับ: artifact ×2, calibration ซับซ้อนขึ้น, SHAP อธิบายยากขึ้น, retrain ช้าลง — ไม่คุ้มกับทีมที่ maintain ระบบนี้
 - ข้อยกเว้นที่อนุญาต: average ง่าย ๆ ของ calibrated LGBM + calibrated XGB — ลองได้ใน experiment แต่ promote ก็ต่อเมื่อชนะตัวเดี่ยว**ทุก backtest cutoff** อย่างมีนัย ไม่งั้นใช้ตัวเดี่ยว
 - กติกา: **ความเรียบง่ายที่วัดผลได้ ชนะความซับซ้อนที่อธิบายไม่ได้**
 
