@@ -30,6 +30,7 @@
 
 ## สารบัญ
 
+0. [สรุปโมเดล/อัลกอริทึมทั้งหมด (Inventory) — ใช้อะไรทำนาย เทรนด้วยอะไรบ้าง กี่ตัว](#0-สรุปโมเดลอัลกอริทึมทั้งหมด-inventory)
 1. [หลักการเวลา (Point-in-time), cutoff และหน้าต่างเวลา](#1-หลักการเวลา)
 2. [Lifecycle Segmentation — Ghost / Churned / Active Paid / Active Free](#2-lifecycle-segmentation)
 3. [Model Eligibility — ใครได้ทำนายอะไร + การงดประเมิน churn (abstain)](#3-model-eligibility)
@@ -42,6 +43,69 @@
 9. [Metrics — F1 / PR-AUC / ECE / Spearman / coverage คำนวณอย่างไร](#9-metrics)
 10. [Promotion Gate — โมเดลใหม่จะขึ้น production ได้ต้องผ่านอะไรบ้าง](#10-promotion-gate)
 11. [ภาคผนวก: ตารางค่าคงที่ทั้งหมด](#11-ภาคผนวก-ตารางค่าคงที่)
+
+---
+
+## 0. สรุปโมเดล/อัลกอริทึมทั้งหมด (Inventory)
+
+> ตอบตรงๆ: "เราใช้อะไรทำนาย และเทรนด้วยโมเดล/อัลกอริทึมอะไรบ้าง กี่ตัว"
+
+### 0.1 ระบบทำนายมี 5 ส่วน (ต่อ 1 prediction run)
+
+| # | ส่วน | ทำนายอะไร | วิธี/อัลกอริทึม |
+|---|---|---|---|
+| 1 | **Lifecycle** | Ghost/Churned/Active Paid/Active Free | **กฎ (rule-based) ไม่ใช่ ML** |
+| 2 | **Churn** | `churn_probability`, risk level, factors | ML champion 1 ตัว + calibrator + SHAP |
+| 3 | **CLV** | `predicted_clv_6m` | ML/สถิติ champion 1 ตัว + OLS calibration |
+| 3b | **p_alive** | โอกาสยัง active | **BG/NBD เสมอ** (ไม่ว่า CLV champion เป็นตัวไหน) |
+| 4 | **Credit usage** | ใช้เครดิต 30/90 วัน (p10–p90) | LightGBM quantile regression |
+| 5 | **Top-up timing** | วันจนต้องเติมเครดิต | XGBoost AFT (survival) |
+
+### 0.2 อัลกอริทึมที่ "แข่งกันตอนเทรน" (candidate) แล้วคัดตัวชนะ
+
+**Churn — 3 ตัว default** (`DEFAULT_CANDIDATES`, `churn_trainer.py`) เลือกด้วย **5-fold CV PR-AUC**:
+1. `logistic_regression` — `sklearn.LogisticRegression`
+2. `lightgbm` — `lightgbm.LGBMClassifier`
+3. `tabicl` — TabICL v2 (tabular foundation model, ต้องมี torch)
+   *(มี `RandomForestClassifier` เป็นตัวเลือกเสริมได้ผ่าน env `CHURN_CANDIDATES`)*
+
+**CLV — 3 ตัว default + 1 opt-in** (`clv_trainer.py`) เลือกด้วย **validation Spearman**:
+1. `bgnbd_gamma_gamma` — `lifetimes.BetaGeoFitter` + `GammaGammaFitter`
+2. `lgbm_tweedie` — `LGBMRegressor(objective="tweedie")`
+3. `hurdle` — `LGBMClassifier` (จะซื้อไหม) × `LGBMRegressor(objective="gamma")` (ซื้อเท่าไร)
+4. `xgb_tweedie` — `XGBRegressor` (เปิดด้วย `ENABLE_XGB_CLV=1`)
+
+**Credit usage** (`credit_trainer.py`) — **LightGBM quantile regression**:
+`LGBMRegressor(objective="quantile")` **5 quantile (p10/p25/p50/p75/p90) × 2 horizon (30/90 วัน) = 10 โมเดลย่อย**
+*(มี XGBoost quantile `reg:quantileerror` เป็น opt-in ผ่าน `ENABLE_XGB_CREDIT=1`)*
+
+**Top-up timing** — `xgboost` AFT (`objective="survival:aft"`) 1 โมเดล
+
+### 0.3 องค์ประกอบเสริม (ไม่ใช่ตัวทำนายหลัก แต่เป็น "โมเดล/อัลกอริทึม" ที่ใช้จริง)
+
+- **Calibration ของ churn:** `LogisticRegression` (Platt) **หรือ** `IsotonicRegression` — เลือก 1
+- **Magnitude calibration ของ CLV:** `LinearRegression` (OLS)
+- **คำอธิบาย factor:** SHAP `TreeExplainer` (tree) / coef เชิงเส้น (linear)
+- **จูน hyperparameter:** Optuna (ใช้กับ lgbm/xgb/hurdle/credit/top-up)
+- **CQR:** conformal calibration ขยายช่วง p10/p90 ให้ coverage ~80%
+
+### 0.4 Baseline (ตัวเทียบขั้นต่ำที่ candidate ต้องชนะก่อน promote) — รวม 7 ตัว
+
+- churn (3): `recency_rule_90d`, `rfm_quartile`, `logistic_regression`
+- clv (2): `segment_mean`, `revenue_180d_carryover`
+- credit (2): `last_30d_carryover`, `moving_avg_90d`
+
+### 0.5 นับรวม "กี่ตัว"
+
+| มุมมอง | จำนวน |
+|---|---|
+| **ตระกูลอัลกอริทึม ML/สถิติที่ระบบใช้** | **~10**: LightGBM, XGBoost, Logistic Regression, Isotonic Regression, Linear Regression (OLS), Random Forest (opt), BG/NBD, Gamma-Gamma, TabICL, XGBoost-AFT |
+| **candidate ที่แข่งตอนเทรน (default)** | churn 3 + clv 3 + credit 1 ตระกูล(×10 โมเดลย่อย) + top-up 1 |
+| **โมเดลที่ "ขึ้น production" ต่อ run** | 3 champion (churn/clv/credit) + lifecycle(กฎ) + BG/NBD(p_alive) + top-up AFT |
+| **baseline** | 7 |
+| **ไลบรารีหลัก** | `lightgbm`, `xgboost`, `scikit-learn`, `lifetimes`, `tabicl`(+`torch`), `optuna`, `shap` |
+
+> รายละเอียดสูตร/เกณฑ์คัดตัวชนะของแต่ละตัวอยู่ในหัวข้อ [4](#4-churn) (churn), [5](#5-clv) (CLV), [6](#6-credit-forecast) (credit) และเกณฑ์ promote ในหัวข้อ [10](#10-promotion-gate)
 
 ---
 
