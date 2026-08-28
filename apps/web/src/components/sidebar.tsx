@@ -2,20 +2,38 @@
 import Link from "next/link";
 import { AiBadge } from "@/components/ai-badge";
 import { usePathname } from "next/navigation";
+import { X } from "lucide-react";
 import { INTRO_ASSETS } from "@/lib/login-brand-colors";
 import { PRIMARY_NAV, FOOTER_NAV } from "@/lib/nav";
 import UserNavProfile from "./user-nav-profile";
 
-export default function Sidebar() {
+export default function Sidebar({
+  mobileOpen = false,
+  onClose,
+}: {
+  mobileOpen?: boolean;
+  onClose?: () => void;
+}) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
-    <aside className="w-[248px] shrink-0 bg-white border-r border-gray-200 flex flex-col">
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-950/30 md:hidden"
+          onClick={onClose}
+          aria-label="ปิดเมนูนำทาง"
+        />
+      )}
+    <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,300px)] shrink-0 flex-col border-r border-gray-200 bg-white shadow-2xl transition-transform duration-200 md:static md:z-auto md:w-[248px] md:translate-x-0 md:shadow-none ${
+      mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+    }`}>
       {/* Brand */}
       <div
-        className="px-5 pt-5 pb-4 border-b border-gray-200"
+        className="relative flex items-center justify-between border-b border-gray-200 px-5 pb-4 pt-5"
         style={{
           backgroundImage: [
             "radial-gradient(rgba(7, 29, 126, 0.42) 0%, transparent 42%)",
@@ -33,6 +51,14 @@ export default function Sidebar() {
           className="block h-8 w-auto"
           style={{ filter: "brightness(0) invert(1)" }}
         />
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white md:hidden"
+          aria-label="ปิดเมนูนำทาง"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Nav */}
@@ -50,6 +76,7 @@ export default function Sidebar() {
                   <li key={it.href}>
                     <Link
                       href={it.href}
+                      onClick={onClose}
                       className={`group flex min-h-[44px] items-center gap-3 px-4 py-2.5 rounded-xl text-[15px] transition-colors
                         ${active
                           ? "bg-[color:var(--moby-50)] text-[color:var(--moby-600)] font-medium"
@@ -83,6 +110,7 @@ export default function Sidebar() {
                   <li key={it.href}>
                     <Link
                       href={it.href}
+                      onClick={onClose}
                       className={`group flex min-h-[44px] items-center gap-3 px-4 py-2.5 rounded-xl text-[15px] transition-colors
                         ${active
                           ? "bg-[color:var(--moby-50)] text-[color:var(--moby-600)] font-medium"
@@ -103,5 +131,6 @@ export default function Sidebar() {
 
       <UserNavProfile />
     </aside>
+    </>
   );
 }

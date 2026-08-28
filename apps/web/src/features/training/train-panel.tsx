@@ -90,7 +90,7 @@ export function TrainPanel({
           type="button"
           disabled={!canTrain}
           onClick={() => onTrain({ cutoff_date: cutoffDate, horizon_days: horizonDays })}
-          className={`${PRIMARY_BUTTON_CLS} sm:min-w-[140px]`}
+          className={`${PRIMARY_BUTTON_CLS} w-full sm:w-auto sm:min-w-[140px]`}
         >
           {creating ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
           {creating ? "กำลังเริ่ม…" : "เทรน"}
@@ -99,7 +99,7 @@ export function TrainPanel({
     >
       <div>
         <span className="type-label">dataset</span>
-        <div className="mt-1.5 flex items-center gap-2">
+        <div className="mt-1.5 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           <Select
             value={selectedSource?.id ?? ""}
             onChange={onSelect}
@@ -117,7 +117,7 @@ export function TrainPanel({
             <button
               type="button"
               onClick={() => onDeleteSource(selectedSource)}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[color:var(--ink-4)] shadow-[var(--shadow-1)] hover:border-[color:var(--danger)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex h-11 w-full shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[color:var(--ink-4)] shadow-[var(--shadow-1)] hover:border-[color:var(--danger)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-45 sm:w-11"
               title="ลบ dataset นี้"
             >
               <Trash2 size={15} />
@@ -126,7 +126,7 @@ export function TrainPanel({
           <button
             type="button"
             onClick={() => setShowUpload((v) => !v)}
-            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45 sm:justify-start"
           >
             <UploadCloud size={14} />
             upload ใหม่

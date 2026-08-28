@@ -31,7 +31,7 @@ export function ModelPerformanceView() {
     <main className="pb-12">
       <PageHeader eyebrow="Model accuracy" title="Model Accuracy" />
 
-      <div className="px-8 mt-4 space-y-5">
+      <div className="mt-4 space-y-5 px-4 sm:px-6 lg:px-8">
         <p className="max-w-4xl text-[12.5px] leading-6 text-[color:var(--ink-4)]">
           แสดง metric ของโมเดล production ปัจจุบัน (ดูอย่างเดียว) — จัดการเวอร์ชัน/ลบได้ที่หน้า Model Training
         </p>

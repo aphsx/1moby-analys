@@ -73,7 +73,7 @@ export function CustomerDetailClient({
 
   if (!runsLoading && !effectiveRun) {
     return (
-      <div className="px-8 py-10">
+      <div className="px-4 py-10 sm:px-6 lg:px-8">
         <EmptyState
           icon={Database}
           title="ยังไม่มี prediction run ที่เสร็จสมบูรณ์"
@@ -93,7 +93,7 @@ export function CustomerDetailClient({
 
   if (error) {
     return (
-      <div className="px-8 py-6">
+      <div className="px-4 py-6 sm:px-6 lg:px-8">
         <EmptyState title={`โหลดข้อมูล account ${accId} ไม่สำเร็จ`} hint={error} />
       </div>
     );
@@ -101,7 +101,7 @@ export function CustomerDetailClient({
 
   if (runsLoading || !customer) {
     return (
-      <div className="space-y-5 px-8 py-5">
+      <div className="space-y-5 px-4 py-5 sm:px-6 lg:px-8">
         <Skeleton className="h-10 w-48 rounded-xl" />
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (

@@ -50,7 +50,7 @@ export default function RunSelector() {
     return (
       <Link
         href="/runs"
-        className="h-9 px-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white text-[13px] text-[color:var(--ink-3)] hover:border-[color:var(--moby-200)]"
+        className="inline-flex h-10 w-full items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-[12px] text-[color:var(--ink-3)] hover:border-[color:var(--moby-200)] sm:h-9 sm:w-auto sm:rounded-lg sm:text-[13px]"
       >
         <Calendar size={14} className="text-[color:var(--ink-4)]" />
         ยังไม่มี prediction run — สร้างที่หน้า Runs
@@ -59,13 +59,13 @@ export default function RunSelector() {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex w-full items-center gap-2 lg:w-auto">
       <Select
         value={runId}
         onChange={setRunId}
         disabled={loading}
         size="md"
-        className="min-w-[230px]"
+        className="w-full min-w-0 lg:min-w-[230px] lg:w-auto"
         leftIcon={<Calendar size={14} />}
         placeholder={loading ? "Loading runs…" : "เลือก run"}
         aria-label="Prediction run"

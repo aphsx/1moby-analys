@@ -5,7 +5,7 @@ import {
   type ChangeEvent, type KeyboardEvent,
 } from "react";
 import {
-  Bot, Send, Plus, Trash2, Edit3, X, ChevronDown, ChevronRight,
+  Bot, Send, Plus, Trash2, Edit3, X, Menu, ChevronDown, ChevronRight,
   Database, Loader2, AlertCircle, MessageSquare, User, Search,
   Archive, ArchiveRestore, Target,
 } from "lucide-react";
@@ -17,7 +17,7 @@ import {
   useChatStore, formatTime, type ChatEvidence, type Conversation,
 } from "@/stores/chat-store";
 
-const VIEWPORT = "h-[calc(100dvh-4rem)]";
+const VIEWPORT = "h-full";
 
 // ── Run badge ────────────────────────────────────────────────────────────────
 function RunBadge({ name }: { name: string }) {
@@ -119,7 +119,15 @@ function ConversationItem({
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────────────────
-function Sidebar({ runs }: { runs: PredictionRun[] }) {
+function Sidebar({
+  runs,
+  mobileOpen = false,
+  onClose,
+}: {
+  runs: PredictionRun[];
+  mobileOpen?: boolean;
+  onClose?: () => void;
+}) {
   const {
     conversations, activeId, showArchived, pendingRunId,
     loadConversations, createConversation, selectConversation,
@@ -138,7 +146,9 @@ function Sidebar({ runs }: { runs: PredictionRun[] }) {
   }, [conversations, showArchived, query]);
 
   return (
-    <aside className="flex h-full w-[240px] shrink-0 flex-col border-r border-gray-200 bg-[#fafafa]">
+    <aside className={`absolute inset-y-0 left-0 z-40 flex h-full w-[min(86vw,280px)] shrink-0 flex-col border-r border-gray-200 bg-[#fafafa] shadow-2xl transition-transform duration-200 md:static md:z-auto md:w-[240px] md:translate-x-0 md:shadow-none ${
+      mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+    }`}>
       <div className="space-y-2 p-3">
         {/* Scope picker for the next new chat */}
         <Select
@@ -158,7 +168,10 @@ function Sidebar({ runs }: { runs: PredictionRun[] }) {
         />
 
         <button
-          onClick={() => createConversation()}
+          onClick={() => {
+            createConversation();
+            onClose?.();
+          }}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[color:var(--moby-600)] px-3 py-2.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-[color:var(--moby-700)] active:scale-[0.98]"
         >
           <Plus size={14} /> New Chat
@@ -187,7 +200,10 @@ function Sidebar({ runs }: { runs: PredictionRun[] }) {
                 key={conv.id}
                 conv={conv}
                 active={conv.id === activeId}
-                onSelect={() => selectConversation(conv.id)}
+                onSelect={() => {
+                  selectConversation(conv.id);
+                  onClose?.();
+                }}
                 onRename={(title) => renameConversation(conv.id, title)}
                 onArchive={() => archiveConversation(conv.id, !conv.archived)}
                 onDelete={() => deleteConversation(conv.id)}
@@ -382,6 +398,7 @@ export function AIChatView() {
   } = useChatStore();
 
   const [input, setInput] = useState("");
+  const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
   const [runs, setRuns] = useState<PredictionRun[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -438,11 +455,28 @@ export function AIChatView() {
       : "ตั้งค่า LLM ก่อนใช้งาน";
 
   return (
-    <div className={`flex min-h-0 overflow-hidden bg-[color:var(--bg)] ${VIEWPORT}`}>
-      <Sidebar runs={runs} />
+    <div className={`relative flex min-h-0 overflow-hidden bg-[color:var(--bg)] ${VIEWPORT}`}>
+      {chatSidebarOpen && (
+        <button
+          type="button"
+          className="absolute inset-0 z-30 bg-slate-950/30 md:hidden"
+          onClick={() => setChatSidebarOpen(false)}
+          aria-label="ปิดรายการสนทนา"
+        />
+      )}
+      <Sidebar runs={runs} mobileOpen={chatSidebarOpen} onClose={() => setChatSidebarOpen(false)} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
         <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-5 py-3">
+          <button
+            type="button"
+            onClick={() => setChatSidebarOpen(true)}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-[color:var(--ink-3)] hover:bg-gray-50 md:hidden"
+            aria-label="เปิดรายการสนทนา"
+            aria-expanded={chatSidebarOpen}
+          >
+            <Menu size={16} />
+          </button>
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[color:var(--moby-500)] to-[color:var(--moby-700)]">
               <Bot size={14} className="text-white" />

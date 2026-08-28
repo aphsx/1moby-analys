@@ -12,7 +12,7 @@ export function PageHeader({
   title, actions,
 }: { eyebrow?: ReactNode; title: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="px-8 pt-6 pb-2 flex items-end justify-between gap-4 flex-wrap">
+    <div className="flex flex-wrap items-end justify-between gap-4 px-4 pb-2 pt-5 sm:px-6 sm:pt-6 lg:px-8">
       <div>
         <h2 className="type-display text-[24px] leading-tight">{title}</h2>
       </div>
@@ -51,7 +51,7 @@ export function SectionCard({
                 <p className="mt-1 max-w-2xl text-[13px] leading-6 text-[color:var(--ink-4)]">{hint}</p>
               ) : null}
             </div>
-            {right ? <div className="flex shrink-0 flex-wrap items-center gap-2">{right}</div> : null}
+            {right ? <div className="flex w-full shrink-0 flex-wrap items-center gap-2 lg:w-auto">{right}</div> : null}
           </div>
         </header>
       )}

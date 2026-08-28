@@ -53,9 +53,9 @@ export function StatusDialog({
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 px-4 backdrop-blur-[2px]">
       <div className="w-full max-w-[607px] rounded-[28px] border border-white/70 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.22)]">
-        <div className="flex flex-col items-center gap-16 px-6 py-16 text-center">
-          <div className="flex flex-col items-center justify-center gap-10">
-            <Image src={style.icon} alt={style.alt} width={105} height={105} priority />
+        <div className="flex flex-col items-center gap-10 px-4 py-10 text-center sm:gap-16 sm:px-6 sm:py-16">
+          <div className="flex flex-col items-center justify-center gap-8 sm:gap-10">
+            <Image className="h-20 w-20 sm:h-[105px] sm:w-[105px]" src={style.icon} alt={style.alt} width={105} height={105} priority />
 
             <div>
               <h3 className="max-w-[400px] text-[18px] font-bold leading-7 text-[color:var(--ink-1)]">

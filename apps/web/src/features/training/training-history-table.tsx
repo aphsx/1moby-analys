@@ -118,7 +118,7 @@ export function TrainingHistoryTable({
           />
         ) : (
           <div className="overflow-x-auto rounded-[22px] border border-gray-200">
-            <table className="table-base">
+            <table className="table-base min-w-[860px]">
               <thead>
                 <tr>
                   <th>Dataset</th>

@@ -282,7 +282,7 @@ function Inner({
   };
 
   return (
-    <main className="px-8 py-6 pb-12">
+    <main className="min-w-0 px-4 py-5 pb-10 sm:px-6 sm:py-6 lg:px-8 lg:pb-12">
         {aiError ? (
           <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
             {aiError}

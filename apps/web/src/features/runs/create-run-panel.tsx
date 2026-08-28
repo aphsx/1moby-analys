@@ -157,7 +157,7 @@ export function CreateRunPanel({
           type="button"
           onClick={() => void create()}
           disabled={!canCreate}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 text-[13px] font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50 sm:min-w-[140px]"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 text-[13px] font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50 sm:w-auto sm:min-w-[140px]"
         >
           {creating ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
           {creating ? "กำลังรัน…" : "รัน"}
@@ -167,7 +167,7 @@ export function CreateRunPanel({
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div>
           <span className="type-label">แหล่งข้อมูล</span>
-          <div className="mt-1.5 flex items-center gap-2">
+          <div className="mt-1.5 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
             <Select
               value={sourceId}
               onChange={setSourceId}
@@ -184,7 +184,7 @@ export function CreateRunPanel({
             <button
               type="button"
               onClick={() => setShowImport((v) => !v)}
-              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50"
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 sm:justify-start"
             >
               <Plus size={14} />
               import ใหม่
@@ -392,7 +392,7 @@ function InlineImportForm({
           type="button"
           onClick={() => void doImport()}
           disabled={busy || !file}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 text-[13px] font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 text-[13px] font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50 sm:w-auto"
         >
           {busy ? <RefreshCw size={16} className="animate-spin" /> : <UploadCloud size={16} />}
           {busy ? "กำลังนำเข้า…" : "Import"}

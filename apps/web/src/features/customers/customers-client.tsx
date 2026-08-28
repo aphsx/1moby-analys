@@ -259,7 +259,7 @@ function CustomersClientInner() {
 
   if (!runsLoading && !run) {
     return (
-      <div className="px-8 py-10">
+      <div className="px-4 py-10 sm:px-6 lg:px-8">
         <EmptyState
           icon={Database}
           title="ยังไม่มี prediction run ที่เสร็จสมบูรณ์"
@@ -279,7 +279,7 @@ function CustomersClientInner() {
 
   if (error) {
     return (
-      <div className="px-8 py-6">
+      <div className="px-4 py-6 sm:px-6 lg:px-8">
         <EmptyState title="โหลดข้อมูลลูกค้าไม่สำเร็จ" hint={error} />
       </div>
     );
@@ -287,7 +287,7 @@ function CustomersClientInner() {
 
   if (runsLoading || !page) {
     return (
-      <div className="space-y-3 px-8 py-5">
+      <div className="space-y-3 px-4 py-5 sm:px-6 lg:px-8">
         {[...Array(8)].map((_, i) => (
           <Skeleton key={i} className="h-14" />
         ))}

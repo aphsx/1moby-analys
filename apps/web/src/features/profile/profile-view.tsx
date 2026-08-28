@@ -88,10 +88,10 @@ export function ProfileView() {
   };
 
   return (
-    <div className="mx-auto max-w-[720px] px-8 py-8">
+    <div className="mx-auto max-w-[720px] px-4 py-6 sm:px-6 sm:py-8">
       {/* Identity card */}
       <section className="rounded-2xl border border-gray-200 bg-white p-6">
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-4 sm:items-center">
           {image.trim() ? (
             <img
               src={image.trim()}
@@ -106,7 +106,7 @@ export function ProfileView() {
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="truncate text-[18px] font-semibold text-[color:var(--ink-1)]">{displayName}</h2>
+              <h2 className="min-w-0 truncate text-[18px] font-semibold text-[color:var(--ink-1)]">{displayName}</h2>
               {user.emailVerified && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--moby-50)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--moby-600)]">
                   <BadgeCheck size={13} /> ยืนยันแล้ว
@@ -143,11 +143,11 @@ export function ProfileView() {
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <ReadOnly label="ชื่อ (จาก Google)" value={user.givenName} />
             <ReadOnly label="นามสกุล (จาก Google)" value={user.familyName} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <ReadOnly label="ภาษา/ภูมิภาค" value={user.locale} />
             <ReadOnly label="สมัครเมื่อ" value={createdAt} />
           </div>
@@ -159,13 +159,13 @@ export function ProfileView() {
           </div>
         )}
 
-        <div className="mt-6 flex items-center justify-end gap-3">
+        <div className="mt-6 flex flex-col-reverse items-stretch justify-end gap-3 sm:flex-row sm:items-center">
           {savedTick && <span className="text-[13px] text-[color:var(--moby-600)]">บันทึกแล้ว ✓</span>}
           <button
             type="button"
             onClick={() => void handleSave()}
             disabled={!dirty || !name.trim() || saving}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-[color:var(--moby-600)] px-5 text-[14px] font-medium text-white transition-colors hover:bg-[color:var(--moby-700)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[color:var(--moby-600)] px-5 text-[14px] font-medium text-white transition-colors hover:bg-[color:var(--moby-700)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving && <Loader2 className="animate-spin" size={15} />}
             บันทึกการเปลี่ยนแปลง

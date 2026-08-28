@@ -113,7 +113,7 @@ export function RunsTable({
           />
         ) : (
           <div className="overflow-x-auto rounded-[22px] border border-gray-200">
-            <table className="table-base">
+            <table className="table-base min-w-[640px]">
               <thead>
                 <tr>
                   <th>Run</th>

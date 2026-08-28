@@ -94,7 +94,7 @@ export function CustomerDetailView({
   const interval = customer.credit_forecast_interval;
 
   return (
-    <main className="px-8 py-6 pb-12">
+    <main className="min-w-0 px-4 py-5 pb-10 sm:px-6 sm:py-6 lg:px-8 lg:pb-12">
       <Link
         href={customerListHref}
         className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[.16em] text-[color:var(--ink-5)] hover:text-[color:var(--moby-600)]"
