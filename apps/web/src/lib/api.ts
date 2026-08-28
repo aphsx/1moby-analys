@@ -15,8 +15,8 @@ import {
 } from "./http";
 export type { TrainDataSource, PredictDataSource };
 
-/** Must stay in sync with apps/api DEFAULT_IMPORT_TIMEOUT_MS (20 minutes). */
-export const IMPORT_TIMEOUT_MS = 20 * 60 * 1000;
+/** Must stay in sync with apps/api DEFAULT_IMPORT_TIMEOUT_MS (10 minutes). */
+export const IMPORT_TIMEOUT_MS = 10 * 60 * 1000;
 
 // Helpers
 

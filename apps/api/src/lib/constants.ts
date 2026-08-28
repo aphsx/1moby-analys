@@ -102,7 +102,7 @@ export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const DEFAULT_MAX_UPLOAD_BYTES = 1024 * 1024 * 1024;
 
 /** Wall-clock budget for one import (raw + clean). Override with IMPORT_TIMEOUT_MS. */
-export const DEFAULT_IMPORT_TIMEOUT_MS = 20 * 60 * 1000;
+export const DEFAULT_IMPORT_TIMEOUT_MS = 10 * 60 * 1000;
 
 export function maxUploadBytes(): number {
   const parsed = Number(process.env.IMPORT_MAX_UPLOAD_BYTES);

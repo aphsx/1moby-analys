@@ -10,7 +10,7 @@ const nextConfig = {
   transpilePackages: ["@moby/types"],
   // Large .xlsx imports proxy through Next → Elysia; default proxy timeout is too short.
   experimental: {
-    proxyTimeout: 20 * 60 * 1000,
+    proxyTimeout: 10 * 60 * 1000,
     proxyClientMaxBodySize: "1gb",
   },
   async rewrites() {
