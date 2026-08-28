@@ -1,15 +1,15 @@
 /**
  * [NEW] Train raw data API — import 8-sheet Excel into train_data_sources + train_raw_sheet_*.
  *
- * Org-shared model: reads are org-wide; importing is admin-only; deleting a
- * source is creator-or-admin.
+ * Org-shared model: reads are org-wide; any authenticated user can import and
+ * delete a source.
  */
 import Elysia, { t } from "elysia";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { trainDataSources, user } from "../db/schema";
-import { requireCreatorOrAdminForMutation } from "../lib/access-control";
-import { requireAdmin, requireUser } from "../lib/auth-middleware";
+import { requireFoundForRead } from "../lib/access-control";
+import { requireUser } from "../lib/auth-middleware";
 import { UUID_RE, maxUploadBytes } from "../lib/constants";
 import { getTrainCutoffSuggestion } from "../lib/clean-cutoff";
 import { prepareTrainDataSource } from "../lib/train-import";
@@ -46,9 +46,9 @@ const sourceSelect = {
   importerEmail: user.email,
 };
 
-// Admin-only: importing/replacing shared training data.
+// Any authenticated user can import training data.
 const adminTrainDataRoutes = new Elysia()
-  .use(requireAdmin)
+  .use(requireUser)
   .post(
     "/import",
     async ({ body, userId, set }) => {
@@ -336,7 +336,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
   )
   .delete(
     "/:id",
-    async ({ params, userId, isAdmin, set }) => {
+    async ({ params, set }) => {
       const [row] = await db
         .select({
           importStatus: trainDataSources.importStatus,
@@ -346,10 +346,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
         .where(eq(trainDataSources.id, params.id))
         .limit(1);
 
-      const denied = requireCreatorOrAdminForMutation(row, row?.importedBy, userId, isAdmin, set, {
-        notFound: "Train data source not found",
-        forbidden: "Only the importer of this data source or an admin can delete it.",
-      });
+      const denied = requireFoundForRead(row, set, "Train data source not found");
       if (denied) return denied;
 
       await db.delete(trainDataSources).where(eq(trainDataSources.id, params.id));

@@ -136,7 +136,7 @@ function LoginForm() {
           </form>
 
           <p className="mt-3 text-center text-[11px] leading-4" style={{ color: "#B0B5C3" }}>
-            Local admin: <span style={{ color: "#8A8F9E" }}>admin</span> /{" "}
+            Local login: <span style={{ color: "#8A8F9E" }}>admin</span> /{" "}
             <span style={{ color: "#8A8F9E" }}>123</span>
           </p>
 

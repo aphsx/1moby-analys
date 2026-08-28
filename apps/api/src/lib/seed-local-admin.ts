@@ -1,6 +1,6 @@
 /**
- * Upserts a local-only credential admin (admin@example.com / 123) so Docker /
- * `bun run dev` always has a usable admin without Google OAuth.
+ * Upserts a local-only credential user (admin@example.com / 123) so Docker /
+ * `bun run dev` always has a usable login without Google OAuth.
  * Login form accepts shorthand "admin" → admin@example.com.
  *
  * Enabled when SEED_LOCAL_ADMIN=true, or when unset and NODE_ENV !== "production".
@@ -8,16 +8,14 @@
  */
 import { and, eq } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
-import { USER_ROLE } from "@moby/types";
 import { db } from "../db/client";
 import { account, user } from "../db/schema";
 
-export const LOCAL_ADMIN = {
+export const LOCAL_USER = {
   id: "local-admin",
   email: "admin@example.com",
   name: "Admin",
   password: "123",
-  role: USER_ROLE.ADMIN,
 } as const;
 
 function seedEnabled(): boolean {
@@ -30,24 +28,23 @@ function seedEnabled(): boolean {
 export async function seedLocalAdmin(): Promise<void> {
   if (!seedEnabled()) return;
 
-  const passwordHash = await hashPassword(LOCAL_ADMIN.password);
+  const passwordHash = await hashPassword(LOCAL_USER.password);
   const now = new Date();
 
   const existing = await db
     .select({ id: user.id })
     .from(user)
-    .where(eq(user.email, LOCAL_ADMIN.email))
+    .where(eq(user.email, LOCAL_USER.email))
     .limit(1);
 
-  const userId = existing[0]?.id ?? LOCAL_ADMIN.id;
+  const userId = existing[0]?.id ?? LOCAL_USER.id;
 
   if (existing.length === 0) {
     await db.insert(user).values({
-      id: LOCAL_ADMIN.id,
-      name: LOCAL_ADMIN.name,
-      email: LOCAL_ADMIN.email,
+      id: LOCAL_USER.id,
+      name: LOCAL_USER.name,
+      email: LOCAL_USER.email,
       emailVerified: true,
-      role: LOCAL_ADMIN.role,
       createdAt: now,
       updatedAt: now,
     });
@@ -55,8 +52,7 @@ export async function seedLocalAdmin(): Promise<void> {
     await db
       .update(user)
       .set({
-        role: LOCAL_ADMIN.role,
-        name: LOCAL_ADMIN.name,
+        name: LOCAL_USER.name,
         emailVerified: true,
         updatedAt: now,
       })
@@ -71,9 +67,9 @@ export async function seedLocalAdmin(): Promise<void> {
 
   if (!credential) {
     await db.insert(account).values({
-      id: `${LOCAL_ADMIN.id}-credential`,
+      id: `${LOCAL_USER.id}-credential`,
       userId,
-      accountId: LOCAL_ADMIN.email,
+      accountId: LOCAL_USER.email,
       providerId: "credential",
       password: passwordHash,
       createdAt: now,
@@ -86,7 +82,5 @@ export async function seedLocalAdmin(): Promise<void> {
       .where(eq(account.id, credential.id));
   }
 
-  console.log(
-    `[api] Local admin ready: ${LOCAL_ADMIN.email} / ${LOCAL_ADMIN.password} (role=${LOCAL_ADMIN.role})`
-  );
+  console.log(`[api] Local login ready: ${LOCAL_USER.email} / ${LOCAL_USER.password}`);
 }

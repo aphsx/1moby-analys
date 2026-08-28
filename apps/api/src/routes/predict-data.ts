@@ -3,7 +3,7 @@
  *
  * Org-shared model: reads and import are available to any authenticated user.
  * A successful import auto-triggers a prediction run (opt out with auto_run=false).
- * Training-data import stays admin-only.
+ * Training-data import is available to any authenticated user.
  */
 import Elysia, { t } from "elysia";
 import { desc, eq } from "drizzle-orm";

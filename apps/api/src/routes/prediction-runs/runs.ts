@@ -4,7 +4,7 @@ import { db } from "../../db/client";
 import { mlPredictionRuns, predictDataSources, user } from "../../db/schema";
 import { requireUser } from "../../lib/auth-middleware";
 import { triggerMlJob } from "../../lib/ml-internal";
-import { denyNotFound, requireCreatorOrAdminForMutation } from "../../lib/access-control";
+import { denyNotFound, requireFoundForRead } from "../../lib/access-control";
 import { getPredictCutoffSuggestion } from "../../lib/clean-cutoff";
 import { DATE_RE, RUN_STATUS, UUID_RE } from "../../lib/constants";
 import { fetchRun, mapRun, requireRunFound, runSelect } from "./_helpers";
@@ -113,15 +113,12 @@ export const runsRoutes = new Elysia()
     },
     { params: t.Object({ id: t.String() }) }
   )
-  // Retry mutates the run record — creator or admin only.
+  // Retry mutates the run record — any authenticated user.
   .post(
     "/:id/retry",
-    async ({ params, userId, isAdmin, set }) => {
+    async ({ params, set }) => {
       const run = await fetchRun(params.id);
-      const denied = requireCreatorOrAdminForMutation(run, run?.createdBy, userId, isAdmin, set, {
-        notFound: "Prediction run not found",
-        forbidden: "Only the creator of this run or an admin can retry it.",
-      });
+      const denied = requireFoundForRead(run, set, "Prediction run not found");
       if (denied) return denied;
       if (run!.status !== RUN_STATUS.FAILED) {
         set.status = 400;
@@ -149,12 +146,9 @@ export const runsRoutes = new Elysia()
   )
   .delete(
     "/:id",
-    async ({ params, userId, isAdmin, set }) => {
+    async ({ params, set }) => {
       const run = await fetchRun(params.id);
-      const denied = requireCreatorOrAdminForMutation(run, run?.createdBy, userId, isAdmin, set, {
-        notFound: "Prediction run not found",
-        forbidden: "Only the creator of this run or an admin can delete it.",
-      });
+      const denied = requireFoundForRead(run, set, "Prediction run not found");
       if (denied) return denied;
       await db.delete(mlPredictionRuns).where(eq(mlPredictionRuns.id, run!.id));
       return { deleted: true };

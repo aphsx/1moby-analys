@@ -1,7 +1,7 @@
 /**
  * Realized-outcome backfill trigger (TRAINING-PIPELINE §15).
  *
- * Admin-only: proxies to FastAPI /internal/outcome-backfill, which spawns
+ * Any authenticated user: proxies to FastAPI /internal/outcome-backfill, which spawns
  * `python -m src.cli.backfill_outcomes`. The job finds completed prediction
  * runs whose horizon has elapsed relative to the newest clean predict data,
  * rebuilds actual labels, and upserts realized metrics into
@@ -12,14 +12,14 @@ import Elysia, { t } from "elysia";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { mlPredictionRuns } from "../db/schema";
-import { requireAdmin } from "../lib/auth-middleware";
+import { requireUser } from "../lib/auth-middleware";
 import { denyNotFound } from "../lib/access-control";
 import { triggerMlJob } from "../lib/ml-internal";
 import { RUN_STATUS, UUID_RE } from "../lib/constants";
 import type { OutcomeBackfillResponse } from "@moby/types";
 
 export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })
-  .use(requireAdmin)
+  .use(requireUser)
   .post(
     "/",
     async ({ body, set }) => {

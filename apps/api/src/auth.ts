@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { USER_PROFILE_FIELDS, USER_ROLE_FIELD } from "@moby/types";
+import { USER_PROFILE_FIELDS } from "@moby/types";
 import pg from "pg";
 
 const { Pool } = pg;
@@ -49,7 +49,7 @@ export const auth = betterAuth({
     enabled: true,
     // Local seed uses password "123"; keep short passwords allowed for that account.
     minPasswordLength: 3,
-    // No public self-signup — local admin is seeded; everyone else uses Google.
+    // No public self-signup — local user is seeded; everyone else uses Google.
     disableSignUp: true,
   },
   socialProviders: {
@@ -60,8 +60,8 @@ export const auth = betterAuth({
     },
   },
   user: {
-    // Extra columns populated from the Google profile + org role (single source: @moby/types).
-    additionalFields: { ...USER_PROFILE_FIELDS, ...USER_ROLE_FIELD },
+    // Extra columns populated from the Google profile (single source: @moby/types).
+    additionalFields: { ...USER_PROFILE_FIELDS },
     // Allow users to delete their own account (cascades to session + account rows).
     deleteUser: { enabled: true },
   },

@@ -13,8 +13,8 @@ import {
   mlPredictionRuns,
   mlTrainingRuns,
 } from "../db/schema";
-import { requireAdmin, requireUser } from "../lib/auth-middleware";
-import { requireCreatorOrAdminForMutation } from "../lib/access-control";
+import { requireUser } from "../lib/auth-middleware";
+import { requireFoundForRead } from "../lib/access-control";
 import {
   DEFAULT_RISK_THRESHOLDS,
   type CandidateResult,
@@ -240,9 +240,8 @@ async function findReferencingPredictionRuns(
     .limit(5);
 }
 
-// Champion pinning changes what every user is served — admin only.
 const adminModelPerformanceRoutes = new Elysia()
-  .use(requireAdmin)
+  .use(requireUser)
   // Manually pin a version to production. Reuses the ML service's promotion
   // transaction (action='manual_override') so the registry stays consistent.
   .post("/:modelType/activate", async ({ params, body, userId, set }) => {
@@ -322,10 +321,10 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
     });
   })
   // Permanently delete a non-production model version (artifacts + registry row).
-  // Creator of the training run or admin. Blocked while any prediction run
-  // still references the version — delete those prediction results first.
+  // Any authenticated user. Blocked while any prediction run still references
+  // the version — delete those prediction results first.
   // The ML service also refuses the current production champion.
-  .delete("/:modelType/versions/:id", async ({ params, userId, isAdmin, set }) => {
+  .delete("/:modelType/versions/:id", async ({ params, userId, set }) => {
     if (!isModelType(params.modelType)) {
       set.status = 400;
       return { message: "Unknown model type" };
@@ -350,17 +349,7 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
       )
       .limit(1);
 
-    const denied = requireCreatorOrAdminForMutation(
-      version,
-      version?.createdBy,
-      userId,
-      isAdmin,
-      set,
-      {
-        notFound: "Model version not found",
-        forbidden: "Only the trainer of this model version or an admin can delete it.",
-      }
-    );
+    const denied = requireFoundForRead(version, set, "Model version not found");
     if (denied) return denied;
 
     if (version!.isActive || version!.status === "production") {

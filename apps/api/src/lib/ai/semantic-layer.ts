@@ -136,7 +136,7 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
 export function getAiUserRole(): AiUserRole {
   const role = process.env.AI_CHAT_DEFAULT_ROLE?.trim().toLowerCase();
   if (role === "admin" || role === "analyst" || role === "viewer") return role;
-  return "analyst";
+  return "admin";
 }
 
 export function getAllowedTables(role: AiUserRole): SemanticTable[] {

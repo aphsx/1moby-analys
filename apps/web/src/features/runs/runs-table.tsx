@@ -13,7 +13,6 @@ import {
   EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill,
 } from "@/components/ui";
 import { deletePredictionRun, retryPredictionRun, type PredictionRun } from "@/lib/ml-api";
-import { canMutateAsCreator, CREATOR_OR_ADMIN_TITLE, useIsAdmin } from "@/lib/auth";
 import { getDisplayError } from "@/lib/ui-error";
 import { useRunStore } from "@/stores/run-store";
 import { formatRelative, runStatusLabel, runStatusTone } from "./runs-utils";
@@ -50,7 +49,6 @@ export function RunsTable({
 }) {
   const router = useRouter();
   const setRunId = useRunStore((s) => s.setRunId);
-  const { isAdmin, userId } = useIsAdmin();
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDeleteRun, setPendingDeleteRun] = useState<PredictionRun | null>(null);
@@ -130,7 +128,6 @@ export function RunsTable({
                   <RunRow
                     key={run.id}
                     run={run}
-                    canMutate={canMutateAsCreator(isAdmin, userId, run.created_by)}
                     retrying={retryingId === run.id}
                     deleting={deletingId === run.id}
                     onOpen={() => openRun(run)}
@@ -162,7 +159,6 @@ export function RunsTable({
 
 function RunRow({
   run,
-  canMutate,
   retrying,
   deleting,
   onOpen,
@@ -170,8 +166,6 @@ function RunRow({
   onDelete,
 }: {
   run: PredictionRun;
-  /** Creator-or-admin rule (mirrors the API's mutation guard). */
-  canMutate: boolean;
   retrying: boolean;
   deleting: boolean;
   onOpen: () => void;
@@ -228,8 +222,7 @@ function RunRow({
             <button
               type="button"
               onClick={onRetry}
-              disabled={retrying || !canMutate}
-              title={canMutate ? undefined : CREATOR_OR_ADMIN_TITLE}
+              disabled={retrying}
               className={actionBtnCls}
             >
               <RefreshCw size={11} className={retrying ? "animate-spin" : undefined} />
@@ -239,9 +232,9 @@ function RunRow({
           <button
             type="button"
             onClick={onDelete}
-            disabled={deleting || !canMutate}
+            disabled={deleting}
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[color:var(--ink-4)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
-            title={canMutate ? "ลบ run" : CREATOR_OR_ADMIN_TITLE}
+            title="ลบ run"
           >
             {deleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
           </button>

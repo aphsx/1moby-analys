@@ -3,9 +3,9 @@
  * Response contract mirrors apps/web/src/lib/mlApi.ts (snake_case keys).
  *
  * Org-shared model: reads are org-wide for any authenticated user; triggering
- * training is admin-only; deleting a finished run is creator-or-admin (blocked
- * while any of its model versions are production or still referenced by a
- * prediction run).
+ * training and deleting a finished run are available to any authenticated user
+ * (blocked while any of its model versions are production or still referenced
+ * by a prediction run).
  */
 import Elysia, { t } from "elysia";
 import { desc, eq, sql } from "drizzle-orm";
@@ -17,7 +17,7 @@ import {
   trainDataSources,
   user,
 } from "../db/schema";
-import { requireAdmin, requireUser } from "../lib/auth-middleware";
+import { requireUser } from "../lib/auth-middleware";
 import { denyNotFound, requireFoundForRead } from "../lib/access-control";
 import { triggerMlJob } from "../lib/ml-internal";
 import { getTrainCutoffSuggestion } from "../lib/clean-cutoff";
@@ -96,9 +96,8 @@ async function fetchTrainingRun(id: string): Promise<TrainingRunRow | null> {
   return rows[0] ?? null;
 }
 
-// Admin-only: triggering training mutates the shared model registry.
 const adminTrainingRoutes = new Elysia()
-  .use(requireAdmin)
+  .use(requireUser)
   .post(
     "/",
     async ({ body, userId, set }) => {
@@ -241,17 +240,13 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
     { params: t.Object({ id: t.String() }) }
   )
   // Delete a training run from history (and cascade its model versions).
-  // Creator or admin. Active/pending runs stay; production champions and
+  // Any authenticated user. Active/pending runs stay; production champions and
   // versions still referenced by prediction runs must be cleared first.
   .delete(
     "/:id",
-    async ({ params, userId, isAdmin, set }) => {
+    async ({ params, set }) => {
       const run = await fetchTrainingRun(params.id);
       if (!run) return denyNotFound(set, "Training run not found");
-      if (!isAdmin && run.createdBy !== userId) {
-        set.status = 403;
-        return { message: "Only the creator of this training run or an admin can delete it." };
-      }
       if (run.status === RUN_STATUS.PENDING || run.status === RUN_STATUS.IN_PROGRESS) {
         set.status = 409;
         return { message: "Cannot delete a training run that is still running" };

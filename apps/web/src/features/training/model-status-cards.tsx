@@ -29,12 +29,6 @@ import {
   type TrainingRun,
   type TrainingRunResult,
 } from "@/lib/ml-api";
-import {
-  ADMIN_ONLY_TITLE,
-  CREATOR_OR_ADMIN_TITLE,
-  canMutateAsCreator,
-  useIsAdmin,
-} from "@/lib/auth";
 import { MODEL_TYPE_LABELS, beatsBaseline, formatMetric } from "./training-run-utils";
 
 const MODEL_TYPES = ["churn", "clv", "credit"] as const;
@@ -87,10 +81,6 @@ function ModelStatusCard({
 }) {
   const [versions, setVersions] = useState<ModelVersionSummary[] | null>(null);
   const [expanded, setExpanded] = useState(false);
-  // Pin-to-production is admin-only; delete is creator-or-admin (blocked while
-  // prediction runs still reference the version).
-  const { isAdmin, userId, loading: roleLoading } = useIsAdmin();
-  const adminLocked = !roleLoading && !isAdmin;
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ModelVersionSummary | null>(null);
@@ -208,8 +198,6 @@ function ModelStatusCard({
             <p className="text-[11px] text-[color:var(--ink-5)]">ยังไม่มีเวอร์ชัน</p>
           )}
           {versions?.map((v) => {
-            const canDelete =
-              roleLoading || canMutateAsCreator(isAdmin, userId, v.created_by);
             return (
             <div
               key={v.id}
@@ -232,8 +220,7 @@ function ModelStatusCard({
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    disabled={busy || adminLocked}
-                    title={adminLocked ? ADMIN_ONLY_TITLE : undefined}
+                    disabled={busy}
                     onClick={() => activate(v.id)}
                     className="rounded-full bg-gray-900 px-2.5 py-1 text-[10.5px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -241,13 +228,9 @@ function ModelStatusCard({
                   </button>
                   <button
                     type="button"
-                    disabled={busy || !canDelete}
+                    disabled={busy}
                     onClick={() => setPendingDelete(v)}
-                    title={
-                      canDelete
-                        ? "ลบเวอร์ชันนี้ (ต้องไม่มี prediction ที่ใช้เวอร์ชันนี้)"
-                        : CREATOR_OR_ADMIN_TITLE
-                    }
+                    title="ลบเวอร์ชันนี้ (ต้องไม่มี prediction ที่ใช้เวอร์ชันนี้)"
                     className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--ink-5)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Trash2 size={12} />

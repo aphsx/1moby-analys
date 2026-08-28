@@ -2,16 +2,14 @@
 /**
  * Training history — one row per training run (all runs, newest first).
  * Shows status, creator, cutoff/horizon, when it ran, duration, and the
- * gate/promotion outcome. Delete is creator-or-admin (same guards as the API:
- * not while running; blocked if production or prediction runs still reference
- * models from this run).
+ * gate/promotion outcome. Any authenticated user can delete a finished run
+ * (blocked if production or prediction runs still reference models from this run).
  */
 
 import { useState } from "react";
 import { History, RefreshCw, Trash2 } from "lucide-react";
 import { StatusDialog } from "@/components/status-dialog";
 import { EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill } from "@/components/ui";
-import { canMutateAsCreator, CREATOR_OR_ADMIN_TITLE, useIsAdmin } from "@/lib/auth";
 import { deleteTrainingRun, type TrainingRun } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { formatRelative } from "@/features/runs/runs-utils";
@@ -74,7 +72,6 @@ export function TrainingHistoryTable({
   /** Called after a successful delete so the parent can refresh runs / model cards. */
   onDeleted?: () => void;
 }) {
-  const { isAdmin, userId, loading: roleLoading } = useIsAdmin();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TrainingRun | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -137,9 +134,7 @@ export function TrainingHistoryTable({
               <tbody>
                 {runs.map((run) => {
                   const inProgress = run.status === "in_progress" || run.status === "pending";
-                  const canMutate =
-                    roleLoading || canMutateAsCreator(isAdmin, userId, run.created_by);
-                  const canDelete = canMutate && !inProgress;
+                  const canDelete = !inProgress;
                   return (
                     <tr key={run.id}>
                       <td>
@@ -178,9 +173,7 @@ export function TrainingHistoryTable({
                           title={
                             inProgress
                               ? "รอให้เทรนจบก่อน"
-                              : canMutate
-                                ? "ลบรอบเทรนนี้ (และโมเดลจากรอบนี้)"
-                                : CREATOR_OR_ADMIN_TITLE
+                              : "ลบรอบเทรนนี้ (และโมเดลจากรอบนี้)"
                           }
                         >
                           {deletingId === run.id ? (

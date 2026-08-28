@@ -58,7 +58,7 @@ const app = new Elysia()
   .use(trainingRunRoutes)
   // ML v2 — champion model performance (spec §2.4)
   .use(modelPerformanceRoutes)
-  // ML v2 — realized-outcome backfill trigger (TRAINING-PIPELINE §15, admin)
+  // ML v2 — realized-outcome backfill trigger (TRAINING-PIPELINE §15)
   .use(outcomeBackfillRoutes)
   .get("/health", () => {
     return {
