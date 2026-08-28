@@ -244,7 +244,7 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
   // versions still referenced by prediction runs must be cleared first.
   .delete(
     "/:id",
-    async ({ params, set }) => {
+    async ({ params, userId, set }) => {
       const run = await fetchTrainingRun(params.id);
       if (!run) return denyNotFound(set, "Training run not found");
       if (run.status === RUN_STATUS.PENDING || run.status === RUN_STATUS.IN_PROGRESS) {
