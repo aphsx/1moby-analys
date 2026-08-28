@@ -1,8 +1,8 @@
 # ML v2 — Overview & Roadmap
 
 > สเปกออกแบบ ML v2 (ขอบเขต, สัญญา output, ขั้นตอนเทรน).
-> Walkthrough ที่เทียบโค้ดปัจจุบัน: `HOW-IT-WORKS.md`, `MODEL-CHURN-DEEP-DIVE.md`,
-> `MODEL-CLV-CREDIT-DEEP-DIVE.md`. สถาปัตยกรรมทั้งระบบ: `../claude.md`.
+> Walkthrough ที่เทียบโค้ดปัจจุบัน: `HOW-IT-WORKS.md`, `MODEL-DEEP-DIVE-EN.md`,
+> `ML-CALCULATIONS-TH.md`. สถาปัตยกรรมทั้งระบบ: `../claude.md`.
 > ถ้าเอกสารกับโค้ดขัดกัน **ให้เชื่อโค้ด** แล้วมาแก้เอกสารนี้.
 
 ## ชุดเอกสาร
@@ -10,7 +10,7 @@
 | ไฟล์ | ตอบคำถาม |
 |---|---|
 | `HOW-IT-WORKS.md` | walkthrough ทั้งระบบ เทียบโค้ดปัจจุบัน |
-| `MODEL-CHURN-DEEP-DIVE.md` / `MODEL-CLV-CREDIT-DEEP-DIVE.md` | churn / CLV / credit ทีละขั้น |
+| `MODEL-DEEP-DIVE-EN.md` | churn / CLV / credit ทีละขั้น (EN) |
 | `ML-V2-OVERVIEW.md` (ไฟล์นี้) | ภาพรวมระบบ, ขอบเขต, สถานะ build |
 | `ML-V2-DASHBOARD-SPEC.md` | หน้าเว็บต้องแสดงอะไรบ้าง widget ไหนใช้ field ไหน |
 | `ML-V2-OUTPUT-CONTRACT.md` | แต่ละ prediction run ต้องเก็บ output อะไรบ้าง พร้อมสูตรทุก field |

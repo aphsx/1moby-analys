@@ -7,8 +7,8 @@ sees "this customer has a 71% chance of churning, and here's why".
 Technical terms are used freely, but every one of them is unpacked.
 
 **Companion docs (deeper, per model):**
-- [`MODEL-CHURN-DEEP-DIVE.md`](MODEL-CHURN-DEEP-DIVE.md) — the churn model, line by line
-- [`MODEL-CLV-CREDIT-DEEP-DIVE.md`](MODEL-CLV-CREDIT-DEEP-DIVE.md) — CLV and credit forecast
+- [`MODEL-DEEP-DIVE-EN.md`](MODEL-DEEP-DIVE-EN.md) — churn, CLV and credit models line by line (EN)
+- [`ML-CALCULATIONS-TH.md`](ML-CALCULATIONS-TH.md) — exact formulas, metrics, thresholds, constants (TH)
 
 ---
 
@@ -424,7 +424,7 @@ feature shouldn't flip every customer to `partial`. Drift never blocks a run; it
 
 **35–45% — Churn.** Transform → `predict_proba` → calibrator → clip to [0,1] → risk level
 from the artifact's thresholds → top-5 SHAP factors per customer.
-(Full detail: [`MODEL-CHURN-DEEP-DIVE.md`](MODEL-CHURN-DEEP-DIVE.md).)
+(Full detail: [`MODEL-DEEP-DIVE-EN.md`](MODEL-DEEP-DIVE-EN.md) ตอนที่ 1.)
 
 **55% — CLV + `p_alive`.** BG-NBD is always run for `p_alive` even when a GBM wins the
 revenue forecast. Whale-tail blending and magnitude calibration are applied.
