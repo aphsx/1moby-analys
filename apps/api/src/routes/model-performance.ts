@@ -240,7 +240,7 @@ async function findReferencingPredictionRuns(
     .limit(5);
 }
 
-const adminModelPerformanceRoutes = new Elysia()
+const modelActivateRoutes = new Elysia()
   .use(requireUser)
   // Manually pin a version to production. Reuses the ML service's promotion
   // transaction (action='manual_override') so the registry stays consistent.
@@ -391,4 +391,4 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
     }
     return { deleted: true };
   })
-  .use(adminModelPerformanceRoutes);
+  .use(modelActivateRoutes);

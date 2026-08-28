@@ -3,8 +3,8 @@
  * `bun run dev` always has a usable login without Google OAuth.
  * Login form accepts shorthand "admin" → admin@example.com.
  *
- * Enabled when SEED_LOCAL_ADMIN=true, or when unset and NODE_ENV !== "production".
- * Set SEED_LOCAL_ADMIN=false to skip.
+ * Enabled when SEED_LOCAL_USER is true, or when unset and NODE_ENV !== "production".
+ * Set SEED_LOCAL_USER=false to skip.
  */
 import { and, eq } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
@@ -12,20 +12,20 @@ import { db } from "../db/client";
 import { account, user } from "../db/schema";
 
 export const LOCAL_USER = {
-  id: "local-admin",
+  id: "local-user",
   email: "admin@example.com",
-  name: "Admin",
+  name: "Local",
   password: "123",
 } as const;
 
 function seedEnabled(): boolean {
-  const flag = process.env.SEED_LOCAL_ADMIN?.trim().toLowerCase();
+  const flag = process.env.SEED_LOCAL_USER?.trim().toLowerCase();
   if (flag === "false" || flag === "0" || flag === "off") return false;
   if (flag === "true" || flag === "1" || flag === "on") return true;
   return process.env.NODE_ENV !== "production";
 }
 
-export async function seedLocalAdmin(): Promise<void> {
+export async function seedLocalUser(): Promise<void> {
   if (!seedEnabled()) return;
 
   const passwordHash = await hashPassword(LOCAL_USER.password);

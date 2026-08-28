@@ -1162,7 +1162,6 @@ CREATE TABLE public."user" (
     "givenName" text,
     "familyName" text,
     locale text,
-    role text DEFAULT 'member' NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );

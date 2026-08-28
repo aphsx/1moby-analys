@@ -10,7 +10,7 @@ import { modelPerformanceRoutes } from "./routes/model-performance";
 import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
 import { releaseStaleTrainImports, releaseStalePredict } from "./lib/abort-data-source";
 import { startStaleRunReaper } from "./lib/run-reaper";
-import { seedLocalAdmin } from "./lib/seed-local-admin";
+import { seedLocalUser } from "./lib/seed-local-user";
 import { maxUploadBytes } from "./lib/constants";
 import { ensureImportSchemaCompat } from "./lib/schema-compat";
 
@@ -29,10 +29,9 @@ Promise.all([releaseStaleTrainImports(), releaseStalePredict()])
   })
   .catch((e) => console.error("[api] Failed to release stale imports:", e));
 
-seedLocalAdmin().catch((e) => console.error("[api] Failed to seed local admin:", e));
-ensureImportSchemaCompat().catch((e) =>
-  console.error("[api] Failed to apply import schema compat:", e)
-);
+ensureImportSchemaCompat()
+  .then(() => seedLocalUser())
+  .catch((e) => console.error("[api] Failed to apply schema compat / seed local user:", e));
 
 // Mark runs stuck in a non-terminal status as failed — now and every 5 minutes.
 startStaleRunReaper();

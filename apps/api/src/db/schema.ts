@@ -33,7 +33,6 @@ export const user = pgTable("user", {
   givenName: text("givenName"),
   familyName: text("familyName"),
   locale: text("locale"),
-  role: text("role").notNull().default("member"),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull().default(sql`NOW()`),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().default(sql`NOW()`),
 });

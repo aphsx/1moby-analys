@@ -47,7 +47,7 @@ const sourceSelect = {
 };
 
 // Any authenticated user can import training data.
-const adminTrainDataRoutes = new Elysia()
+const trainImportRoutes = new Elysia()
   .use(requireUser)
   .post(
     "/import",
@@ -354,4 +354,4 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
     },
     { params: t.Object({ id: t.String() }) }
   )
-  .use(adminTrainDataRoutes);
+  .use(trainImportRoutes);

@@ -13,15 +13,12 @@ Used by internal staff across multiple teams (~10–50 users). Analyzes uploaded
 predict customer churn, segment customers by CLV / value tier, and forecast credit consumption.
 
 **Access model (org-shared):** all data sources, runs, and dashboards are visible to every
-authenticated user. Two roles on `user.role`: `admin` (import train data, trigger training,
-pin production models, delete anything, trigger outcome backfill) and `member` (default —
-view everything, import predict data, create prediction runs, AI chat, delete own
-non-production model versions when no prediction run still references them). Bootstrap
-admins via `ADMIN_EMAILS` env. Local Docker/dev seeds `admin@example.com` / `123` (role=admin)
-on API boot when `SEED_LOCAL_ADMIN` is enabled (default outside production); type `admin` on
-the login form. Deletes are creator-or-admin. AI chat conversations stay private per user, but
-Text-to-SQL queries are scoped org-wide (deterministic id allowlist in
-`apps/api/src/lib/ai/scope.ts`).
+authenticated user. There is no admin/member role — any signed-in user can import train
+and predict data, trigger training, pin production models, delete sources/runs, and
+trigger outcome backfill. Local Docker/dev seeds `admin@example.com` / `123` on API boot
+when `SEED_LOCAL_USER` is enabled (default outside production); type `admin` on the login
+form. AI chat conversations stay private per user, but Text-to-SQL queries are scoped
+org-wide (deterministic id allowlist in `apps/api/src/lib/ai/scope.ts`).
 
 **Deployment target:** Local Docker first. Production decision deferred.
 
@@ -238,7 +235,7 @@ Training follows the same shape via `POST /training-runs` → `/internal/trainin
 
 **Realized-outcome loop:** once a run's horizon has elapsed and newer predict data exists,
 `python -m src.cli.backfill_outcomes` (spawned via `POST /internal/outcome-backfill`, triggered by
-admin `POST /outcome-backfill`) rebuilds actual labels with the training label builders and upserts
+`POST /outcome-backfill`) rebuilds actual labels with the training label builders and upserts
 per-run realized metrics as `ml_model_evaluations` rows (`evaluation_type='production_holdout'`,
 keyed by `prediction_run_id`). Read via `GET /prediction-runs/:id/realized-outcomes`.
 
@@ -254,8 +251,8 @@ keyed by `prediction_run_id`). Read via `GET /prediction-runs/:id/realized-outco
 | **Drizzle in introspect mode** | `db/init/001_schema.sql` owns schema; Drizzle reflects it. No `drizzle-kit generate`, no Alembic. |
 | **PostgreSQL not MongoDB** | Data is relational. All ML output is tabular. |
 
-## Route Map (Elysia — all keys snake_case, all routes `requireUser`; reads are org-wide,
-## admin-only writes marked [admin], deletes are creator-or-admin)
+## Route Map (Elysia — all keys snake_case, all routes `requireUser`; reads and writes
+## are org-wide for any authenticated user)
 
 ```
 Auth
@@ -265,7 +262,7 @@ Prediction runs
   GET    /prediction-runs                       list runs (+ created_by / created_by_name)
   POST   /prediction-runs                       create run { predict_source_id, name, cutoff_date }
   GET    /prediction-runs/:id                   run detail + progress
-  DELETE /prediction-runs/:id                   creator or admin, cascade
+  DELETE /prediction-runs/:id                   any authenticated user, cascade
   GET    /prediction-runs/:id/summary           dashboard aggregates (SQL-side)
   GET    /prediction-runs/:id/outputs           paginated customer table (sort/filter)
   GET    /prediction-runs/:id/outputs/:acc_id   Customer 360 (output + profile snapshot)
@@ -275,22 +272,22 @@ Prediction runs
 Data sources
   POST   /predict-data-sources/import           import predict Excel (raw + clean);
                                                 auto-triggers a prediction run (auto_run=false to skip)
-  POST   /train-data-sources/import             [admin] import train Excel (raw + clean)
+  POST   /train-data-sources/import             import train Excel (raw + clean)
   GET    /{train,predict}-data-sources[/...]    lists/detail/progress — org-wide reads
-  DELETE /{train,predict}-data-sources/:id      creator or admin
+  DELETE /{train,predict}-data-sources/:id      any authenticated user
 
 Training / models
-  POST   /training-runs                         [admin] trigger training { train_source_id, cutoff_date, horizon_days }
+  POST   /training-runs                         trigger training { train_source_id, cutoff_date, horizon_days }
   GET    /training-runs / :id                   history + progress + gate results + metrics
-  DELETE /training-runs/:id                     creator or admin; blocked while running,
+  DELETE /training-runs/:id                     any authenticated user; blocked while running,
                                                 if any version is production, or if a
                                                 prediction run still references its models
   GET    /model-performance                     champion per model_type + evaluations + baselines
-  POST   /model-performance/:type/activate      [admin] pin a version to production
-  DELETE /model-performance/:type/versions/:id  creator or admin; blocked if production
+  POST   /model-performance/:type/activate      pin a version to production
+  DELETE /model-performance/:type/versions/:id  any authenticated user; blocked if production
                                                 champion or any prediction run still
                                                 references the version (delete predicts first)
-  POST   /outcome-backfill                      [admin] trigger realized-outcome backfill
+  POST   /outcome-backfill                      trigger realized-outcome backfill
 
 AI chat
   GET    /ai-chat/config                         { configured, provider, model } for the UI status line
@@ -344,8 +341,7 @@ ALLOWED_ORIGINS          # http://localhost:3000
 INTERNAL_SERVICE_TOKEN   # shared with ml service
 ML_INTERNAL_URL          # http://ml:8000
 ML_INTERNAL_TIMEOUT_MS   # Elysia → FastAPI call timeout (default 30000)
-ADMIN_EMAILS             # comma-separated bootstrap admins (role=admin)
-SEED_LOCAL_ADMIN         # seed admin@example.com / 123 on API boot (default on unless production)
+SEED_LOCAL_USER          # seed admin@example.com / 123 on API boot (default on unless production)
 STALE_RUN_TIMEOUT_MINUTES # reaper threshold for stuck runs (default 120)
 MODEL_DIR                # /app/models
 OLLAMA_API_KEY / OLLAMA_HOST / OLLAMA_MODEL        # AI chat + insights
@@ -390,9 +386,7 @@ Done: ~~Realized-outcome loop~~ (shipped — `src/outcomes/`, `POST /outcome-bac
 ## Always Check
 
 - Is the run status updated to `in_progress`/`completed`/`failed` at the right points?
-- Are all Elysia routes behind `requireUser`? Reads are org-wide by design; writes that change
-  shared training/model state (train import, training, champion pinning, backfill) must be behind
-  `requireAdmin`. Predict import + creating prediction runs are open to any authenticated user.
-- Do deletes enforce creator-or-admin and return 403 (not bypass) otherwise?
+- Are all Elysia routes behind `requireUser`? Reads and writes are org-wide for any
+  authenticated user (train import, training, champion pinning, backfill, deletes).
 - Are uploaded files validated (size, MIME, required sheet presence) before inserting?
 - Are batch inserts used (never row-by-row `for` loops)?

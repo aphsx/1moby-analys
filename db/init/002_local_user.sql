@@ -1,23 +1,21 @@
--- Local credential admin for Docker / fresh volumes.
+-- Local credential user for Docker / fresh volumes.
 -- Login: admin (or admin@example.com) / 123
 -- Password hash = Better Auth scrypt for "123".
--- API also upserts this user on every boot via seedLocalAdmin() when
--- SEED_LOCAL_ADMIN is enabled (default outside production).
+-- API also upserts this user on every boot via seedLocalUser() when
+-- SEED_LOCAL_USER is enabled (default outside production).
 
 INSERT INTO public."user" (
-  id, name, email, "emailVerified", role, "createdAt", "updatedAt"
+  id, name, email, "emailVerified", "createdAt", "updatedAt"
 ) VALUES (
-  'local-admin',
-  'Admin',
+  'local-user',
+  'Local',
   'admin@example.com',
   true,
-  'admin',
   NOW(),
   NOW()
 )
 ON CONFLICT (email) DO UPDATE SET
-  role = 'admin',
-  name = 'Admin',
+  name = 'Local',
   "emailVerified" = true,
   "updatedAt" = NOW();
 
@@ -25,7 +23,7 @@ INSERT INTO public.account (
   id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt"
 )
 SELECT
-  'local-admin-credential',
+  'local-user-credential',
   u.id,
   'admin@example.com',
   'credential',

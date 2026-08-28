@@ -96,7 +96,7 @@ async function fetchTrainingRun(id: string): Promise<TrainingRunRow | null> {
   return rows[0] ?? null;
 }
 
-const adminTrainingRoutes = new Elysia()
+const trainingWriteRoutes = new Elysia()
   .use(requireUser)
   .post(
     "/",
@@ -228,7 +228,7 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
       .orderBy(desc(mlTrainingRuns.createdAt));
     return rows.map(mapTrainingRun);
   })
-  .use(adminTrainingRoutes)
+  .use(trainingWriteRoutes)
   .get(
     "/:id",
     async ({ params, set }) => {

@@ -9,4 +9,5 @@ export async function ensureImportSchemaCompat(): Promise<void> {
   await db.execute(
     sql`ALTER TABLE train_data_sources DROP CONSTRAINT IF EXISTS train_data_sources_file_checksum_sha256_key`
   );
+  await db.execute(sql`ALTER TABLE "user" DROP COLUMN IF EXISTS role`);
 }
