@@ -98,4 +98,21 @@ export const UUID_RE =
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+/** Safety cap so a huge upload cannot OOM the API. Override with IMPORT_MAX_UPLOAD_BYTES. */
+export const DEFAULT_MAX_UPLOAD_BYTES = 1024 * 1024 * 1024;
+
+/** Wall-clock budget for one import (raw + clean). Override with IMPORT_TIMEOUT_MS. */
+export const DEFAULT_IMPORT_TIMEOUT_MS = 20 * 60 * 1000;
+
+export function maxUploadBytes(): number {
+  const parsed = Number(process.env.IMPORT_MAX_UPLOAD_BYTES);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_UPLOAD_BYTES;
+}
+
+export function importTimeoutMs(): number {
+  const parsed = Number(process.env.IMPORT_TIMEOUT_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_IMPORT_TIMEOUT_MS;
+}
+
+/** @deprecated Prefer maxUploadBytes() — kept as the resolved default for route schemas. */
+export const MAX_UPLOAD_BYTES = DEFAULT_MAX_UPLOAD_BYTES;

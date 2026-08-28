@@ -22,6 +22,15 @@ sheets:
     table: train_raw_sheet_users_user_profile
     required_headers:
       - acc_id
+      - status (SMS)
+      - user.credit + user.credit_premium
+      - credit_email
+      - expire
+      - expire_email
+      - status (Email)
+      - join_date
+      - last_access
+      - last_send
     expected_headers:
       - acc_id
       - status (SMS)
@@ -40,6 +49,9 @@ sheets:
       - uid
       - payment_date
       - acc_id
+      - credit_add
+      - amount
+      - credit_type
     expected_headers:
       - uid
       - payment_date

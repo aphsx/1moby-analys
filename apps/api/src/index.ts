@@ -11,6 +11,8 @@ import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
 import { releaseStaleTrainImports, releaseStalePredict } from "./lib/abort-data-source";
 import { startStaleRunReaper } from "./lib/run-reaper";
 import { seedLocalAdmin } from "./lib/seed-local-admin";
+import { maxUploadBytes } from "./lib/constants";
+import { ensureImportSchemaCompat } from "./lib/schema-compat";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -28,6 +30,9 @@ Promise.all([releaseStaleTrainImports(), releaseStalePredict()])
   .catch((e) => console.error("[api] Failed to release stale imports:", e));
 
 seedLocalAdmin().catch((e) => console.error("[api] Failed to seed local admin:", e));
+ensureImportSchemaCompat().catch((e) =>
+  console.error("[api] Failed to apply import schema compat:", e)
+);
 
 // Mark runs stuck in a non-terminal status as failed — now and every 5 minutes.
 startStaleRunReaper();
@@ -62,7 +67,13 @@ const app = new Elysia()
       message: "ML v2 API: prediction-runs, training-runs, model-performance.",
     };
   })
-  .listen({ hostname: "::", port: PORT }); // ponytail: "::" is dual-stack; Railway private net is IPv6-only
+  .listen({
+    hostname: "::",
+    port: PORT,
+    // Large .xlsx imports — Bun default body cap is 128MB and idleTimeout 10s.
+    maxRequestBodySize: maxUploadBytes(),
+    idleTimeout: 0,
+  }); // ponytail: "::" is dual-stack; Railway private net is IPv6-only
 
 console.log(`[api] Elysia listening on port ${PORT}`);
 

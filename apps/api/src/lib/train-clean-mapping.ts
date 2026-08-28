@@ -2,7 +2,7 @@
  * Excel header → clean column mapping (aligned with apps/ml/src/data_loader.py).
  */
 
-import type { TrainSheetName } from "./train-excel-contract";
+import { PAYMENT_HEADERS, type TrainSheetName } from "./train-excel-contract";
 
 export const USER_PAYLOAD_TO_COLUMN: Record<string, string> = {
   acc_id: "acc_id",
@@ -29,11 +29,4 @@ export const USAGE_SHEET_CHANNEL: Record<string, { channel: string; usageSource:
 export const USAGE_SHEET_NAMES = Object.keys(USAGE_SHEET_CHANNEL) as TrainSheetName[];
 
 /** Excel Backend_payment headers — see excel_schema.yaml */
-export const PAYMENT_EXCEL_HEADERS = [
-  "uid",
-  "acc_id",
-  "payment_date",
-  "amount",
-  "credit_add",
-  "credit_type",
-] as const;
+export const PAYMENT_EXCEL_HEADERS = PAYMENT_HEADERS;

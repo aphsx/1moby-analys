@@ -13,7 +13,13 @@ import {
   publishTrainImportError,
   publishTrainPipelineProgress,
 } from "./train-import-stream";
-import { MAX_UPLOAD_BYTES } from "./constants";
+import { maxUploadBytes } from "./constants";
+import {
+  IMPORT_TIMEOUT_CODE,
+  isImportTimeoutError,
+  throwIfImportAborted,
+  withImportTimeout,
+} from "./import-timeout";
 
 export interface TrainImportParams {
   buffer: Buffer;
@@ -27,8 +33,9 @@ export interface TrainImportParams {
 /** Reads an uploaded file into a Buffer, enforcing the upload size limit. */
 export async function readImportBuffer(file: File): Promise<Buffer> {
   const buffer = Buffer.from(await file.arrayBuffer());
-  if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw new Error(`File exceeds ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit`);
+  const limit = maxUploadBytes();
+  if (buffer.length > limit) {
+    throw new Error(`File exceeds ${Math.round(limit / (1024 * 1024))}MB limit`);
   }
   return buffer;
 }
@@ -51,7 +58,7 @@ export async function runTrainImportPipeline(
   params: TrainImportParams & { sourceId: string }
 ): Promise<TrainImportResult> {
   const sourceId = params.sourceId;
-  try {
+  return withImportTimeout(async (signal) => {
     await publishRawProgress(sourceId, { progress: 0, step: "Reading workbook…" });
     const rawResult = await importTrainExcel({
       buffer: params.buffer,
@@ -62,11 +69,13 @@ export async function runTrainImportPipeline(
       imported_by: params.imported_by,
       sourceId,
       deferReadyCatalog: true,
+      signal,
       onProgress: (event) => {
         void publishRawProgress(sourceId, event);
       },
     });
 
+    throwIfImportAborted(signal);
     const cleanManifest = await cleanTrainFromRaw(sourceId, (event) => {
       void publishTrainPipelineProgress(sourceId, event);
     });
@@ -76,13 +85,7 @@ export async function runTrainImportPipeline(
       import_status: "ready",
       clean_manifest: cleanManifest,
     };
-  } catch (e) {
-    const err = e as Error & { code?: string };
-    if (sourceId && err.code !== "DUPLICATE_FILE") {
-      await abortTrainDataSource(sourceId);
-    }
-    throw e;
-  }
+  });
 }
 
 /** Fire-and-forget background variant for the async import endpoint. */
@@ -92,9 +95,10 @@ export function runTrainImportJob(sourceId: string, params: TrainImportParams): 
       const result = await runTrainImportPipeline({ ...params, sourceId });
       await publishTrainImportDone(sourceId, result);
     } catch (e) {
-      const err = e as Error & { code?: string; source_id?: string };
-      if (err.code === "DUPLICATE_FILE") return;
-      await publishTrainImportError(sourceId, err.message ?? "Import failed");
+      const err = e as Error;
+      await publishTrainImportError(sourceId, err.message ?? "Import failed", {
+        code: isImportTimeoutError(err) ? IMPORT_TIMEOUT_CODE : undefined,
+      });
       await abortTrainDataSource(sourceId);
     }
   })();

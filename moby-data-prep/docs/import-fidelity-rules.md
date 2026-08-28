@@ -57,7 +57,7 @@ Re-count in Excel (data rows only, exclude header and trailing blanks) should ma
 ## Failure behaviour
 
 - Missing required sheet or header → entire import `failed`, no partial sheet commits left in `ready` state (transaction per sheet after source row created; on error status set to `failed`).
-- Duplicate checksum → exit code 2, no new rows.
+- Re-uploading the same file is allowed — each import is a new snapshot (no checksum dedupe, no merge).
 
 ## Exit codes (`import_train_raw.py`)
 
@@ -65,4 +65,3 @@ Re-count in Excel (data rows only, exclude header and trailing blanks) should ma
 |------|---------|
 | 0 | Success |
 | 1 | Error (file, DB, validation) |
-| 2 | Already imported (checksum exists) |

@@ -29,7 +29,7 @@ import {
   fetchPredictSuggestedCutoff,
   type ModelVersionSummary,
 } from "@/lib/ml-api";
-import { getDisplayError } from "@/lib/ui-error";
+import { getDisplayError, getImportErrorMessage } from "@/lib/ui-error";
 import {
   defaultRunName,
   formatDate,
@@ -317,7 +317,7 @@ function InlineImportForm({
         });
       }
     } catch (e) {
-      setError(getDisplayError(e, "นำเข้าข้อมูลไม่สำเร็จ") ?? "นำเข้าข้อมูลไม่สำเร็จ");
+      setError(getImportErrorMessage(e, "นำเข้าข้อมูลไม่สำเร็จ"));
     } finally {
       setBusy(false);
     }

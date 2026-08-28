@@ -10,10 +10,10 @@ import { db } from "../db/client";
 import { trainDataSources, user } from "../db/schema";
 import { requireCreatorOrAdminForMutation } from "../lib/access-control";
 import { requireAdmin, requireUser } from "../lib/auth-middleware";
-import { UUID_RE } from "../lib/constants";
+import { UUID_RE, maxUploadBytes } from "../lib/constants";
 import { getTrainCutoffSuggestion } from "../lib/clean-cutoff";
 import { prepareTrainDataSource } from "../lib/train-import";
-import { releaseStaleTrainImports } from "../lib/abort-data-source";
+import { abortTrainDataSource, releaseStaleTrainImports } from "../lib/abort-data-source";
 import {
   publishTrainPipelineProgress,
   readLatestTrainImportStreamEntry,
@@ -24,6 +24,7 @@ import {
   runTrainImportPipeline,
 } from "../lib/train-import-orchestrator";
 import { isXlsxFilename, mapDataSourceRow } from "../lib/data-import/data-source-dto";
+import { IMPORT_TIMEOUT_CODE, isImportTimeoutError } from "../lib/import-timeout";
 
 const sourceSelect = {
   id: trainDataSources.id,
@@ -59,8 +60,9 @@ const adminTrainDataRoutes = new Elysia()
 
       const buffer = await readImportBuffer(body.file);
 
+      let sourceId = "";
       try {
-        const sourceId = await prepareTrainDataSource({
+        sourceId = await prepareTrainDataSource({
           buffer,
           filename,
           name: body.name,
@@ -79,10 +81,11 @@ const adminTrainDataRoutes = new Elysia()
         });
         return result;
       } catch (e) {
-        const err = e as Error & { code?: string; source_id?: string };
-        if (err.code === "DUPLICATE_FILE") {
-          set.status = 409;
-          return { message: err.message, source_id: err.source_id };
+        if (sourceId) await abortTrainDataSource(sourceId);
+        const err = e as Error;
+        if (isImportTimeoutError(err)) {
+          set.status = 504;
+          return { message: err.message, code: IMPORT_TIMEOUT_CODE };
         }
         set.status = 400;
         return { message: err.message ?? "Import failed" };
@@ -90,7 +93,7 @@ const adminTrainDataRoutes = new Elysia()
     },
     {
       body: t.Object({
-        file: t.File(),
+        file: t.File({ maxSize: maxUploadBytes() }),
         name: t.String({ minLength: 1 }),
         client_label: t.Optional(t.String()),
         notes: t.Optional(t.String()),
@@ -114,8 +117,9 @@ const adminTrainDataRoutes = new Elysia()
         return { message: (e as Error).message };
       }
 
+      let sourceId = "";
       try {
-        const sourceId = await prepareTrainDataSource({
+        sourceId = await prepareTrainDataSource({
           buffer,
           filename,
           name: body.name,
@@ -141,10 +145,11 @@ const adminTrainDataRoutes = new Elysia()
 
         return { source_id: sourceId, import_status: "importing" };
       } catch (e) {
-        const err = e as Error & { code?: string; source_id?: string };
-        if (err.code === "DUPLICATE_FILE") {
-          set.status = 409;
-          return { message: err.message, source_id: err.source_id };
+        if (sourceId) await abortTrainDataSource(sourceId);
+        const err = e as Error;
+        if (isImportTimeoutError(err)) {
+          set.status = 504;
+          return { message: err.message, code: IMPORT_TIMEOUT_CODE };
         }
         set.status = 400;
         return { message: err.message ?? "Import failed" };
@@ -152,7 +157,7 @@ const adminTrainDataRoutes = new Elysia()
     },
     {
       body: t.Object({
-        file: t.File(),
+        file: t.File({ maxSize: maxUploadBytes() }),
         name: t.String({ minLength: 1 }),
         client_label: t.Optional(t.String()),
         notes: t.Optional(t.String()),
@@ -188,6 +193,17 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
         .limit(1);
 
       if (!row) {
+        const snap = await readLatestTrainImportStreamEntry(sourceId);
+        if (snap.kind === "failed") {
+          return {
+            status: "failed" as const,
+            progress: 0,
+            step: snap.message,
+            message: snap.message,
+            code: snap.code,
+            source_id: snap.source_id,
+          };
+        }
         set.status = 404;
         return { status: "not_found" as const, message: "Train data source not found" };
       }

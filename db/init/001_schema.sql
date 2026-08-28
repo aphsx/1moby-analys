@@ -1591,14 +1591,6 @@ ALTER TABLE ONLY public.train_clean_usage
 
 
 --
--- Name: train_data_sources train_data_sources_file_checksum_sha256_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.train_data_sources
-    ADD CONSTRAINT train_data_sources_file_checksum_sha256_key UNIQUE (file_checksum_sha256);
-
-
---
 -- Name: train_data_sources train_data_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 

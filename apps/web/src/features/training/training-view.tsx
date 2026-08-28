@@ -25,7 +25,7 @@ import {
   type RunStatus,
   type TrainingRun,
 } from "@/lib/ml-api";
-import { getDisplayError } from "@/lib/ui-error";
+import { getDisplayError, getImportErrorMessage } from "@/lib/ui-error";
 import { ModelStatusCards } from "./model-status-cards";
 import { TrainPanel } from "./train-panel";
 import { TrainingHistoryTable } from "./training-history-table";
@@ -225,14 +225,10 @@ export function TrainingView() {
       setImportProgress(0);
       setImportStep("");
       setImportPhase(null);
-      const err = e as Error & { code?: string };
       notifyStatusDialog({
         tone: "error",
         title: "นำเข้าข้อมูลไม่สำเร็จ",
-        message:
-          err.code === "DUPLICATE_FILE"
-            ? "ไฟล์นี้ถูกนำเข้าแล้ว เลือก dataset เดิมจากรายการได้เลย"
-            : getDisplayError(e, "นำเข้าข้อมูลไม่สำเร็จ") ?? "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+        message: getImportErrorMessage(e, "นำเข้าข้อมูลไม่สำเร็จ"),
       });
     } finally {
       setImporting(false);

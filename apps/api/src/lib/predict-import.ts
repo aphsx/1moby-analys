@@ -1,6 +1,6 @@
 /**
  * [NEW] Predict raw import — faithful row_payload per sheet into predict_* tables.
- * Each upload is a new snapshot (no merge with prior sources). No global checksum dedupe.
+ * Each upload is a new snapshot (no merge with prior sources). No checksum dedupe.
  */
 import { createHash } from "node:crypto";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -31,6 +31,7 @@ import {
   insertSheetRows as insertSheetRowsCore,
   type CellJson,
 } from "./data-import/excel-core";
+import { throwIfImportAborted } from "./import-timeout";
 
 type RawInsertTable = PgTable;
 
@@ -78,10 +79,13 @@ export async function importPredictExcel(params: {
   notes?: string | null;
   /** When true, leave status `importing` after raw (clean step sets `ready`). */
   deferReadyCatalog?: boolean;
+  signal?: AbortSignal;
 }): Promise<PredictImportResult> {
   const checksum = createHash("sha256").update(params.buffer).digest("hex");
+  throwIfImportAborted(params.signal);
 
   const wb = XLSX.read(params.buffer, { type: "buffer", cellDates: true });
+  throwIfImportAborted(params.signal);
   validateWorkbookSheets(wb.SheetNames);
 
   const [created] = await db
@@ -107,6 +111,7 @@ export async function importPredictExcel(params: {
     );
 
     for (const sheetName of sheetOrder) {
+      throwIfImportAborted(params.signal);
       const cfg = PREDICT_SHEET_CONFIG[sheetName];
       const table = PREDICT_RAW_TABLE_BY_NAME[cfg.table];
       if (!table) throw new Error(`No table mapping for ${cfg.table}`);
@@ -114,6 +119,8 @@ export async function importPredictExcel(params: {
       const rows = parseSheetRows(wb, sheetName, true);
       manifest[sheetName] = await insertSheetRows(table, sourceId, rows);
     }
+
+    throwIfImportAborted(params.signal);
 
     if (params.deferReadyCatalog) {
       await db

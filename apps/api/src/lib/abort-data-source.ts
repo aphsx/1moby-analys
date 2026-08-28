@@ -4,8 +4,13 @@
 import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 import { db } from "../db/client";
 import { predictDataSources, trainDataSources } from "../db/schema";
+import { importTimeoutMs } from "./constants";
 
-const STALE_IMPORT_MINUTES = 15;
+/** Reap catalogs still importing after timeout + buffer (crash / killed container). */
+function staleImportCutoff(): Date {
+  const bufferMs = 5 * 60 * 1000;
+  return new Date(Date.now() - importTimeoutMs() - bufferMs);
+}
 
 export async function abortTrainDataSource(sourceId: string): Promise<void> {
   await db.delete(trainDataSources).where(eq(trainDataSources.id, sourceId));
@@ -17,7 +22,7 @@ export async function abortPredictDataSource(sourceId: string): Promise<void> {
 
 /** Remove catalogs left in importing/cleaning after server/docker stopped. */
 export async function releaseStaleTrainImports(): Promise<number> {
-  const cutoff = new Date(Date.now() - STALE_IMPORT_MINUTES * 60 * 1000);
+  const cutoff = staleImportCutoff();
   const stale = await db
     .select({ id: trainDataSources.id })
     .from(trainDataSources)
@@ -37,7 +42,7 @@ export async function releaseStaleTrainImports(): Promise<number> {
 
 /** Remove predict catalogs left in importing/cleaning after a crash. */
 export async function releaseStalePredict(): Promise<number> {
-  const cutoff = new Date(Date.now() - STALE_IMPORT_MINUTES * 60 * 1000);
+  const cutoff = staleImportCutoff();
   const stale = await db
     .select({ id: predictDataSources.id })
     .from(predictDataSources)

@@ -1,6 +1,7 @@
 /**
  * [NEW] Train raw import logic — faithful row_payload per sheet.
  * Parallel to predict-import.ts and moby-data-prep/scripts/import_train_raw.py.
+ * Each upload is a new snapshot (no merge with prior sources). No checksum dedupe.
  */
 import { createHash } from "node:crypto";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -38,6 +39,7 @@ import {
   insertSheetRows as insertSheetRowsCore,
   type CellJson,
 } from "./data-import/excel-core";
+import { throwIfImportAborted } from "./import-timeout";
 
 type TrainRawInsertTable = PgTable;
 
@@ -87,25 +89,6 @@ export async function prepareTrainDataSource(params: {
 }): Promise<string> {
   const checksum = createHash("sha256").update(params.buffer).digest("hex");
 
-  const wb = XLSX.read(params.buffer, { type: "buffer", cellDates: true });
-  validateWorkbookSheets(wb.SheetNames);
-
-  const existing = await db
-    .select({ id: trainDataSources.id })
-    .from(trainDataSources)
-    .where(eq(trainDataSources.fileChecksumSha256, checksum))
-    .limit(1);
-
-  if (existing.length > 0) {
-    const err = new Error("This file was already imported (checksum match)") as Error & {
-      code: string;
-      source_id: string;
-    };
-    err.code = "DUPLICATE_FILE";
-    err.source_id = existing[0].id;
-    throw err;
-  }
-
   const [created] = await db
     .insert(trainDataSources)
     .values({
@@ -137,40 +120,21 @@ export async function importTrainExcel(params: {
   onSourceCreated?: (sourceId: string) => void;
   /** When true, leave status `importing` after raw (clean step sets `ready`). */
   deferReadyCatalog?: boolean;
+  signal?: AbortSignal;
 }): Promise<TrainImportResult> {
   const emit = params.onProgress;
   const checksum = createHash("sha256").update(params.buffer).digest("hex");
+  throwIfImportAborted(params.signal);
+
+  emit?.({ progress: 0, step: "Reading workbook…" });
+  const wb = XLSX.read(params.buffer, { type: "buffer", cellDates: true });
+  throwIfImportAborted(params.signal);
+  validateWorkbookSheets(wb.SheetNames);
 
   let sourceId: string;
   if (params.sourceId) {
     sourceId = params.sourceId;
-    params.onSourceCreated?.(sourceId);
-    emit?.({
-      progress: progressAfterValidate(),
-      step: "Catalog created — importing sheets…",
-    });
   } else {
-    emit?.({ progress: 0, step: "Reading workbook…" });
-
-    const wb = XLSX.read(params.buffer, { type: "buffer", cellDates: true });
-    validateWorkbookSheets(wb.SheetNames);
-
-    const existing = await db
-      .select({ id: trainDataSources.id })
-      .from(trainDataSources)
-      .where(eq(trainDataSources.fileChecksumSha256, checksum))
-      .limit(1);
-
-    if (existing.length > 0) {
-      const err = new Error("This file was already imported (checksum match)") as Error & {
-        code: string;
-        source_id: string;
-      };
-      err.code = "DUPLICATE_FILE";
-      err.source_id = existing[0].id;
-      throw err;
-    }
-
     const [created] = await db
       .insert(trainDataSources)
       .values({
@@ -186,15 +150,15 @@ export async function importTrainExcel(params: {
       .returning({ id: trainDataSources.id });
 
     sourceId = created.id;
-    params.onSourceCreated?.(sourceId);
-    emit?.({
-      progress: progressAfterValidate(),
-      step: "Catalog created — importing sheets…",
-    });
   }
 
+  params.onSourceCreated?.(sourceId);
+  emit?.({
+    progress: progressAfterValidate(),
+    step: "Catalog created — importing sheets…",
+  });
+
   const manifest: Record<string, number> = {};
-  const wb = XLSX.read(params.buffer, { type: "buffer", cellDates: true });
 
   try {
     const sheetOrder = wb.SheetNames.filter(
@@ -202,6 +166,7 @@ export async function importTrainExcel(params: {
     );
 
     for (let i = 0; i < sheetOrder.length; i++) {
+      throwIfImportAborted(params.signal);
       const sheetName = sheetOrder[i];
       const cfg = TRAIN_SHEET_CONFIG[sheetName];
       const table = TRAIN_RAW_TABLE_BY_NAME[cfg.table];
@@ -224,6 +189,8 @@ export async function importTrainExcel(params: {
         rows: rowCount,
       });
     }
+
+    throwIfImportAborted(params.signal);
 
     if (params.deferReadyCatalog) {
       await db
@@ -254,7 +221,9 @@ export async function importTrainExcel(params: {
       file_checksum_sha256: checksum,
     };
   } catch (e) {
-    await db.delete(trainDataSources).where(eq(trainDataSources.id, sourceId));
+    if (!params.sourceId) {
+      await db.delete(trainDataSources).where(eq(trainDataSources.id, sourceId));
+    }
     throw e;
   }
 }

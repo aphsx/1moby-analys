@@ -208,20 +208,6 @@ def main() -> int:
     with psycopg.connect(db_url) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, import_status FROM train_data_sources WHERE file_checksum_sha256 = %s",
-                (checksum,),
-            )
-            existing = cur.fetchone()
-            if existing:
-                print(
-                    f"Already imported (checksum match): source_id={existing[0]} "
-                    f"status={existing[1]}",
-                    file=sys.stderr,
-                )
-                wb.close()
-                return 2
-
-            cur.execute(
                 """
                 INSERT INTO train_data_sources (
                     name, client_label, original_filename,

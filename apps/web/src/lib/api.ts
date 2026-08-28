@@ -15,6 +15,9 @@ import {
 } from "./http";
 export type { TrainDataSource, PredictDataSource };
 
+/** Must stay in sync with apps/api DEFAULT_IMPORT_TIMEOUT_MS (20 minutes). */
+export const IMPORT_TIMEOUT_MS = 20 * 60 * 1000;
+
 // Helpers
 
 function asArray<T>(value: unknown): T[] {
@@ -124,6 +127,7 @@ function postTrainImportAsync(
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/train-data-sources/import/async");
     xhr.withCredentials = true;
+    xhr.timeout = IMPORT_TIMEOUT_MS;
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onUploadBytes) {
@@ -172,6 +176,13 @@ function postTrainImportAsync(
     };
 
     xhr.onerror = () => reject(new Error("Upload failed"));
+    xhr.ontimeout = () => {
+      const err = new Error("นำเข้าข้อมูลหมดเวลา กรุณาลองใหม่อีกครั้ง") as Error & {
+        code: string;
+      };
+      err.code = "IMPORT_TIMEOUT";
+      reject(err);
+    };
     xhr.send(fd);
   });
 }
@@ -196,6 +207,7 @@ function waitForTrainImportDone(
   return new Promise((resolve, reject) => {
     let stopped = false;
     let timer: ReturnType<typeof setInterval> | null = null;
+    const deadline = Date.now() + IMPORT_TIMEOUT_MS;
 
     const stop = () => {
       stopped = true;
@@ -205,6 +217,15 @@ function waitForTrainImportDone(
 
     const tick = async () => {
       if (stopped) return;
+      if (Date.now() > deadline) {
+        stop();
+        const err = new Error("นำเข้าข้อมูลหมดเวลา กรุณาลองใหม่อีกครั้ง") as Error & {
+          code: string;
+        };
+        err.code = "IMPORT_TIMEOUT";
+        reject(err);
+        return;
+      }
       try {
         const snap = await pollTrainImportProgress(sourceId);
 
@@ -221,6 +242,9 @@ function waitForTrainImportDone(
             source_id?: string;
           };
           if (snap.code) err.code = snap.code;
+          else if ((snap.message ?? "").toLowerCase().includes("timed out")) {
+            err.code = "IMPORT_TIMEOUT";
+          }
           if (snap.source_id) err.source_id = snap.source_id;
           reject(err);
           return;
@@ -376,10 +400,30 @@ export async function uploadPredictDataFile(
   if (client_label) fd.append("client_label", client_label);
   if (notes) fd.append("notes", notes);
 
-  const res = await apiFetch("/api/predict-data-sources/import", { method: "POST", body: fd });
+  let res: Response;
+  try {
+    res = await apiFetch("/api/predict-data-sources/import", {
+      method: "POST",
+      body: fd,
+      signal: AbortSignal.timeout(IMPORT_TIMEOUT_MS),
+    });
+  } catch (e) {
+    if (typeof DOMException !== "undefined" && e instanceof DOMException && e.name === "TimeoutError") {
+      const err = new Error("นำเข้าข้อมูลหมดเวลา กรุณาลองใหม่อีกครั้ง") as Error & { code: string };
+      err.code = "IMPORT_TIMEOUT";
+      throw err;
+    }
+    throw e;
+  }
   const body = await parseJson(res);
   if (!res.ok) {
-    throw new Error(isApiError(body) ? body.message : `Import failed (${res.status})`);
+    const err = new Error(
+      isApiError(body) ? body.message : `Import failed (${res.status})`
+    ) as Error & { code?: string };
+    if (typeof body === "object" && body !== null && typeof (body as { code?: unknown }).code === "string") {
+      err.code = (body as { code: string }).code;
+    }
+    throw err;
   }
   return body as PredictImportDone;
 }

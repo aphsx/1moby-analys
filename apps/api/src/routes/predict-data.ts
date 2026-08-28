@@ -11,13 +11,19 @@ import { db } from "../db/client";
 import { predictDataSources, user } from "../db/schema";
 import { requireUser } from "../lib/auth-middleware";
 import { denyNotFound } from "../lib/access-control";
-import { UUID_RE, MAX_UPLOAD_BYTES } from "../lib/constants";
+import { UUID_RE, maxUploadBytes } from "../lib/constants";
 import { importPredictExcel, type PredictImportResult } from "../lib/predict-import";
-import { abortPredictDataSource } from "../lib/abort-data-source";
+import { abortPredictDataSource, releaseStalePredict } from "../lib/abort-data-source";
 import { cleanPredictFromRaw } from "../lib/predict-clean";
 import { isXlsxFilename, mapDataSourceRow } from "../lib/data-import/data-source-dto";
 import { getPredictCutoffSuggestion } from "../lib/clean-cutoff";
 import { createAutoPredictionRun } from "../lib/auto-prediction-run";
+import {
+  IMPORT_TIMEOUT_CODE,
+  isImportTimeoutError,
+  throwIfImportAborted,
+  withImportTimeout,
+} from "../lib/import-timeout";
 
 const sourceSelect = {
   id: predictDataSources.id,
@@ -42,6 +48,7 @@ const sourceSelect = {
 export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
   .use(requireUser)
   .get("/", async () => {
+    await releaseStalePredict();
     const rows = await db
       .select(sourceSelect)
       .from(predictDataSources)
@@ -95,9 +102,10 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
       }
 
       const buffer = Buffer.from(await body.file.arrayBuffer());
-      if (buffer.length > MAX_UPLOAD_BYTES) {
+      const limit = maxUploadBytes();
+      if (buffer.length > limit) {
         set.status = 413;
-        return { message: `File exceeds ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit` };
+        return { message: `File exceeds ${Math.round(limit / (1024 * 1024))}MB limit` };
       }
 
       const displayName = body.name?.trim() || filename;
@@ -105,41 +113,49 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
       let sourceId = "";
 
       try {
-        const rawResult = await importPredictExcel({
-          buffer,
-          filename,
-          name: displayName,
-          imported_by: userId!,
-          client_label: body.client_label ?? null,
-          notes: body.notes ?? null,
-          deferReadyCatalog: true,
+        return await withImportTimeout(async (signal) => {
+          const rawResult = await importPredictExcel({
+            buffer,
+            filename,
+            name: displayName,
+            imported_by: userId!,
+            client_label: body.client_label ?? null,
+            notes: body.notes ?? null,
+            deferReadyCatalog: true,
+            signal,
+          });
+          sourceId = rawResult.source_id;
+
+          throwIfImportAborted(signal);
+          const cleanManifest = await cleanPredictFromRaw(sourceId);
+          const result: PredictImportResult = {
+            ...rawResult,
+            import_status: "ready",
+            clean_manifest: cleanManifest,
+          };
+
+          // Auto prediction run (default on; opt out with auto_run=false). Fully
+          // isolated from import success — createAutoPredictionRun never throws.
+          const autoRunWanted = body.auto_run !== false && body.auto_run !== "false";
+          const autoRunId = autoRunWanted
+            ? await createAutoPredictionRun({
+                predictSourceId: sourceId,
+                sourceName: displayName,
+                createdBy: userId!,
+              })
+            : null;
+
+          return { ...result, auto_prediction_run_id: autoRunId };
         });
-        sourceId = rawResult.source_id;
-
-        const cleanManifest = await cleanPredictFromRaw(sourceId);
-        const result: PredictImportResult = {
-          ...rawResult,
-          import_status: "ready",
-          clean_manifest: cleanManifest,
-        };
-
-        // Auto prediction run (default on; opt out with auto_run=false). Fully
-        // isolated from import success — createAutoPredictionRun never throws.
-        const autoRunWanted = body.auto_run !== false && body.auto_run !== "false";
-        const autoRunId = autoRunWanted
-          ? await createAutoPredictionRun({
-              predictSourceId: sourceId,
-              sourceName: displayName,
-              createdBy: userId!,
-            })
-          : null;
-
-        return { ...result, auto_prediction_run_id: autoRunId };
       } catch (e) {
         const err = e as Error;
         const message = err.message?.slice(0, 500) ?? "Import failed";
         if (sourceId) {
           await abortPredictDataSource(sourceId);
+        }
+        if (isImportTimeoutError(err)) {
+          set.status = 504;
+          return { message, code: IMPORT_TIMEOUT_CODE };
         }
         set.status = 400;
         return { message };
@@ -147,7 +163,7 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
     },
     {
       body: t.Object({
-        file: t.File(),
+        file: t.File({ maxSize: maxUploadBytes() }),
         name: t.Optional(t.String()),
         client_label: t.Optional(t.String()),
         notes: t.Optional(t.String()),

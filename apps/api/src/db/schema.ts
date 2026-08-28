@@ -104,7 +104,7 @@ export const trainDataSources = pgTable(
     name:                 text("name").notNull(),
     clientLabel:          text("client_label"),
     originalFilename:     text("original_filename").notNull(),
-    fileChecksumSha256: text("file_checksum_sha256").notNull().unique(),
+    fileChecksumSha256: text("file_checksum_sha256").notNull(),
     fileSizeBytes:        bigint("file_size_bytes", { mode: "number" }),
     importStatus:         text("import_status").notNull().default("pending"),
     importedAt:           timestamp("imported_at", { withTimezone: true }),

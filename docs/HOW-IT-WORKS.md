@@ -123,8 +123,7 @@ spreadsheet line. Dates that Excel gave as serial numbers are wrapped as
 
 Every clean row keeps `raw_row_id` + `excel_row`. Full lineage back to the spreadsheet.
 
-**Re-uploading the same file is blocked** by a SHA-256 checksum on the source row.
-Re-importing to the same `source_id` deletes and re-inserts (CASCADE by `source_id`).
+**Re-uploading the same file is allowed** — each upload is a new snapshot (checksum is stored for audit, not uniqueness). There is no merge with prior sources.
 
 ---
 
@@ -133,7 +132,7 @@ Re-importing to the same `source_id` deletes and re-inserts (CASCADE by `source_
 `POST /predict-data-sources/import` (any user) or `POST /train-data-sources/import` (admin):
 
 1. Browser POSTs the `.xlsx` via `XMLHttpRequest` so upload byte progress is visible.
-2. Elysia SHA-256s the buffer, checks for a duplicate, reads the workbook with `xlsx`,
+2. Elysia SHA-256s the buffer (audit only — duplicates are allowed as new snapshots), reads the workbook with `xlsx`,
    and validates that all 8 required sheets exist and each has its required headers.
    A missing header aborts before a single row is written.
 3. A `*_data_sources` catalog row is created with `import_status='importing'` **first**,
