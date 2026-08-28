@@ -215,7 +215,7 @@ were **permanently cut** — do not reintroduce them.
 
 ## Job Flow (prediction run)
 
-1. Admin imports predict data on `/runs` (`POST /predict-data-sources/import`) — raw + clean in one job;
+1. A signed-in user imports predict data on `/runs` (`POST /predict-data-sources/import`) — raw + clean in one job;
    progress streamed via Redis Stream `predict-import:{source_id}`.
 2. On import success an **auto prediction run** is created + triggered with the suggested cutoff
    (`apps/api/src/lib/auto-prediction-run.ts`; opt out with `auto_run: false`). Users can still
