@@ -43,6 +43,8 @@
 9. [Metrics — F1 / PR-AUC / ECE / Spearman / coverage คำนวณอย่างไร](#9-metrics)
 10. [Promotion Gate — โมเดลใหม่จะขึ้น production ได้ต้องผ่านอะไรบ้าง](#10-promotion-gate)
 11. [ภาคผนวก: ตารางค่าคงที่ทั้งหมด](#11-ภาคผนวก-ตารางค่าคงที่)
+12. [Design contract & policy (หลักการ/นโยบาย/เหตุผล)](#12-design-contract--policy-สัญญาการออกแบบ--นโยบาย)
+13. [Output contract (สัญญา field ของ ml_prediction_outputs)](#13-output-contract-สัญญา-field-ของ-ml_prediction_outputs)
 
 ---
 
@@ -751,3 +753,72 @@ metric ตอนเทรน (ข้อ 9.1–9.3) วัดบน **test/backte
 - **CLV** = แข่งกันด้วย validation Spearman; **p_alive** จาก BG/NBD เสมอ
 - **Credit** = quantile regression (p50), ช่วงคุมด้วย CQR 80%
 - **Metric ทุกตัว** คำนวณด้วยสูตรมาตรฐานใน `metrics.py` บน test/backtest จริง และต้อง **ชนะ baseline + champion เดิม** ถึงจะขึ้น production — ทั้งหมดตรวจสอบย้อนได้จากโค้ดที่อ้างอิงไว้
+
+---
+
+## 12. Design contract & policy (สัญญาการออกแบบ + นโยบาย)
+
+> ยุบมาจาก `ML-V2-TRAINING-PIPELINE.md` เดิม — ส่วนที่เป็น "หลักการ/นโยบาย/เหตุผล"
+> (ตัวเลข/สูตรที่เป็นทางการดูหัวข้อ 1–11 ด้านบน ซึ่งอิงโค้ดจริง; ถ้าขัดกันให้เชื่อโค้ด)
+
+### 12.1 หลักการที่ห้ามละเมิด
+
+1. **Point-in-time (PIT):** feature เห็นได้เฉพาะข้อมูลก่อน cutoff, label มาจากข้อมูลหลัง cutoff ภายใน horizon เท่านั้น
+2. **Temporal split เท่านั้น** — ห้าม random split (ข้อมูลเป็น time-series พฤติกรรม; random split = ให้โมเดลแอบเห็นอนาคต)
+3. **โมเดลต้องชนะ baseline** ถึงจะ promote — ถ้าไม่ชนะกฎง่ายๆ แปลว่ายังไม่ควรใช้ ML
+4. **Probability ต้อง calibrated** — เพราะ downstream คูณเงิน (`revenue_at_risk = p × CLV`)
+5. **Reproducible** — fix seed, บันทึก config + `feature_code_hash` + เวอร์ชัน library ใน `ml_training_runs.training_config_json`
+6. **หลักฐานทุกอย่างลง DB** — metric → `ml_model_evaluations`, gate/leakage → `ml_data_validation_reports` (หน้าเว็บ/การ promote อ่านจาก DB ไม่ใช่ log)
+
+### 12.2 Class imbalance
+
+- churn rate จริง ~5–40% ของ active paid → ใช้ `scale_pos_weight`/`class_weight`
+- **ห้าม SMOTE/oversampling** (บิด distribution → calibration พังทั้งระบบ ขัดข้อ 12.1(4))
+- วัดด้วย **PR-AUC** เป็นหลัก ไม่ใช่ accuracy (accuracy โกหกเมื่อ class เอียง)
+
+### 12.3 เหตุผลการเลือกโมเดล (ทำไมตัวนี้)
+
+- **Churn:** LightGBM เป็นตัวเต็ง (tabular ~10⁴ แถว, กิน missing ได้ตรงๆ, เทรนเร็วพอทำ Optuna + backtest หลาย cutoff, มี SHAP); TabICL แข่งใน default set; LR เป็น ML baseline. **ยังไม่ทำ ensemble** — ที่ข้อมูลขนาดนี้กำไร ~1–2% ไม่คุ้มความซับซ้อน (artifact ×2, calibration/SHAP ยากขึ้น)
+- **CLV:** BG/NBD+Gamma-Gamma (ให้ `p_alive` ฟรี, ดีกับ data น้อย) แข่ง LightGBM Tweedie/Hurdle; ตัดสินด้วย **Spearman** (งานจริงคือจัดอันดับมูลค่า ไม่ใช่ทายเป๊ะ)
+- **Credit:** LightGBM quantile (p10–p90) + anchor บน carryover (log-ratio) + shrinkage λ + CQR — ออกแบบให้ "ไม่แพ้ baseline เชิงโครงสร้าง" (λ=0 = carryover เป๊ะ)
+
+### 12.4 Feature tiers (ทำไมใช้แค่ Tier A)
+
+- **Tier A** — สร้างจาก event history (payments/usage) ย้อนเวลาได้ → PIT-safe เสมอ → **ใช้เทรน**
+- **Tier B** — snapshot (`credit_*`, `status_*`, `expire_*`) = ค่า "ตอน export" ไม่ใช่ ณ cutoff → เทรน = leak อนาคต → **ห้ามเทรน** (แสดงใน `profile_snapshot` ได้)
+- **Tier C** — `last_access`, `last_send` = ใกล้ label เกินไป → **ห้าม**
+- เพิ่ม feature ใหม่ได้เมื่อผ่าน PIT review + อัปเดต `feature_schema_json` + `feature_code_hash` เปลี่ยน + เทรนเป็น feature set version ใหม่
+
+### 12.5 Retraining policy
+
+Trigger ให้ retrain: (1) มี dataset ใหม่ import สำเร็จ, (2) ตามรอบ ~90 วัน (มี label สดครบ horizon), (3) feature drift PSI > 0.2, (4) performance decay จาก realized outcome
+- **เทรนใหม่หมดทุกครั้ง** ที่ cutoff ใหม่ (ไม่มี incremental — data ขนาดนี้เทรนไม่กี่นาที, reproducible สำคัญกว่า) → challenger เทียบ champion ผ่าน promotion gate (หัวข้อ 10)
+- **Realized-outcome loop:** ครบ horizon + มีข้อมูลใหม่ → คำนวณ label จริง → วัดเทียบที่เคยทำนาย → เก็บ `ml_model_evaluations` (`evaluation_type='production_holdout'`) = ตัวเลขที่ซื่อสัตย์ที่สุด
+
+### 12.6 Artifacts + Model card
+
+เก็บที่ `models/{model_type}/{version}/`: `model.pkl`, `calibrator.pkl` (churn), `preprocessor.json`, `feature_names.json`, `thresholds.json`, `metrics.json`, `model_card.json/.md`, `training_log.txt`
+**Model card ต้องมี:** version, วันที่/cutoff/horizon, dataset (source_id/แถว/positive rate), feature set (ชื่อ+version+hash), algorithm+params, ผลทุก split + baseline + backtest, calibration+ECE, thresholds, leakage results, ข้อจำกัด, ผู้เทรน — path+checksum ลง `ml_model_versions`
+
+### 12.7 Definition of Done (ระบบเทรน)
+
+- รัน training run จบจาก CLI/API เดียว: gates → train → eval → promote → artifacts ครบ
+- `ml_model_evaluations` มีแถว baseline + candidate ทุก split ทุก cutoff
+- leakage suite รันอัตโนมัติ และเคย "จับ leak จริง" ได้ (ทดสอบโดยจงใจใส่ leak แล้วต้อง fail)
+- champion มี alias `production` + model card + artifact load test ผ่าน
+- หน้า Model Performance แสดงค่าจาก DB ล้วน (ไม่มี mock)
+- prediction runner ใช้ champion + preprocessor + calibrator ชุดเดียวกับที่เทรน (`feature_code_hash` ตรง)
+
+---
+
+## 13. Output contract (สัญญา field ของ `ml_prediction_outputs`)
+
+> ยุบมาจาก `ML-V2-OUTPUT-CONTRACT.md` เดิม — รายการ field แบบเต็มดูหัวข้อ 2, 3, 7 ด้านบน (lifecycle, churn/CLV/credit, derived, descriptive, meta)
+
+กติกาหลัก:
+1. **1 แถวต่อลูกค้าต่อ run** — `UNIQUE(prediction_run_id, acc_id)`
+2. **ลูกค้าทุกคนต้องมีแถว** แม้ทำนายไม่ได้ — field ที่ทำนายไม่ได้เป็น `null` พร้อมเหตุผลใน `model_eligibility_json`
+3. output เก็บ **scalar ต่อลูกค้า** เท่านั้น — time-series (กราฟ usage/payment) อ่านจาก `predict_clean_*` ตรง
+4. ทุกแถวเก็บ `model_versions_json` — รู้เสมอว่าตัวเลขมาจากโมเดลเวอร์ชันไหน (audit)
+
+ลำดับการเขียนของ prediction runner: (1) สร้าง `ml_prediction_runs` (in_progress) → (2) โหลด `predict_clean_*` → gates → features → (3) lifecycle + eligibility ทุกคน → (4) รัน champion เฉพาะ eligible + SHAP (churn) → (5) derived fields → (6) **batch insert** ทุกคน → (7) post-check (Gate 15: จำนวนแถว=ลูกค้า, คะแนนอยู่ใน [0,1], null ในกลุ่ม eligible ≈ 0) → (8) `completed`/`failed` (+`error_message` เสมอ)

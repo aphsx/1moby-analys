@@ -68,7 +68,7 @@ python scripts/profile_training_dataset.py     # dataset profiling / label viabi
 ```
 
 When asked whether an ML rebuild task is "good enough / complete / ready", use the `ml-contract-review`
-Cursor skill (`.cursor/skills/ml-contract-review/`) and the specs under `docs/ML-V2-*.md`.
+Cursor skill (`.cursor/skills/ml-contract-review/`) and `docs/ML-CALCULATIONS-TH.md` + `docs/ML-V2-DASHBOARD-SPEC.md`.
 
 ## Tech Stack
 
@@ -86,12 +86,12 @@ Cursor skill (`.cursor/skills/ml-contract-review/`) and the specs under `docs/ML
 
 ## Canonical Documentation
 
-The documentation map lives in [`docs/README.md`](docs/README.md). The ML v2 design is canonical:
+The documentation map lives in [`docs/README.md`](docs/README.md). Key references:
 
-- `docs/ML-V2-OVERVIEW.md` — system overview, scope, build phases
+- `docs/ML-CALCULATIONS-TH.md` — **canonical ML reference (TH)**: every formula, metric, threshold, constant, the `ml_prediction_outputs` output contract, plus training design-contract & policy
+- `docs/HOW-IT-WORKS.md` — plain-English end-to-end system walkthrough
+- `docs/MODEL-DEEP-DIVE-EN.md` — churn / CLV / credit design rationale + worked example (EN)
 - `docs/ML-V2-DASHBOARD-SPEC.md` — what every web page/widget shows, field-by-field
-- `docs/ML-V2-OUTPUT-CONTRACT.md` — `ml_prediction_outputs` field contract + derived-field formulas
-- `docs/ML-V2-TRAINING-PIPELINE.md` — training pipeline, anti-leakage suite, metrics, promotion gate, retraining
 - `docs/AI-ASSISTANT.md` — AI chat assistant (separate feature)
 - `moby-data-prep/docs/*` — Excel import contract, table naming, raw/clean schemas
 
@@ -121,7 +121,7 @@ moby-analytics/
 ├── moby-data-prep/    # Excel import contract docs/config + import CLI
 ├── packages/
 │   └── types/         # Shared TypeScript types (@moby/types) — single source for web + api
-├── docs/              # ML-V2-*.md + AI-ASSISTANT.md + WEB-DEV-WORKFLOW.md (see docs/README.md)
+├── docs/              # ML-CALCULATIONS-TH.md + HOW-IT-WORKS.md + MODEL-DEEP-DIVE-EN.md + specs (see docs/README.md)
 ├── models/            # ML model artifacts (.pkl, metrics.json, model_card)
 ├── data/              # Training Excel files
 ├── docker-compose.yml
@@ -201,7 +201,7 @@ Key design decisions:
 - Better Auth tables use camelCase column names — Drizzle schema preserves this in
   `apps/api/src/db/schema.ts`.
 
-## ML v2 Components (see `docs/ML-V2-OVERVIEW.md` — canonical)
+## ML v2 Components (see `docs/ML-CALCULATIONS-TH.md` — canonical)
 
 | Component           | Type                                 | Output                                              |
 | ------------------- | ------------------------------------ | --------------------------------------------------- |
@@ -230,7 +230,7 @@ were **permanently cut** — do not reintroduce them.
    `STALE_RUN_TIMEOUT_MINUTES` (default 120) as failed, on startup and every 5 minutes.
 
 Training follows the same shape via `POST /training-runs` → `/internal/training-runs` → `train_v2.py`
-(see `docs/ML-V2-TRAINING-PIPELINE.md`).
+(see `docs/ML-CALCULATIONS-TH.md` §8–§12).
 
 **Realized-outcome loop:** once a run's horizon has elapsed and newer predict data exists,
 `python -m src.cli.backfill_outcomes` (spawned via `POST /internal/outcome-backfill`, triggered by

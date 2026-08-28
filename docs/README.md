@@ -10,17 +10,17 @@ Every doc in this repo and what it answers. Start at the top.
 | [`../claude.md`](../claude.md) | **Architecture source of truth** — schema, routes, conventions, what-not-to-change | EN |
 | [`PROJECT-REPORT-TH.md`](PROJECT-REPORT-TH.md) | **รายงานโครงงานฉบับสมบูรณ์ 5 บท** — ที่มา, เทคโนโลยี, ออกแบบ, workflow, ผลการทดสอบ, สรุป | TH |
 | [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) | **Plain-English end-to-end walkthrough** — services, import, features, training/prediction run, output row, web, AI, ops | EN |
-| [`ML-CALCULATIONS-TH.md`](ML-CALCULATIONS-TH.md) | **สูตร/metric/threshold/ค่าคงที่ ML ทุกตัว** (อ้างอิงบรรทัดโค้ด) — เลขทางการยึดไฟล์นี้ | TH |
+| [`ML-CALCULATIONS-TH.md`](ML-CALCULATIONS-TH.md) | **เอกสาร ML canonical (TH)** — สูตร/metric/threshold/ค่าคงที่ ทุกตัว (อิงบรรทัดโค้ด) + output contract ของ `ml_prediction_outputs` + design contract/policy ของการเทรน | TH |
 | [`MODEL-DEEP-DIVE-EN.md`](MODEL-DEEP-DIVE-EN.md) | Churn + CLV + Credit design rationale & worked example (EN narrative; formulas → `ML-CALCULATIONS-TH.md`) | EN |
 
-## ML v2 (canonical design specs — follow over any legacy code)
+## UI spec
 
 | Doc | What it covers | Language |
 |---|---|---|
-| [`ML-V2-OVERVIEW.md`](ML-V2-OVERVIEW.md) | System overview, scope, build phases, current status | TH |
 | [`ML-V2-DASHBOARD-SPEC.md`](ML-V2-DASHBOARD-SPEC.md) | Every web page/widget, field-by-field, value provenance | TH |
-| [`ML-V2-OUTPUT-CONTRACT.md`](ML-V2-OUTPUT-CONTRACT.md) | `ml_prediction_outputs` field contract + derived-field formulas | TH |
-| [`ML-V2-TRAINING-PIPELINE.md`](ML-V2-TRAINING-PIPELINE.md) | Training pipeline, anti-leakage suite, metrics, promotion gate, retraining | TH |
+
+> เดิมมี `ML-V2-OVERVIEW` / `ML-V2-OUTPUT-CONTRACT` / `ML-V2-TRAINING-PIPELINE` แยกไฟล์ —
+> ตอนนี้ยุบรวมเข้า `ML-CALCULATIONS-TH.md` (output contract = §13, training design/policy = §12) แล้ว
 
 ## Features & workflow
 

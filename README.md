@@ -78,6 +78,8 @@ models were permanently cut.
 | [`claude.md`](claude.md) | Architecture, schema, conventions — the project's source of truth |
 | [`docs/README.md`](docs/README.md) | Index of all docs |
 | [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) | End-to-end walkthrough of the running system |
-| [`docs/ML-V2-*.md`](docs/) | ML v2 design: overview, dashboard spec, output contract, training pipeline |
+| [`docs/ML-CALCULATIONS-TH.md`](docs/ML-CALCULATIONS-TH.md) | Canonical ML reference: formulas, metrics, thresholds, output contract, training design/policy (TH) |
+| [`docs/MODEL-DEEP-DIVE-EN.md`](docs/MODEL-DEEP-DIVE-EN.md) | Churn / CLV / credit design rationale + worked example (EN) |
+| [`docs/ML-V2-DASHBOARD-SPEC.md`](docs/ML-V2-DASHBOARD-SPEC.md) | Dashboard/UI spec: every page/widget, field-by-field |
 | [`docs/AI-ASSISTANT.md`](docs/AI-ASSISTANT.md) | AI chat assistant architecture + build plan |
 | [`moby-data-prep/`](moby-data-prep/) | Excel import contract, naming convention, raw/clean schemas |
