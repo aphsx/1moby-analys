@@ -38,7 +38,7 @@
 2. เทรนโมเดล ML 3 ตัว (churn / CLV / credit) แบบกันข้อมูลรั่ว (point-in-time) และวัดผลได้จริง
 3. ทำนายผลลูกค้าทุกคนในไฟล์ พร้อมค่าต่อยอด (revenue at risk, priority, segment)
 4. แสดงผลผ่านแดชบอร์ดสำหรับผู้ใช้ภายใน และมีผู้ช่วย AI ตอบคำถามข้อมูลแบบมีการกำกับ (governed)
-5. ควบคุมสิทธิ์การเข้าถึง (admin/member) และเก็บประวัติ/เวอร์ชันโมเดลเพื่อตรวจสอบได้
+5. ควบคุมการเข้าถึงด้วยการล็อกอิน (org-shared: ผู้ที่ล็อกอินทุกคนมีสิทธิ์เท่ากัน) และเก็บประวัติ/เวอร์ชันโมเดลเพื่อตรวจสอบได้
 
 ## 1.3 ขอบเขตของโครงงาน
 
@@ -46,7 +46,7 @@
 - โมเดล 3 ตัว: **Churn** (โอกาสเลิกใช้), **CLV** (มูลค่า 6 เดือน + p_alive), **Credit forecast** (การใช้เครดิต 30/90 วัน + วันจนต้องเติม)
 - การแบ่งสถานะลูกค้าแบบกฎ (Lifecycle: Ghost / Churned / Active Paid / Active Free)
 - ผู้ช่วย AI: ถาม-ตอบความรู้บริษัท + Text-to-SQL บนข้อมูลทำนาย (อ่านอย่างเดียว)
-- ผู้ใช้ภายในราว 5–50 คน (2 บทบาท: admin / member)
+- ผู้ใช้ภายในราว 5–50 คน (org-shared: ล็อกอินด้วย Google แล้วมีสิทธิ์เท่ากันทุกคน — ไม่มีการแยกบทบาท admin/member)
 
 **อยู่นอกขอบเขต (ตัดออกถาวร):** โมเดล win-back และ conversion (`comeback_probability`, `conversion_probability`)
 รวมถึงระบบอนุมัติ/เวิร์กโฟลว์การติดต่อลูกค้า และการ deploy production จริง (ยัง "local Docker first")
@@ -158,17 +158,19 @@
 
 ### 3.1.1 ความต้องการเชิงหน้าที่ (Functional)
 
-| รหัส | ความต้องการ | บทบาท |
+> โมเดลสิทธิ์เป็นแบบ **org-shared** — ผู้ที่ล็อกอิน (Google) ทุกคนทำได้ทุกอย่างเท่ากัน ไม่มีการแยกบทบาท admin/member
+
+| รหัส | ความต้องการ | ผู้ทำ |
 |---|---|---|
-| FR-1 | นำเข้าไฟล์ Excel 8 ชีต (เทรน) แปลงเป็น raw + clean | admin |
-| FR-2 | นำเข้าไฟล์ Excel (ทำนาย) และสร้าง prediction run อัตโนมัติ | member+ |
-| FR-3 | สั่งเทรนโมเดล (เลือก cutoff/horizon) + คัด champion อัตโนมัติ | admin |
+| FR-1 | นำเข้าไฟล์ Excel 8 ชีต (เทรน) แปลงเป็น raw + clean | ผู้ล็อกอิน |
+| FR-2 | นำเข้าไฟล์ Excel (ทำนาย) และสร้าง prediction run อัตโนมัติ | ผู้ล็อกอิน |
+| FR-3 | สั่งเทรนโมเดล (เลือก cutoff/horizon) + คัด champion อัตโนมัติ | ผู้ล็อกอิน |
 | FR-4 | ทำนายลูกค้าทุกคน เขียน `ml_prediction_outputs` 1 แถว/คน/run | ระบบ |
-| FR-5 | แดชบอร์ดภาพรวม + ตารางลูกค้า + Customer 360 | member+ |
-| FR-6 | หน้าวัดผลโมเดล (champion metrics + candidate competition) | member+ |
-| FR-7 | จัดการเวอร์ชันโมเดล (activate/delete) | admin |
-| FR-8 | ผู้ช่วย AI ถาม-ตอบข้อมูล (Text-to-SQL อ่านอย่างเดียว) + ความรู้บริษัท | member+ |
-| FR-9 | วัดผลจริงย้อนหลัง (realized outcome) เมื่อครบ horizon | admin สั่ง |
+| FR-5 | แดชบอร์ดภาพรวม + ตารางลูกค้า + Customer 360 | ผู้ล็อกอิน |
+| FR-6 | หน้าวัดผลโมเดล (champion metrics + candidate competition) | ผู้ล็อกอิน |
+| FR-7 | จัดการเวอร์ชันโมเดล (activate/delete) | ผู้ล็อกอิน |
+| FR-8 | ผู้ช่วย AI ถาม-ตอบข้อมูล (Text-to-SQL อ่านอย่างเดียว) + ความรู้บริษัท | ผู้ล็อกอิน |
+| FR-9 | วัดผลจริงย้อนหลัง (realized outcome) เมื่อครบ horizon | ผู้ล็อกอิน สั่ง |
 
 ### 3.1.2 ความต้องการที่ไม่ใช่หน้าที่ (Non-functional)
 
@@ -257,8 +259,8 @@ Health            GET  /health
 
 Prediction runs   GET/POST /prediction-runs
                   GET  /prediction-runs/:id            (+ progress)
-                  POST /prediction-runs/:id/retry      (creator/admin)
-                  DELETE /prediction-runs/:id          (creator/admin)
+                  POST /prediction-runs/:id/retry      (ผู้ล็อกอิน)
+                  DELETE /prediction-runs/:id          (ผู้ล็อกอิน)
                   GET  /prediction-runs/:id/summary    (แดชบอร์ด aggregates)
                   GET  /prediction-runs/:id/outputs     (ตารางลูกค้า sort/filter/paginate)
                   GET  /prediction-runs/:id/outputs/:acc_id           (Customer 360)
@@ -413,7 +415,7 @@ docker compose up --build     # db, redis, ml, api, web
 - เทรนโมเดล 3 ตัว (churn/CLV/credit) แบบ point-in-time พร้อมคัด champion ที่ชนะ baseline และวัดผลได้จริง
 - ทำนายลูกค้าทุกคนพร้อมค่าต่อยอด (revenue at risk, segment, priority) และอธิบายด้วย SHAP
 - แดชบอร์ด + Customer 360 + Model Performance + ผู้ช่วย AI (governed Text-to-SQL + RAG)
-- ควบคุมสิทธิ์ (admin/member) และเก็บเวอร์ชัน/ประวัติเพื่อตรวจสอบได้
+- ควบคุมการเข้าถึงด้วยการล็อกอิน (org-shared, ไม่มีบทบาท admin/member) และเก็บเวอร์ชัน/ประวัติเพื่อตรวจสอบได้
 - ทดสอบ end-to-end บนชุดตัวอย่างได้ผลจริง (30,697 outputs, churn PR-AUC 0.76)
 
 ## 5.2 ปัญหาและอุปสรรค
