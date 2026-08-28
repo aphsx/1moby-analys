@@ -42,6 +42,8 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Iterable
 
+PROMOTION_TIE_EPSILON = 1e-9
+
 
 @dataclass(frozen=True)
 class PromotionConfig:
@@ -78,6 +80,8 @@ class CandidateEval:
     primary_backtests: dict[str, float] = field(default_factory=dict)
     baseline_backtests: dict[str, float] = field(default_factory=dict)
     champion_backtests: dict[str, float] | None = None
+    # Fallback incumbent metric when the new run has no shared backtest cutoff.
+    incumbent_primary_test: float | None = None
     calibration_error: float | None = None
     # Bootstrap 95% CI on the primary test metric: (ci_lower, ci_upper).
     # When supplied, decide() uses it to flag statistically uncertain wins.
@@ -173,7 +177,15 @@ def _evaluate(c: CandidateEval, config: PromotionConfig) -> CandidateDecision:
     champion_gap = _champion_gap(c, config)
     if champion_gap is not None:
         required = _champion_required_gap(c, config)
-        if champion_gap < required:
+        # A tie is not an improvement, even when the configured margin is
+        # zero. Keep the incumbent instead of rotating production to an
+        # equivalent retrain; only a strictly positive gap can promote.
+        if champion_gap <= PROMOTION_TIE_EPSILON:
+            reasons.append(
+                f"ไม่ดีกว่า champion เดิม (gap {champion_gap:+.4f}) "
+                "— ถือว่าเสมอหรือต่ำกว่า, คง champion เดิม"
+            )
+        elif champion_gap < required:
             reasons.append(
                 f"ดีกว่า champion เดิมไม่ถึงเกณฑ์ (gap {champion_gap:+.4f} < {required:.4f}) "
                 "— ถือว่าเสมอในระดับ noise, คง champion เดิม"
@@ -234,14 +246,19 @@ def _champion_gap(c: CandidateEval, config: PromotionConfig) -> float | None:
     Returns None when there is no incumbent or no shared cutoff to compare.
     """
 
-    if not c.champion_backtests:
+    if c.champion_backtests:
+        shared = [k for k in c.primary_backtests if k in c.champion_backtests]
+        if shared:
+            cand = statistics.fmean(c.primary_backtests[k] for k in shared)
+            champ = statistics.fmean(c.champion_backtests[k] for k in shared)
+            return (cand - champ) if config.higher_is_better else (champ - cand)
+    if c.incumbent_primary_test is None:
         return None
-    shared = [k for k in c.primary_backtests if k in c.champion_backtests]
-    if not shared:
-        return None
-    cand = statistics.fmean(c.primary_backtests[k] for k in shared)
-    champ = statistics.fmean(c.champion_backtests[k] for k in shared)
-    return (cand - champ) if config.higher_is_better else (champ - cand)
+    return (
+        c.primary_test - c.incumbent_primary_test
+        if config.higher_is_better
+        else c.incumbent_primary_test - c.primary_test
+    )
 
 
 def _champion_required_gap(c: CandidateEval, config: PromotionConfig) -> float:
@@ -253,12 +270,20 @@ def _champion_required_gap(c: CandidateEval, config: PromotionConfig) -> float:
     """
 
     abs_floor = config.champion_margin
-    if config.champion_margin_rel <= 0.0 or not c.champion_backtests:
+    if config.champion_margin_rel <= 0.0:
         return abs_floor
-    shared = [k for k in c.primary_backtests if k in c.champion_backtests]
-    if not shared:
+    if c.champion_backtests:
+        shared = [k for k in c.primary_backtests if k in c.champion_backtests]
+        if shared:
+            champ = statistics.fmean(c.champion_backtests[k] for k in shared)
+        elif c.incumbent_primary_test is not None:
+            champ = c.incumbent_primary_test
+        else:
+            return abs_floor
+    elif c.incumbent_primary_test is not None:
+        champ = c.incumbent_primary_test
+    else:
         return abs_floor
-    champ = statistics.fmean(c.champion_backtests[k] for k in shared)
     rel_floor = config.champion_margin_rel * abs(champ)
     return max(abs_floor, rel_floor)
 

@@ -312,6 +312,10 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
               model_type: version.modelType,
               model_version_id: version.id,
               created_by: userId ?? null,
+              // A training run can contain several model types. Do not
+              // auto-promote a temporary sole version while deleting the
+              // whole run; the run deletion must remove all of its versions.
+              auto_promote_sole_remaining: false,
             });
           } catch (error) {
             const upstream = (error as { upstreamStatus?: number }).upstreamStatus;

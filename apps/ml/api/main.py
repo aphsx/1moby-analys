@@ -184,6 +184,7 @@ async def internal_model_delete(request: Request):
             model_type=model_type,
             model_version_id=model_version_id,
             created_by=body.get("created_by"),
+            auto_promote_sole_remaining=body.get("auto_promote_sole_remaining", True),
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))

@@ -293,7 +293,13 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
         id: mlModelVersions.id,
         version: mlModelVersions.version,
         status: mlModelVersions.status,
-        isActive: mlModelVersions.isActive,
+        // The production alias is the serving source of truth. Fall back to
+        // is_active for legacy rows created before aliases were repaired.
+        isActive: sql<boolean>`CASE
+          WHEN ${mlModelAliases.id} IS NOT NULL
+            THEN ${mlModelAliases.modelVersionId} = ${mlModelVersions.id}
+          ELSE ${mlModelVersions.isActive}
+        END`,
         trainedAt: mlModelVersions.trainedAt,
         modelCardJson: mlModelVersions.modelCardJson,
         testMetricsJson: mlModelVersions.testMetricsJson,
@@ -301,6 +307,13 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
       })
       .from(mlModelVersions)
       .leftJoin(mlTrainingRuns, eq(mlModelVersions.trainingRunId, mlTrainingRuns.id))
+      .leftJoin(
+        mlModelAliases,
+        and(
+          eq(mlModelAliases.modelType, params.modelType),
+          eq(mlModelAliases.alias, "production")
+        )
+      )
       .where(eq(mlModelVersions.modelType, params.modelType))
       .orderBy(desc(mlModelVersions.trainedAt));
 
@@ -340,6 +353,13 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
         version: mlModelVersions.version,
         isActive: mlModelVersions.isActive,
         status: mlModelVersions.status,
+        isProductionAlias: sql<boolean>`EXISTS (
+          SELECT 1
+          FROM ${mlModelAliases} AS alias_row
+          WHERE alias_row.model_type = ${mlModelVersions.modelType}
+            AND alias_row.alias = 'production'
+            AND alias_row.model_version_id = ${mlModelVersions.id}
+        )`,
         createdBy: mlTrainingRuns.createdBy,
       })
       .from(mlModelVersions)
@@ -352,7 +372,7 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
     const denied = requireFoundForRead(version, set, "Model version not found");
     if (denied) return denied;
 
-    if (version!.isActive || version!.status === "production") {
+    if (version!.isActive || version!.status === "production" || version!.isProductionAlias) {
       set.status = 409;
       return {
         message:

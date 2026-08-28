@@ -10,6 +10,7 @@ the old hard-threshold gate got wrong or right, so the behaviour is pinned:
   4. best ranker but loses to the incumbent champion (aggregate) -> rejected
   5. no candidate clears the safety gate                         -> keep incumbent
   6. two clean candidates                                        -> best ranker wins
+  7. candidate ties the incumbent                                -> keep incumbent
 
 Exit code 0 when all scenarios pass, 1 otherwise.
 """
@@ -105,6 +106,26 @@ SCENARIOS = [
             _candidate("xgboost", primary_test=0.72, primary_backtests=_bt(0.71, 0.72, 0.73), calibration_error=0.03),
         ],
         "tabicl",
+    ),
+    (
+        "candidate ties incumbent -> keep incumbent",
+        [
+            _candidate("tabicl", primary_test=0.75, primary_backtests=_bt(0.71, 0.70, 0.72)),
+        ],
+        None,
+    ),
+    (
+        "candidate ties incumbent without shared backtests -> keep incumbent",
+        [
+            _candidate(
+                "tabicl",
+                primary_test=0.75,
+                primary_backtests={},
+                champion_backtests=None,
+                incumbent_primary_test=0.75,
+            ),
+        ],
+        None,
     ),
 ]
 

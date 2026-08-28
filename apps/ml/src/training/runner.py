@@ -366,6 +366,7 @@ def _train_and_register_churn(
     # on quality, not the first that squeaks past a hairline threshold.
     progress("churn: evaluate candidates + promotion policy", 35)
     incumbent_backtests = _incumbent_backtests("churn")
+    incumbent_primary_test = _incumbent_primary_test("churn", "pr_auc")
     attempts: list[dict[str, Any]] = []
     n_candidates = len(training.candidates)
     n_backtests = len(backtest_sets)
@@ -416,7 +417,7 @@ def _train_and_register_churn(
 
     by_name = {a["candidate"].name: a for a in attempts}
     decision = promotion.decide(
-        [_churn_candidate_eval(a, incumbent_backtests) for a in attempts],
+        [_churn_candidate_eval(a, incumbent_backtests, incumbent_primary_test) for a in attempts],
         CHURN_PROMOTION_CONFIG,
     )
 
@@ -684,9 +685,22 @@ def _incumbent_backtests_by_metric(model_type: str, metric_key: str) -> dict[str
     return out or None
 
 
+def _incumbent_primary_test(model_type: str, metric_key: str) -> float | None:
+    """Read the incumbent's holdout primary metric for fallback comparison."""
+    champion = current_champion(model_type)
+    if champion is None:
+        return None
+    metrics = champion.get("metrics_json") or {}
+    if isinstance(metrics, str):
+        metrics = json.loads(metrics)
+    value = metrics.get(metric_key) if isinstance(metrics, dict) else None
+    return float(value) if isinstance(value, (int, float)) else None
+
+
 def _churn_candidate_eval(
     attempt: dict[str, Any],
     incumbent_backtests: dict[str, float] | None,
+    incumbent_primary_test: float | None,
 ) -> promotion.CandidateEval:
     """Build a promotion.CandidateEval from one finalized churn candidate.
 
@@ -726,6 +740,7 @@ def _churn_candidate_eval(
         primary_backtests=primary_backtests,
         baseline_backtests=baseline_backtests,
         champion_backtests=incumbent_backtests,
+        incumbent_primary_test=incumbent_primary_test,
         calibration_error=result.test_metrics["ece"],
         primary_test_ci=test_ci,
     )
@@ -846,6 +861,7 @@ def _train_and_register_clv(
         primary_backtests=_clv_primary_backtests,
         baseline_backtests=_clv_baseline_backtests,
         champion_backtests=_incumbent_backtests_by_metric("clv", "spearman"),
+        incumbent_primary_test=_incumbent_primary_test("clv", "spearman"),
         calibration_error=None,
         primary_test_ci=_clv_test_ci,
     )
@@ -1128,6 +1144,7 @@ def _train_and_register_credit(
         primary_backtests=_credit_primary_backtests,
         baseline_backtests=_credit_baseline_backtests,
         champion_backtests=_incumbent_backtests_by_metric("credit", "coverage_p10_p90"),
+        incumbent_primary_test=_incumbent_primary_test("credit", "coverage_p10_p90"),
         calibration_error=max(0.0, coverage - COVERAGE_RANGE[1]),
         primary_test_ci=_credit_test_ci,
     )

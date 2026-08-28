@@ -134,7 +134,11 @@ function ModelStatusCard({
           <Icon size={15} className="text-[color:var(--moby-600)]" />
           {MODEL_TYPE_LABELS[modelType]}
         </span>
-        {latestResult ? (
+        {active ? (
+          <StatusPill tone="brand" icon={Check}>
+            production {active.version}
+          </StatusPill>
+        ) : versions === null && latestResult ? (
           latestResult.promoted ? (
             <StatusPill tone="brand" icon={Check}>
               promoted {latestResult.new_version ?? ""}
@@ -144,8 +148,12 @@ function ModelStatusCard({
               ไม่ promote
             </StatusPill>
           )
+        ) : versions === null ? (
+          <StatusPill tone="neutral">กำลังโหลด…</StatusPill>
         ) : (
-          <StatusPill tone="neutral">ยังไม่เทรน</StatusPill>
+          <StatusPill tone="warn" icon={X}>
+            ยังไม่มี production
+          </StatusPill>
         )}
       </div>
 
