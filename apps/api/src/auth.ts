@@ -45,13 +45,7 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
   secret: process.env.BETTER_AUTH_SECRET,
   trustedOrigins: parseTrustedOrigins(process.env.ALLOWED_ORIGINS),
-  emailAndPassword: {
-    enabled: true,
-    // Local seed uses password "123"; keep short passwords allowed for that account.
-    minPasswordLength: 3,
-    // No public self-signup — local user is seeded; everyone else uses Google.
-    disableSignUp: true,
-  },
+  emailAndPassword: { enabled: false },
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",

@@ -73,15 +73,10 @@
 
 ## 1.6 ผู้ใช้งานและบทบาท (Access model — org-shared)
 
-ข้อมูล/รัน/แดชบอร์ดทั้งหมด "เห็นร่วมกันทั้งองค์กร" (org-wide reads) มี 2 บทบาทบน `user.role`:
-
-| บทบาท | ทำอะไรได้ |
-|---|---|
-| **admin** | นำเข้าข้อมูลเทรน, สั่งเทรน, ปักธง champion, ลบเวอร์ชันโมเดล, สั่ง backfill; + ทุกอย่างของ member |
-| **member** | ดูทุกอย่าง, นำเข้าข้อมูลทำนาย, สร้าง prediction run, ใช้ AI chat |
-
-การลบเป็นแบบ "ผู้สร้างหรือแอดมิน" (creator-or-admin); บทสนทนา AI เป็นส่วนตัวรายคน
-แอดมินเริ่มต้น (local dev): `admin@example.com` / `123` (พิมพ์ `admin` ในฟอร์มล็อกอินได้)
+ข้อมูล/รัน/แดชบอร์ดทั้งหมด "เห็นร่วมกันทั้งองค์กร" (org-wide reads)
+ผู้ใช้ที่ล็อกอินแล้วทำได้ทุกอย่าง — นำเข้าเทรน/ทำนาย, สั่งเทรน, ปักธง champion, ลบ, สั่ง backfill
+ไม่มีบทบาท admin/member; บทสนทนา AI เป็นส่วนตัวรายคน
+เข้าสู่ระบบด้วย Google OAuth เท่านั้น
 
 ---
 
@@ -115,7 +110,7 @@
 ## 2.3 เทคโนโลยีฝั่ง Backend/API (`apps/api`)
 
 - **Elysia.js** รันบน **Bun** — เป็นเจ้าของ REST + Auth + SSE ทั้งหมด
-- **Better Auth** (email/password + Google OAuth; ปิดการ sign-up; เซสชัน 7 วัน)
+- **Better Auth** (Google OAuth เท่านั้น; เซสชัน 7 วัน)
 - **Drizzle ORM** โหมด **introspect-only** (สะท้อน schema จาก `db/init/001_schema.sql` เท่านั้น ห้าม generate/push)
 - **ioredis** สำหรับ Redis Streams (ความคืบหน้าการ import)
 - ไลบรารีอ่าน Excel: `xlsx`
@@ -273,28 +268,28 @@ Prediction runs   GET/POST /prediction-runs
                   POST /prediction-runs/:id/outputs/:acc_id/ai-explanation
 
 Data sources      POST /predict-data-sources/import   (auto prediction run)
-                  POST /train-data-sources/import[/async]   [admin]
+                  POST /train-data-sources/import[/async]
                   GET  /{train,predict}-data-sources[/...]  (list/detail/progress/suggested-cutoff)
-                  DELETE /{train,predict}-data-sources/:id  (creator/admin)
+                  DELETE /{train,predict}-data-sources/:id
 
-Training/models   POST /training-runs   [admin]      GET /training-runs[/:id]
+Training/models   POST /training-runs              GET /training-runs[/:id]
                   GET  /model-performance             GET /model-performance/:type/versions
-                  POST /model-performance/:type/activate            [admin]
-                  DELETE /model-performance/:type/versions/:id      [admin]
-                  POST /outcome-backfill              [admin]
+                  POST /model-performance/:type/activate
+                  DELETE /model-performance/:type/versions/:id
+                  POST /outcome-backfill
 
 AI chat           GET  /ai-chat/config
                   GET/POST/PATCH/DELETE /ai-chat/conversations[/:id]
                   POST /ai-chat/conversations/:id/messages          (SSE token stream)
 ```
 
-ทุก route อยู่หลัง `requireUser`; การเขียนที่กระทบสถานะร่วม (train import, training, activate, backfill) อยู่หลัง `requireAdmin`
+ทุก route อยู่หลัง `requireUser`; ผู้ใช้ที่ล็อกอินแล้วทำได้ทุกอย่าง
 
 ## 3.7 การออกแบบส่วนติดต่อผู้ใช้ (หน้าเว็บ)
 
 | หน้า | เส้นทาง | ทำอะไร |
 |---|---|---|
-| Login | `/login` | อีเมล/รหัส (`admin`/`123`) หรือ Google OAuth |
+| Login | `/login` | Google OAuth |
 | Dashboard | `/` | ภาพรวม run ที่เลือก: KPI, lifecycle mix, รายได้รายเดือน, value×risk matrix, top priority, AI summary |
 | Customers | `/customers` | ตารางลูกค้า filter/sort/paginate ที่ฝั่ง server, ค้นหา, export CSV, Gen AI รายคน |
 | Customer 360 | `/customers/[id]` | รายละเอียดลูกค้า: churn/CLV/credit, profile snapshot, กราฟ usage/payment, churn factors |
@@ -304,15 +299,13 @@ AI chat           GET  /ai-chat/config
 | AI Chat | `/ai-chat` | แชตกับ Moby AI (sidebar, สตรีมคำตอบ, evidence panel SQL) |
 | Profile | `/profile` | แก้ชื่อ/อวาตาร์, ดูข้อมูล Google, ลบบัญชี |
 
-การป้องกันเส้นทาง: `proxy.ts` ตรวจเซสชัน (ยกเว้น `/login`) redirect ไป `/login?redirect=...` เมื่อยังไม่ล็อกอิน;
-สิทธิ์ admin ซ่อน/ปิดปุ่มที่เป็น mutation (พร้อม tooltip) และบังคับซ้ำที่ backend
+การป้องกันเส้นทาง: `proxy.ts` ตรวจเซสชัน (ยกเว้น `/login`) redirect ไป `/login?redirect=...` เมื่อยังไม่ล็อกอิน
 
 ## 3.8 การออกแบบความปลอดภัยและสิทธิ์
 
-- **Better Auth** — email/password (ปิด sign-up) + Google OAuth; เซสชัน 7 วัน
-- **Middleware** — `userPlugin` derive `{userId, userRole, isAdmin}`; `requireUser` (401), `requireAdmin` (401/403)
-- **Admin bootstrap** — `ADMIN_EMAILS` และ `SEED_LOCAL_ADMIN` (seed `admin@example.com`)
-- **Access control** — reads เปิดทั้งองค์กร; delete/retry = creator-or-admin; บทสนทนา AI = เจ้าของเท่านั้น
+- **Better Auth** — Google OAuth เท่านั้น; เซสชัน 7 วัน
+- **Middleware** — `userPlugin` derive `{userId}`; `requireUser` (401)
+- **Access control** — reads และ writes เปิดทั้งองค์กรสำหรับผู้ใช้ที่ล็อกอินแล้ว; บทสนทนา AI = เจ้าของเท่านั้น
 - **Internal token** — Elysia→FastAPI กันด้วย `x-internal-token`
 
 ## 3.9 การออกแบบผู้ช่วย AI (Governed)
@@ -338,7 +331,7 @@ docker compose up --build     # db, redis, ml, api, web
 
 - Postgres จะ bootstrap schema จาก `db/init/001_schema.sql` อัตโนมัติเมื่อสร้าง volume ใหม่
 - ตัวแปรแวดล้อมสำคัญ: `DATABASE_URL`, `REDIS_HOST`, `INTERNAL_SERVICE_TOKEN`, `BETTER_AUTH_SECRET`,
-  `ELYSIA_URL`, `ML_INTERNAL_URL`, `ADMIN_EMAILS`, `SEED_LOCAL_ADMIN`, `LLM_*`/`OLLAMA_*`
+  `ELYSIA_URL`, `ML_INTERNAL_URL`, `LLM_*`/`OLLAMA_*`
 - สำหรับ Cloud Agent/นักพัฒนา มีสคริปต์ตั้งค่าอัตโนมัติใน `.cursor/` (ดูหมายเหตุการรันใน `docs/WEB-DEV-WORKFLOW.md`)
 
 > **ผลการติดตั้งจริง (ทดสอบในเซสชันนี้):** ทั้ง 5 บริการขึ้นครบและ healthy — `api /health` ตอบ `db:connected`,
@@ -347,17 +340,17 @@ docker compose up --build     # db, redis, ml, api, web
 ## 4.2 ขั้นตอนการทำงานจริง (Workflow ตั้งแต่ต้นจนจบ)
 
 ### 4.2.1 เข้าสู่ระบบ
-ผู้ใช้เปิด `http://localhost:3000` → ถูก redirect ไป `/login` → ล็อกอิน (`admin`/`123` หรือ Google)
-→ Better Auth ออก session cookie → เข้าถึงหน้าอื่นได้ (member เห็นทุกอย่าง, admin เห็นปุ่ม mutation เพิ่ม)
+ผู้ใช้เปิด `http://localhost:3000` → ถูก redirect ไป `/login` → ล็อกอินด้วย Google
+→ Better Auth ออก session cookie → เข้าถึงหน้าอื่นได้
 
-### 4.2.2 นำเข้าข้อมูลเทรน + เทรนโมเดล (admin)
+### 4.2.2 นำเข้าข้อมูลเทรน + เทรนโมเดล
 1. ไปหน้า **Training** → อัปโหลด Excel 8 ชีต → ระบบ parse → `train_raw_*` → clean → `train_clean_*`
    (progress สตรีมผ่าน Redis)
 2. เลือก cutoff (ต้องเป็นวันที่ 1 ของเดือน) แล้วสั่งเทรน → Elysia ตรวจ Gate 3 (ช่วงเวลา/label พอไหม)
    → เรียก FastAPI `/internal/training-runs` → spawn `train_v2.py`
 3. Pipeline: Gates 1–5 → labels+features → split → baselines → candidates (Optuna) → calibration
    → evaluation → **promotion gate** → ถ้าผ่านจะปักธง `production`
-4. การ์ดสถานะโมเดลอัปเดตเป็น champion ใหม่ (มีปุ่ม activate/delete เวอร์ชันสำหรับ admin)
+4. การ์ดสถานะโมเดลอัปเดตเป็น champion ใหม่ (มีปุ่ม activate/delete เวอร์ชัน)
 
 ### 4.2.3 นำเข้าข้อมูลทำนาย + สร้าง prediction run
 1. ไปหน้า **Runs** → นำเข้า Excel ทำนาย → clean → **auto prediction run** (ปิดได้ด้วย `auto_run=false`)
@@ -378,7 +371,7 @@ docker compose up --build     # db, redis, ml, api, web
 → orchestrator เลือก tool → Text-to-SQL ผ่าน validator → รัน read-only → ตอบพร้อม evidence (SQL + จำนวนแถว + แหล่งอ้างอิง) แบบสตรีม
 
 ### 4.2.7 Realized outcome / retrain
-เมื่อ horizon ของ run ครบและมีข้อมูลใหม่มายืนยัน admin สั่ง `POST /outcome-backfill`
+เมื่อ horizon ของ run ครบและมีข้อมูลใหม่มายืนยัน ผู้ใช้สั่ง `POST /outcome-backfill`
 → สร้าง label จริง → วัดด้วยฟังก์ชัน metric ตัวเดียวกับตอนเทรน → เก็บเป็น `ml_model_evaluations` (production_holdout)
 
 ## 4.3 ผลการทดสอบจริง (End-to-end บนชุดข้อมูลตัวอย่าง)

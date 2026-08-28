@@ -15,10 +15,9 @@ predict customer churn, segment customers by CLV / value tier, and forecast cred
 **Access model (org-shared):** all data sources, runs, and dashboards are visible to every
 authenticated user. There is no admin/member role — any signed-in user can import train
 and predict data, trigger training, pin production models, delete sources/runs, and
-trigger outcome backfill. Local Docker/dev seeds `admin@example.com` / `123` on API boot
-when `SEED_LOCAL_USER` is enabled (default outside production); type `admin` on the login
-form. AI chat conversations stay private per user, but Text-to-SQL queries are scoped
-org-wide (deterministic id allowlist in `apps/api/src/lib/ai/scope.ts`).
+trigger outcome backfill. Sign-in is Google OAuth. AI chat conversations stay private per user, but
+Text-to-SQL queries are scoped org-wide (deterministic id allowlist in
+`apps/api/src/lib/ai/scope.ts`).
 
 **Deployment target:** Local Docker first. Production decision deferred.
 
@@ -341,7 +340,6 @@ ALLOWED_ORIGINS          # http://localhost:3000
 INTERNAL_SERVICE_TOKEN   # shared with ml service
 ML_INTERNAL_URL          # http://ml:8000
 ML_INTERNAL_TIMEOUT_MS   # Elysia → FastAPI call timeout (default 30000)
-SEED_LOCAL_USER          # seed admin@example.com / 123 on API boot (default on unless production)
 STALE_RUN_TIMEOUT_MINUTES # reaper threshold for stuck runs (default 120)
 MODEL_DIR                # /app/models
 OLLAMA_API_KEY / OLLAMA_HOST / OLLAMA_MODEL        # AI chat + insights
