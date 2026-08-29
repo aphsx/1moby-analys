@@ -157,8 +157,8 @@
 - วันจนต้องเติม (top-up) ใช้ **AFT survival model** (จัดการข้อมูลถูกตัดปลาย/censored เมื่อยังไม่ top-up)
 
 ### 2.7.4 AI Assistant
-- **RAG (Retrieval-Augmented Generation)** ด้วย **pgvector** (ค้นด้วย cosine similarity) สำหรับความรู้บริษัท
-- **Text-to-SQL** ที่ผ่านตัวตรวจ (validator) ก่อนรันจริง — ป้องกันคำสั่งเขียน/คำสั่งอันตราย
+- **Text-to-SQL** ที่ผ่านตัวตรวจ (validator) ก่อนรันจริง — ป้องกันคำสั่งเขียน/คำสั่งอันตราย (ส่วนที่ทำงานจริงตอนนี้)
+- **RAG (Retrieval-Augmented Generation)** ด้วย **pgvector** (cosine similarity) สำหรับความรู้บริษัท — **อยู่ระหว่างพัฒนา (planned)** ยังไม่มีตาราง vector ใน schema จริง
 
 ---
 
@@ -207,12 +207,19 @@ FastAPI :8000  ← Elysia เรียกภายในเท่านั้น
 Python runners → เขียนผลลง PostgreSQL (ตาราง ml_*)
 ```
 
-Elysia เป็นเจ้าของ REST/auth/SSE ทั้งหมด; FastAPI เป็นบริการภายในที่กันด้วย `INTERNAL_SERVICE_TOKEN`;
-งานหนัก ML รันเป็น CLI ที่ spawn จาก FastAPI
+### 3.2.1 การเชื่อมต่อบริการจริง (ตรวจจากโค้ด)
+
+- **Elysia (`apps/api/src/index.ts`)** — ประกอบแอปด้วย `.mount(auth.handler)` (Better Auth คุม `/api/auth/*`) + 7 route groups (train-data, predict-data, ai-chat, prediction-runs, training-runs, model-performance, outcome-backfill) + `GET /health`; ตอน boot รัน `releaseStaleTrainImports/Predict()` (ปล่อย import ค้าง), `ensureImportSchemaCompat()` (idempotent — สั่ง `ALTER TABLE "user" DROP COLUMN IF EXISTS role` ทำให้เป็น org-shared), และ `startStaleRunReaper()`; `listen` ที่ `hostname:"::"` (dual-stack), `maxRequestBodySize` ใหญ่พอสำหรับ `.xlsx`, `idleTimeout:0`
+- **FastAPI (`apps/ml/api/main.py`) เป็น internal-only** — กันด้วย header `x-internal-token` เทียบแบบ `hmac.compare_digest` กับ `INTERNAL_SERVICE_TOKEN`
+  - `/internal/training-runs`, `/internal/prediction-runs`, `/internal/outcome-backfill` — **spawn subprocess แบบ detached** (`subprocess.Popen([python, "-m", "src.cli.train|predict|backfill_outcomes", "--...-id", id], start_new_session=True)`) แล้ว **คืนค่าทันที** (fire-and-forget); ตัว runner ที่ถูก spawn เป็นผู้ปรับ status/progress บนแถว run เอง (แถว run ถูกสร้างโดย Elysia ก่อน = pending)
+  - `/internal/model-activate`, `/internal/model-delete` — **synchronous** เรียก `src.training.registry` ตรงๆ (ปรับ alias + activation history ในทรานแซกชันเดียว)
+- **CLI (`src/cli/train.py` / `predict.py`)** — บางมาก: argparse → `import runner` → `run_training(id)` / `run_prediction(id)`
+
+สรุป: Elysia เป็นเจ้าของ REST/auth/SSE ทั้งหมด; FastAPI ไม่รัน ML แบบ inline แต่ **แตกกระบวนการลูก** ให้ทำงานเบื้องหลัง จึงตอบ HTTP กลับได้ทันทีและ debug ผ่าน `docker compose logs ml` ได้ (subprocess inherit stdout/stderr)
 
 ## 3.3 การออกแบบฐานข้อมูล (`db/init/001_schema.sql`)
 
-ตระกูลตารางทั้งหมด:
+ตระกูลตารางทั้งหมด (schema จริงมี **39 ตาราง** ใน `001_schema.sql`; ไม่มี migration framework):
 
 **(1) Auth (Better Auth):** `user` (id, name, email, image, role*, givenName, familyName, locale), `session`, `account`, `verification`
 (* คอลัมน์ `role` ถูกยกเลิกแล้วในโมเดล org-shared)
@@ -224,13 +231,13 @@ Elysia เป็นเจ้าของ REST/auth/SSE ทั้งหมด; Fa
 
 **(3) Predict raw/clean:** `predict_data_sources` (คล้าย train แต่ไม่มี checksum unique + มี `prediction_run_id`), `predict_raw_sheet_*` (8), `predict_clean_customers/payments/usage`
 
-**(4) ML runtime (`ml_*`):**
-- `ml_training_runs` — id, source_id, cutoff_date, horizon_days, status, progress_json, results_json, training_config_json, created_by, timestamps, error_message
-- `ml_prediction_runs` — id, predict_source_id, name, cutoff_date, status, progress_json, total_customers, model_versions_json, created_by, timestamps
-- `ml_prediction_outputs` — **1 แถว/ลูกค้า/run** (UNIQUE(prediction_run_id, acc_id)) — เก็บผลทุกโมเดล (รายละเอียด field ดู §4.6/§4.10)
-- `ml_model_versions` (status candidate/production/archived), `ml_model_aliases` (`production` 1 ตัวต่อ model_type — unique index), `ml_model_activation_history`, `ml_model_evaluations` (holdout/backtest/production_holdout พร้อม cutoff_date, baseline_name, calibration_json), `ml_feature_sets` (feature_code_hash), `ml_data_validation_reports` (gate/leakage)
+**(4) ML runtime (`ml_*`) — คอลัมน์จริงจาก schema:**
+- `ml_training_runs` — `id`, `source_id`, `run_type` (default `initial_train`), `status`, `cutoff_date`, `horizon_days`, `training_config_json`, `progress_json`, `results_json`, `parent_training_run_id` (สำหรับ retrain lineage), `notes`, `error_message`, `created_by`, timestamps
+- `ml_prediction_runs` — `id`, `name`, `predict_source_id`, `status`, `cutoff_date`, `total_customers`, `progress_json`, `model_versions_json`, `cohort_insight_json` (AI run summary), `model_overrides_json` (override เวอร์ชันต่อ model_type), `error_message`, `created_by`, timestamps
+- `ml_prediction_outputs` — **1 แถว/ลูกค้า/run** (UNIQUE(prediction_run_id, acc_id)) คอลัมน์จริง: `lifecycle_stage`, `sub_stage`, `churn_probability(5,4)`, `churn_risk_level`, `churn_factors_json`, `predicted_clv_6m(14,2)`, `p_alive(5,4)`, `customer_value_tier`, `revenue_at_risk(14,2)`, `predicted_credit_usage_30d/90d(14,2)`, `credit_forecast_interval_json` (p10/p90×30/90), `estimated_days_until_topup`, `credit_urgency_level`, `usage_trend`, `days_since_last_activity`, `n_purchases`, `total_revenue`, `avg_transaction_value`, `ever_paid`, `priority_score(5,2)`, `segment`, `priority_rank`, `needs_review`, `ai_explanation`/`ai_reasoning_json`/`ai_generated_at`/`ai_model`/`ai_status` (Phase 2), `output_status`, `output_notes`, `model_eligibility_json`, `model_versions_json`, `profile_snapshot_json`
+- `ml_model_versions` (status candidate/production/archived), `ml_model_aliases` (`production` 1 ตัวต่อ model_type — unique index), `ml_model_activation_history`, `ml_model_evaluations` (holdout/backtest/production_holdout + cutoff_date, baseline_name, calibration_json), `ml_feature_sets` (feature_code_hash), `ml_data_validation_reports` (gate/leakage)
 
-**(5) AI chat (`ai_*`):** `ai_conversations` (user-scoped, optional `run_id`), `ai_messages` (role user/assistant, evidence_json), + วางแผน `ai_knowledge_documents`/`ai_knowledge_chunks` (embedding vector(768)) สำหรับ RAG
+**(5) AI chat (`ai_*`) — สถานะจริง:** มีเฉพาะ `ai_conversations` (user-scoped, optional `run_id`) และ `ai_messages` (role user/assistant, `evidence_json`) ที่ **live ใน schema จริง**; ตาราง knowledge/vector (`ai_knowledge_documents`, `ai_knowledge_chunks` + `embedding vector(768)`) สำหรับ RAG **ยังเป็น planned — ยังไม่มีใน `001_schema.sql`**
 
 หลักการออกแบบ: raw/clean ผูก `source_id` (CASCADE) อัปโหลดซ้ำ=ล้างแล้วใส่ใหม่; ผล ML รวมตารางเดียว; champion เลือกผ่าน alias; Drizzle สะท้อน schema เท่านั้น
 
@@ -333,15 +340,17 @@ AI chat           GET  /ai-chat/config                 provider/model + configur
 - **Access control** (`access-control.ts`) — org-shared: ผู้ล็อกอินอ่าน/แก้ได้ทุกอย่าง, guard เช็คแค่ record มีอยู่ (404); บทสนทนา AI = เจ้าของ
 - **Internal token** — Elysia→FastAPI กันด้วย `x-internal-token`
 
-## 3.9 การออกแบบผู้ช่วย AI (Governed) ละเอียด
+## 3.9 การออกแบบผู้ช่วย AI (Governed) — สถานะจริงจากโค้ด
 
-- **LLM:** Ollama Cloud (`qwen3.5:397b-cloud`) สำหรับแชต + embedding model สำหรับ RAG
-- **3 ความสามารถ:** (1) Text-to-SQL บนข้อมูลทำนาย, (2) เจาะรายลูกค้า (`get_customer`), (3) ถาม-ตอบความรู้บริษัท/ML (`search_knowledge`)
-- **Orchestrator (tool-calling loop):** normalize ประวัติ → safety check → LLM เลือก tool (query_database / get_customer / search_knowledge) → รวมคำตอบจาก evidence เท่านั้น
-- **Semantic layer:** นิยาม table/column/metric/join ที่อนุญาต + ตัวอย่างคำถามไทย→SQL
-- **SQL validator (โค้ด deterministic):** อนุญาต `SELECT` เดียว; บล็อก `INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE/COPY/EXECUTE/CALL` และ `SELECT *`; อนุญาตเฉพาะตาราง/คอลัมน์ที่ modeled; บังคับ `LIMIT`; รันด้วย read-only
-- **RAG:** chunk เอกสาร (~500 token) → embed → ค้น `ORDER BY embedding <=> query LIMIT k` (cosine, pgvector) → อ้างอิงแหล่งกลับ
-- **Streaming (SSE):** events `thinking / token / evidence / title / done / error`; เก็บ evidence (SQL, จำนวนแถว, แหล่ง) ทุกข้อความเพื่อ audit
+โครงจริงอยู่ที่ `apps/api/src/lib/ai/*` และ route `POST /ai-chat/conversations/:id/messages` (SSE)
+
+- **LLM:** Ollama Cloud (`qwen3.5:397b-cloud`) — `llm-client.ts` (`complete`/`stream`), config ใน `llm-config.ts`
+- **Orchestrator (`orchestrator.ts`) — เป็น async generator ของ SSE:** safety check (`safety.ts`) → โหลด/จำกัดประวัติ → บันทึกข้อความผู้ใช้ → **self-correcting Text-to-SQL agent** (`sql-agent.ts`) → สตรีมคำตอบที่ grounded บน evidence → บันทึกข้อความ assistant + evidence → (เทิร์นแรก) ตั้งชื่อบทสนทนา; conversation ที่ผูก run จะถูก hard-scope เฉพาะ run นั้น
+- **โหมดคำตอบจริง:** `text_to_sql` (มี SQL) หรือ `direct` (ตอบจากบริบท) — ทุกคำตอบใช้ evidence เท่านั้น
+- **Text-to-SQL guardrails:** `semantic-layer.ts` (นิยาม table/column/metric/role ที่อนุญาต), `sql-guard.ts` (validator deterministic: `SELECT` เดียว; บล็อก `INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE/COPY/EXECUTE/CALL` และ `SELECT *`; เฉพาะตาราง/คอลัมน์ที่ modeled; บังคับ `LIMIT`), `scope.ts` (จำกัดแถวตามสิทธิ์), `sql-executor.ts` (รัน read-only)
+- **นอกจากแชต:** ยังมี AI อธิบายรายลูกค้า (`customer-explanation.ts` → `ai_explanation`) และสรุประดับ run (`run-insight.ts` → `cohort_insight_json`)
+- **Streaming (SSE, `constants.ts`):** events `thinking / token / evidence / title / done / error`; เก็บ evidence (SQL, row_count, columns, warnings, sources) ทุกข้อความเพื่อ audit
+- **RAG (pgvector) = planned:** ยังไม่มีตาราง knowledge/vector ใน schema จริง (มีแค่ ai_conversations/ai_messages); เมื่อเปิดจะ chunk→embed→ค้น cosine (`embedding <=> query`) + อ้างอิงแหล่ง
 
 ---
 
