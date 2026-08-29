@@ -4,7 +4,7 @@
  * One generated customer population per run; every aggregate
  * (summary KPIs, matrix, top priority) is DERIVED from those rows with the
  * same formulas the real prediction runner will use
- * (docs/ML-V2-OUTPUT-CONTRACT.md §5), so numbers agree across pages.
+ * (docs/ML-CALCULATIONS-TH.md §7/§13), so numbers agree across pages.
  * Served by lib/mlApi.ts while NEXT_PUBLIC_ML_USE_MOCK === "1".
  */
 

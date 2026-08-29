@@ -8,19 +8,19 @@ Every doc in this repo and what it answers. Start at the top.
 |---|---|---|
 | [`../README.md`](../README.md) | Project intro, stack, how to run, ports, data flow | EN |
 | [`../claude.md`](../claude.md) | **Architecture source of truth** — schema, routes, conventions, what-not-to-change | EN |
-| [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) | **Plain-English end-to-end walkthrough** — services, import, features, training run, prediction run, output row, web, AI, ops | EN |
-| [`MODEL-CHURN-DEEP-DIVE.md`](MODEL-CHURN-DEEP-DIVE.md) | The churn model line by line — label, features, candidates, CV, calibration, thresholds, leakage suite, promotion, serving, worked example | EN |
-| [`MODEL-CLV-CREDIT-DEEP-DIVE.md`](MODEL-CLV-CREDIT-DEEP-DIVE.md) | CLV (BG-NBD / Tweedie / Hurdle, p_alive, tail blend) and credit (quantile regression, CQR, AFT top-up timing) | EN |
+| [`PROJECT-REPORT-TH.md`](PROJECT-REPORT-TH.md) | **รายงานโครงงานฉบับสมบูรณ์ 5 บท** — ที่มา, เทคโนโลยี, ออกแบบ, workflow, ผลการทดสอบ, สรุป | TH |
+| [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) | **Plain-English end-to-end walkthrough** — services, import, features, training/prediction run, output row, web, AI, ops | EN |
+| [`ML-CALCULATIONS-TH.md`](ML-CALCULATIONS-TH.md) | **เอกสาร ML canonical (TH)** — สูตร/metric/threshold/ค่าคงที่ ทุกตัว (อิงบรรทัดโค้ด) + output contract ของ `ml_prediction_outputs` + design contract/policy ของการเทรน | TH |
+| [`MODEL-DEEP-DIVE-EN.md`](MODEL-DEEP-DIVE-EN.md) | Churn + CLV + Credit design rationale & worked example (EN narrative; formulas → `ML-CALCULATIONS-TH.md`) | EN |
 
-## ML v2 (canonical — follow over any legacy code)
+## UI spec
 
 | Doc | What it covers | Language |
 |---|---|---|
-| [`ML-V2-OVERVIEW.md`](ML-V2-OVERVIEW.md) | System overview, scope, build phases, current status | TH |
 | [`ML-V2-DASHBOARD-SPEC.md`](ML-V2-DASHBOARD-SPEC.md) | Every web page/widget, field-by-field, value provenance | TH |
-| [`ML-V2-OUTPUT-CONTRACT.md`](ML-V2-OUTPUT-CONTRACT.md) | `ml_prediction_outputs` field contract + derived-field formulas | TH |
-| [`ML-V2-TRAINING-PIPELINE.md`](ML-V2-TRAINING-PIPELINE.md) | Training pipeline, anti-leakage suite, metrics, promotion gate, retraining | TH |
-| [`ML-V2-CHANGE-REVIEW.md`](ML-V2-CHANGE-REVIEW.md) | Point-in-time change log + senior review (model deletion, panel training, new features, TabICL, fixes) + required validation steps | EN |
+
+> เดิมมี `ML-V2-OVERVIEW` / `ML-V2-OUTPUT-CONTRACT` / `ML-V2-TRAINING-PIPELINE` แยกไฟล์ —
+> ตอนนี้ยุบรวมเข้า `ML-CALCULATIONS-TH.md` (output contract = §13, training design/policy = §12) แล้ว
 
 ## Features & workflow
 
@@ -29,7 +29,6 @@ Every doc in this repo and what it answers. Start at the top.
 | [`CUSTOMER-SEGMENTS.md`](CUSTOMER-SEGMENTS.md) | CS/sales segments on top of ML outputs (`segment`, `priority_rank`) | EN |
 | [`AI-ASSISTANT.md`](AI-ASSISTANT.md) | AI chat assistant — architecture, governance, build plan & status | EN |
 | [`WEB-DEV-WORKFLOW.md`](WEB-DEV-WORKFLOW.md) | How to run / rebuild the `apps/web` frontend during dev | TH |
-| [`REMEDIATION-PLAN.md`](REMEDIATION-PLAN.md) | Accuracy audit backlog — P1 CLV log-space retrain still open | EN |
 
 ## Data preparation (Excel import → clean tables)
 
@@ -46,9 +45,6 @@ Every doc in this repo and what it answers. Start at the top.
 ## Conventions
 
 - The live database schema is **always** `db/init/001_schema.sql` — there is no migration framework.
-- ML v2 docs are written in Thai by design; infrastructure docs are in English.
+- ML v2 specs + the Thai report/calculations are written in Thai by design; infrastructure/English deep-dive docs are in English.
 - If a doc disagrees with the code, the code wins — fix the doc.
-- Walkthroughs (`HOW-IT-WORKS.md`, `MODEL-*-DEEP-DIVE.md`) are the current
-  explanation of the running system. ML-V2 specs are the design contract;
-  if a number drifted (feature counts, serving policy), trust the walkthrough
-  and the code.
+- `HOW-IT-WORKS.md` + `MODEL-DEEP-DIVE-EN.md` are the current explanation of the running system; the ML-V2 specs are the design contract. If a number drifted, trust `ML-CALCULATIONS-TH.md` and the code.

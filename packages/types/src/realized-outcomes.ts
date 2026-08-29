@@ -1,5 +1,5 @@
 /**
- * Realized-outcome loop (docs/ML-V2-TRAINING-PIPELINE.md §15).
+ * Realized-outcome loop (docs/ML-CALCULATIONS-TH.md §12.5).
  *
  * After a prediction run's horizon has elapsed and newer clean data covers the
  * window, the backfill job rebuilds actual labels (same definitions as

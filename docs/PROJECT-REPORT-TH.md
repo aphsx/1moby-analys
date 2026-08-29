@@ -454,11 +454,10 @@ docker compose up --build     # db, redis, ml, api, web
 
 | เอกสาร | เนื้อหา |
 |---|---|
-| `docs/ML-CALCULATIONS-TH.md` | สูตรการคำนวณ ML เชิงลึกทุกตัว (churn/CLV/credit/metric/threshold) |
+| `docs/ML-CALCULATIONS-TH.md` | สูตร ML ทุกตัว (churn/CLV/credit/metric/threshold) + output contract + design/policy การเทรน |
 | `claude.md` | สถาปัตยกรรม, schema, conventions (source of truth) |
-| `docs/ML-V2-OVERVIEW.md` | ภาพรวม ML v2 + roadmap |
-| `docs/ML-V2-OUTPUT-CONTRACT.md` | สัญญา field ของ `ml_prediction_outputs` |
-| `docs/ML-V2-TRAINING-PIPELINE.md` | รายละเอียด pipeline การเทรน |
+| `docs/HOW-IT-WORKS.md` | walkthrough ระบบทั้งภาพ ตั้งแต่ import จนถึงหน้าเว็บ (EN) |
+| `docs/MODEL-DEEP-DIVE-EN.md` | เชิงลึกโมเดล churn/CLV/credit + worked example (EN) |
 | `docs/ML-V2-DASHBOARD-SPEC.md` | สเปกหน้าเว็บแต่ละ widget |
 | `docs/AI-ASSISTANT.md` | สถาปัตยกรรมผู้ช่วย AI |
 | `moby-data-prep/docs/*` | สัญญาการนำเข้า Excel + schema raw/clean |

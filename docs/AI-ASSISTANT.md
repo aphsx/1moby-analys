@@ -115,8 +115,8 @@ RAG is for company knowledge, not raw analytics. Pipeline:
 4. **Ground** — top-k chunks injected into the prompt; sources cited back to the user.
 
 Defaults: retrieval top ~20 → rerank to 3–5 final chunks → 2,000–4,000 token RAG budget. Re-embed only
-documents whose `content_hash` changed. Initial sources auto-ingested on first boot: `docs/ML-V2-*.md`,
-`docs/AI-ASSISTANT.md`, and the metric definitions currently hardcoded in the old `company-knowledge.ts`.
+documents whose `content_hash` changed. Initial sources auto-ingested on first boot: `docs/ML-CALCULATIONS-TH.md`,
+`docs/ML-V2-DASHBOARD-SPEC.md`, `docs/AI-ASSISTANT.md`, and the metric definitions currently hardcoded in the old `company-knowledge.ts`.
 
 ### Permissions, audit, injection defense
 - **Permissions** enforced in retrieval and SQL execution, not only the UI. Suggested roles: `viewer`
