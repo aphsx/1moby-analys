@@ -597,7 +597,33 @@ def _apply_clv(
                 ml_pred = np.clip(mag_slope * ml_pred + mag_intercept, 0.0, None)
                 predicted[clv_mask] = ml_pred
 
+    # ── Two-part representation (data-grounded): p_pay + value range + expected ──
+    # The bundled data is zero-inflated (77% earn 0) and whale-driven (top 1% =
+    # ~63% of revenue), so a single THB point is misleading. When the CLV artifact
+    # ships a two-part model we emit p_pay + a p10/p90 value range, and use its
+    # calibrated expected value (p_pay × median) as predicted_clv_6m.
+    twopart = model_object.get("twopart")
+    clv_pay_probability = np.full(len(frame), np.nan)
+    clv_interval: list[dict[str, float] | None] = [None] * len(frame)
+    if twopart is not None and clv_mask.any():
+        xx = transform_features(features_raw[clv_mask], clv_bundle["preprocessor"])
+        pp = np.clip(twopart.p_pay(xx), 0.0, 1.0)
+        v10 = twopart.value_quantile(xx, 0.10)
+        v50 = twopart.value_quantile(xx, 0.50)
+        v90 = twopart.value_quantile(xx, 0.90)
+        expected = np.clip(pp * v50, 0.0, None)
+        predicted[clv_mask] = expected  # data-grounded point CLV
+        clv_pay_probability[clv_mask] = pp
+        for i, fp in enumerate(np.flatnonzero(clv_mask)):
+            clv_interval[fp] = {
+                "p10": round(float(v10[i]), 2),
+                "p50": round(float(v50[i]), 2),
+                "p90": round(float(v90[i]), 2),
+            }
+
     frame["predicted_clv_6m"] = predicted
+    frame["clv_pay_probability"] = np.clip(clv_pay_probability, 0.0, 1.0)
+    frame["clv_forecast_interval"] = clv_interval
     frame["p_alive"] = np.clip(p_alive, 0.0, 1.0)
     return frame
 
@@ -1020,6 +1046,10 @@ def _build_output_rows(
                 if row["churn_factors"] is not None
                 else None,
                 "predicted_clv_6m": _round_or_none(row["predicted_clv_6m"], 2),
+                "clv_pay_probability": _round_or_none(row.get("clv_pay_probability"), 4),
+                "clv_forecast_interval_json": json.dumps(row["clv_forecast_interval"])
+                if row.get("clv_forecast_interval") is not None
+                else None,
                 "p_alive": _round_or_none(row["p_alive"], 4),
                 "customer_value_tier": _str_or_none(row["customer_value_tier"]),
                 "revenue_at_risk": _round_or_none(row["revenue_at_risk"], 2),
@@ -1137,6 +1167,8 @@ OUTPUT_COLUMNS = [
     "churn_risk_level",
     "churn_factors_json",
     "predicted_clv_6m",
+    "clv_pay_probability",
+    "clv_forecast_interval_json",
     "p_alive",
     "customer_value_tier",
     "revenue_at_risk",
@@ -1185,6 +1217,7 @@ def _replace_outputs(prediction_run_id: str, rows: list[dict[str, Any]]) -> None
         not in (
             "prediction_run_id",
             "churn_factors_json",
+            "clv_forecast_interval_json",
             "credit_forecast_interval_json",
             "model_eligibility_json",
             "model_versions_json",
@@ -1193,6 +1226,7 @@ def _replace_outputs(prediction_run_id: str, rows: list[dict[str, Any]]) -> None
         else {
             "prediction_run_id": "CAST(:prediction_run_id AS UUID)",
             "churn_factors_json": "CAST(:churn_factors_json AS JSONB)",
+            "clv_forecast_interval_json": "CAST(:clv_forecast_interval_json AS JSONB)",
             "credit_forecast_interval_json": "CAST(:credit_forecast_interval_json AS JSONB)",
             "model_eligibility_json": "CAST(:model_eligibility_json AS JSONB)",
             "model_versions_json": "CAST(:model_versions_json AS JSONB)",

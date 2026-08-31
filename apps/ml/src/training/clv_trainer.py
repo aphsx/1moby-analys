@@ -129,6 +129,43 @@ class HurdleBundle:
         return prob_positive * conditional
 
 
+TWOPART_QUANTILES = (0.10, 0.50, 0.90)
+
+
+@dataclass
+class TwoPartQuantileBundle:
+    """Data-grounded CLV representation: retention × value-if-pay (log-space).
+
+    The bundled data is extreme: ~77% of active customers generate zero future
+    6-month revenue and the top 1% drive ~63% of it (Gini ≈ 0.96). A single
+    point THB forecast is therefore meaningless for most customers. This bundle
+    splits CLV into the two questions the data can actually answer:
+
+      p_pay        = P(future_revenue_6m > 0)                 (LightGBM binary)
+      value | pay  = quantile regression on log1p(revenue)     (LightGBM, positive rows)
+                     at q10/q50/q90 → back-transform expm1
+
+    Outputs per customer:
+      p_pay                 calibrated probability of paying
+      value_p10/p50/p90     THB range if they pay (uncertainty band)
+      expected_value        = p_pay × value_p50   (feeds the portfolio total / ranking)
+    """
+
+    classifier: lgb.LGBMClassifier
+    q_models: dict[float, lgb.LGBMRegressor]
+    params: dict[str, Any]
+
+    def p_pay(self, x: "pd.DataFrame") -> np.ndarray:
+        return np.clip(self.classifier.predict_proba(x)[:, 1], 0.0, 1.0)
+
+    def value_quantile(self, x: "pd.DataFrame", q: float) -> np.ndarray:
+        return np.expm1(np.clip(self.q_models[q].predict(x), 0.0, None))
+
+    def predict(self, x: "pd.DataFrame") -> np.ndarray:
+        """Expected value = p_pay × median value-if-pay (point estimate for ranking/total)."""
+        return self.p_pay(x) * self.value_quantile(x, 0.50)
+
+
 @dataclass
 class ClvTrainResult:
     champion_name: str  # "bgnbd_gamma_gamma" | "lgbm_tweedie" | "xgb_tweedie" | "hurdle"
@@ -149,6 +186,10 @@ class ClvTrainResult:
     # at-risk / watch p_alive cuts derived from validation p_alive (shipped in
     # the artifact so prediction reads them instead of hardcoding 0.20 / 0.50).
     p_alive_thresholds: dict[str, float] = field(default_factory=dict)
+    # Two-part (retention × value-if-pay) representation — always fitted and shipped
+    # so prediction can emit p_pay + a value range alongside the point estimate.
+    twopart_bundle: "TwoPartQuantileBundle | None" = None
+    twopart_metrics: dict[str, Any] = field(default_factory=dict)
 
 
 def build_rfm_summary(payments: pd.DataFrame, acc_ids: pd.Series, cutoff: pd.Timestamp) -> pd.DataFrame:
@@ -348,6 +389,18 @@ def train_clv(
         x_train, y_train, x_val, y_val, hurdle_trials=hurdle_trials
     )
 
+    # ── Two-part (retention × value-if-pay) — always fitted + shipped ──
+    # Data-grounded CLV representation: emit p_pay + a value range at serve time
+    # alongside the point estimate. Not part of the Spearman champion contest.
+    notify("clv: fitting two-part (retention × value-if-pay) representation")
+    twopart_bundle, twopart_metrics = _fit_twopart_quantile(x_train, y_train, x_val, y_val)
+    notify(
+        f"clv: two-part val spearman={twopart_metrics.get('spearman')} "
+        f"top10={twopart_metrics.get('top_decile_capture')} "
+        f"range_cov={twopart_metrics.get('range_coverage')} "
+        f"bias={twopart_metrics.get('revenue_bias_ratio')}"
+    )
+
     competition = {
         "bgnbd_gamma_gamma": round(best_bgnbd_spearman, 4),
         "lgbm_tweedie": round(tweedie_val_spearman, 4),
@@ -443,6 +496,8 @@ def train_clv(
         magnitude_slope=magnitude_slope,
         magnitude_intercept=magnitude_intercept,
         p_alive_thresholds=p_alive_thresholds,
+        twopart_bundle=twopart_bundle,
+        twopart_metrics=twopart_metrics,
     )
 
 
@@ -622,3 +677,58 @@ def _fit_hurdle(
     else:
         reg_final.fit(x_tr_pos, y_tr_pos)
     return HurdleBundle(classifier=clf_final, regressor=reg_final, params=best_params), float(study.best_value)
+
+
+def _fit_twopart_quantile(
+    x_train: pd.DataFrame,
+    y_train: pd.Series,
+    x_val: pd.DataFrame,
+    y_val: pd.Series,
+) -> tuple[TwoPartQuantileBundle, dict[str, Any]]:
+    """Fit retention classifier + log-space quantile value model.
+
+    Returns (bundle, validation_metrics). Fixed, sensible LightGBM params (no
+    Optuna): the two-part structure — not fine tuning — is what fits this
+    zero-inflated, whale-heavy target, and it keeps training fast + reproducible.
+    """
+    from src.training.metrics import clv_metrics
+
+    y_tr = np.asarray(y_train, dtype=float)
+    y_va = np.asarray(y_val, dtype=float)
+    params = dict(
+        n_estimators=1500, num_leaves=64, learning_rate=0.05, min_child_samples=50,
+        feature_fraction=0.8, bagging_fraction=0.8, bagging_freq=1,
+        random_state=RANDOM_SEED, n_jobs=-1, verbosity=-1,
+    )
+    clf = lgb.LGBMClassifier(objective="binary", **params)
+    clf.fit(
+        x_train, (y_tr > 0).astype(float),
+        eval_set=[(x_val, (y_va > 0).astype(float))],
+        callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False), lgb.log_evaluation(0)],
+    )
+    pos = y_tr > 0
+    pos_va = y_va > 0
+    log_pos = np.log1p(np.maximum(y_tr[pos], 0.0))
+    log_va = np.log1p(np.maximum(y_va[pos_va], 0.0))
+    q_models: dict[float, lgb.LGBMRegressor] = {}
+    for a in TWOPART_QUANTILES:
+        m = lgb.LGBMRegressor(objective="quantile", alpha=a, **params)
+        if int(pos_va.sum()) >= 20:
+            m.fit(
+                x_train[pos], log_pos,
+                eval_set=[(x_val[pos_va], log_va)],
+                callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False), lgb.log_evaluation(0)],
+            )
+        else:
+            m.fit(x_train[pos], log_pos)
+        q_models[a] = m
+
+    bundle = TwoPartQuantileBundle(classifier=clf, q_models=q_models, params=params)
+    metrics = clv_metrics(y_va, bundle.predict(x_val))
+    if int(pos_va.sum()) > 0:
+        lo = bundle.value_quantile(x_val, 0.10)[pos_va]
+        hi = bundle.value_quantile(x_val, 0.90)[pos_va]
+        metrics["range_coverage"] = round(
+            float(((y_va[pos_va] >= lo) & (y_va[pos_va] <= hi)).mean()), 4
+        )
+    return bundle, metrics
