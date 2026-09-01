@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Lock, Mail } from "lucide-react";
 import { signIn, sanitizeRedirectParam } from "@/lib/auth";
 import { LoginBackground } from "@/components/login-background";
 import { INTRO_ASSETS, MOBY_BRAND } from "@/lib/login-brand-colors";
@@ -52,11 +53,61 @@ function LoginForm() {
             </p>
           </div>
 
+          <div className="mt-7 space-y-3">
+            <label
+              className="flex h-12 items-center gap-3 rounded-2xl px-4 opacity-60"
+              style={{ background: "#F3F4F8" }}
+            >
+              <Mail size={18} strokeWidth={1.75} style={{ color: "#B0B5C3" }} />
+              <input
+                type="text"
+                name="email"
+                autoComplete="username"
+                placeholder="Email"
+                disabled
+                className="h-full w-full cursor-not-allowed bg-transparent text-sm outline-none placeholder:text-[#B0B5C3]"
+                style={{ color: MOBY_BRAND.dark }}
+              />
+            </label>
+            <label
+              className="flex h-12 items-center gap-3 rounded-2xl px-4 opacity-60"
+              style={{ background: "#F3F4F8" }}
+            >
+              <Lock size={18} strokeWidth={1.75} style={{ color: "#B0B5C3" }} />
+              <input
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                placeholder="Password"
+                disabled
+                className="h-full w-full cursor-not-allowed bg-transparent text-sm outline-none placeholder:text-[#B0B5C3]"
+                style={{ color: MOBY_BRAND.dark }}
+              />
+            </label>
+
+            <button
+              type="button"
+              disabled
+              className="mt-2 h-12 w-full cursor-not-allowed rounded-2xl text-sm font-semibold text-white opacity-60"
+              style={{ background: MOBY_BRAND.blue }}
+            >
+              Login
+            </button>
+          </div>
+
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-[#E8EAEF]" />
+            <span className="text-xs" style={{ color: "#B0B5C3" }}>
+              or
+            </span>
+            <div className="h-px flex-1 bg-[#E8EAEF]" />
+          </div>
+
           <button
             type="button"
             onClick={() => void handleGoogle()}
             disabled={busy}
-            className="mt-7 flex h-12 w-full items-center justify-center gap-3 rounded-2xl border px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl border px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60"
             style={{
               background: "#FFFFFF",
               borderColor: "#E8EAEF",
