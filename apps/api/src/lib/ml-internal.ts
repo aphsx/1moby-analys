@@ -16,7 +16,7 @@ function mlInternalTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ML_INTERNAL_TIMEOUT_MS;
 }
 
-export async function triggerMlJob(path: string, payload: object): Promise<void> {
+async function postMlInternal(path: string, payload: object): Promise<Response> {
   const token = process.env.INTERNAL_SERVICE_TOKEN?.trim();
   if (!token) throw new Error("INTERNAL_SERVICE_TOKEN environment variable is not set");
 
@@ -46,15 +46,32 @@ export async function triggerMlJob(path: string, payload: object): Promise<void>
     clearTimeout(timeout);
   }
 
+  return res;
+}
+
+function throwMlInternalError(path: string, res: Response, detail: string): never {
+  throw Object.assign(
+    new Error(
+      `ML job trigger ${path} failed (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ""}`
+    ),
+    { upstreamStatus: res.status }
+  );
+}
+
+export async function triggerMlJob(path: string, payload: object): Promise<void> {
+  const res = await postMlInternal(path, payload);
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    // Attach the upstream status so callers can distinguish a client/state error
-    // raised by the ML service (e.g. 400 from a guard) from a 5xx outage.
-    throw Object.assign(
-      new Error(
-        `ML job trigger ${path} failed (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ""}`
-      ),
-      { upstreamStatus: res.status }
-    );
+    throwMlInternalError(path, res, detail);
   }
+}
+
+/** Synchronous ML internal routes that return a JSON body (activate, delete, repoint). */
+export async function callMlInternalJson<T>(path: string, payload: object): Promise<T> {
+  const res = await postMlInternal(path, payload);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throwMlInternalError(path, res, detail);
+  }
+  return (await res.json()) as T;
 }

@@ -185,7 +185,7 @@ async def internal_repoint_production_for_training_run(request: Request):
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
-    return {"repointed": True, **result}
+    return {"ok": True, **result}
 
 
 @app.post("/internal/model-delete")

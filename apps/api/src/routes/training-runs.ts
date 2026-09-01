@@ -19,7 +19,7 @@ import {
 } from "../db/schema";
 import { requireUser } from "../lib/auth-middleware";
 import { denyNotFound, requireFoundForRead } from "../lib/access-control";
-import { triggerMlJob } from "../lib/ml-internal";
+import { callMlInternalJson, triggerMlJob } from "../lib/ml-internal";
 import { getTrainCutoffSuggestion } from "../lib/clean-cutoff";
 import {
   type RunStatus,
@@ -305,17 +305,17 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
         const production = versions.filter((v) => v.isActive || v.status === "production");
         if (production.length > 0) {
           try {
-            const repoint = (await triggerMlJob("/internal/repoint-production-for-training-run", {
-              training_run_id: run.id,
-              created_by: userId ?? null,
-            })) as {
+            const repoint = await callMlInternalJson<{
               repointed?: Array<{
                 model_type: string;
                 from_version: string;
                 to_version: string;
               }>;
               cleared?: Array<{ model_type: string; from_version: string }>;
-            };
+            }>("/internal/repoint-production-for-training-run", {
+              training_run_id: run.id,
+              created_by: userId ?? null,
+            });
             productionRepointed = repoint.repointed ?? [];
             productionCleared = repoint.cleared ?? [];
           } catch (error) {
