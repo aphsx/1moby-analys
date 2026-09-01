@@ -611,15 +611,34 @@ def _apply_clv(
         v10 = twopart.value_quantile(xx, 0.10)
         v50 = twopart.value_quantile(xx, 0.50)
         v90 = twopart.value_quantile(xx, 0.90)
+        raw_expected = pp * v50
+        if bgnbd is not None:
+            bg_clv = eligible_acc.map(bg_pred["predicted_clv"]).fillna(0.0).to_numpy()
+            tail_q = float(
+                clv_bundle.get("model_card", {}).get("clv_tail_quantile", CLV_TAIL_QUANTILE)
+            )
+            raw_expected = _blend_clv_tail(
+                raw_expected,
+                bg_clv=bg_clv,
+                freq=pd.to_numeric(features_raw["payment_count_all"], errors="coerce")
+                .to_numpy()[clv_mask],
+                revenue=pd.to_numeric(features_raw["total_revenue_all"], errors="coerce")
+                .to_numpy()[clv_mask],
+                tail_quantile=tail_q,
+            )
         mag_slope = float(model_object.get("magnitude_slope", 1.0))
-        expected = np.clip(mag_slope * pp * v50, 0.0, None)
-        predicted[clv_mask] = expected  # data-grounded point CLV
+        mag_intercept = float(model_object.get("magnitude_intercept", 0.0))
+        expected = np.clip(mag_slope * raw_expected + mag_intercept, 0.0, None)
+        predicted[clv_mask] = expected
         clv_pay_probability[clv_mask] = pp
+        v10_cal = np.clip(mag_slope * v10, 0.0, None)
+        v50_cal = np.clip(mag_slope * v50, 0.0, None)
+        v90_cal = np.clip(mag_slope * v90, 0.0, None)
         for i, fp in enumerate(np.flatnonzero(clv_mask)):
             clv_interval[fp] = {
-                "p10": round(float(v10[i]), 2),
-                "p50": round(float(v50[i]), 2),
-                "p90": round(float(v90[i]), 2),
+                "p10": round(float(v10_cal[i]), 2),
+                "p50": round(float(v50_cal[i]), 2),
+                "p90": round(float(v90_cal[i]), 2),
             }
 
     frame["predicted_clv_6m"] = predicted

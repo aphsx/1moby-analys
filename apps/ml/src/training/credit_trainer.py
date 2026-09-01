@@ -3,7 +3,8 @@
 LightGBM quantile models per horizon (30d, 90d) × 5 quantiles
 (p10, p25, p50, p75, p90), Optuna tuned on p50 pinball loss per horizon, with
 an additive CQR margin calibrated on validation so p10–p90 coverage lands at
-the 80% target. (XGBoost quantile is an opt-in alternative — ENABLE_XGB_CREDIT=1.)
+the 80% target. (XGBoost quantile competes with LightGBM per horizon by default;
+set ENABLE_XGB_CREDIT=0 to skip XGBoost Optuna trials.)
 
 The models are trained on the LOG-RATIO against the carryover baseline
 (`log1p(y) − log1p(carryover)`). Trees predict piecewise-constant values and
@@ -33,7 +34,11 @@ import optuna
 import pandas as pd
 import xgboost as xgb
 
-from src.training.baselines import credit_last_30d_carryover, credit_moving_avg_90d
+from src.training.baselines import (
+    credit_last_30d_carryover,
+    credit_moving_avg_90d,
+    credit_runway_depletion,
+)
 from src.training.datasets import SplitFrame
 from src.training.labels import CREDIT_HORIZONS
 from src.training.metrics import bootstrap_ci_credit, credit_metrics, interval_coverage, pinball_loss, smape
@@ -66,10 +71,9 @@ CORRECTION_CLIP = 1.5
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-# XGBoost quantile is an opt-in alternative to LightGBM per horizon.
-# When disabled, LightGBM is always used (~30 fewer Optuna trials per horizon).
-# Set ENABLE_XGB_CREDIT=1 to let XGBoost compete in _train_horizon().
-_CREDIT_XGB_ENABLED = os.getenv("ENABLE_XGB_CREDIT", "0") == "1"
+# XGBoost quantile competes with LightGBM per horizon by default.
+# Set ENABLE_XGB_CREDIT=0 to train LightGBM only (~30 fewer Optuna trials/horizon).
+_CREDIT_XGB_ENABLED = os.getenv("ENABLE_XGB_CREDIT", "1") != "0"
 
 
 def _enforce_cross_horizon_monotonicity(
@@ -227,7 +231,10 @@ def train_credit(
 
     horizons: dict[int, CreditHorizonModels] = {}
     for horizon_days in HORIZONS:
-        notify(f"credit: tuning LightGBM quantile models for {horizon_days}d horizon ({n_trials} trials)")
+        notify(
+            f"credit: tuning quantile models for {horizon_days}d horizon "
+            f"({'LGBM vs XGB' if _CREDIT_XGB_ENABLED else 'LGBM only'}, {n_trials} trials)"
+        )
         horizons[horizon_days] = _train_horizon(
             x["train"], y[horizon_days]["train"], anchors[horizon_days]["train"],
             x["validation"], y[horizon_days]["validation"], anchors[horizon_days]["validation"],
@@ -413,7 +420,7 @@ def _train_horizon(
     )
     lgbm_study.optimize(lgbm_objective, n_trials=n_trials, show_progress_bar=False)
 
-    # ── XGBoost Quantile (opt-in, ENABLE_XGB_CREDIT=1) ────────────
+    # ── XGBoost Quantile (competes with LightGBM unless ENABLE_XGB_CREDIT=0) ──
     # ── Pick best family, calibrate CQR ───────────────────────────
     if _CREDIT_XGB_ENABLED:
         def build_xgb_params(trial: optuna.Trial) -> dict[str, Any]:
@@ -794,6 +801,7 @@ def _evaluate_baselines(
     scorers = {
         "last_30d_carryover": credit_last_30d_carryover,
         "moving_avg_90d": credit_moving_avg_90d,
+        "runway_depletion": credit_runway_depletion,
     }
     results: dict[str, dict[str, dict[str, float]]] = {}
     for baseline_name, scorer in scorers.items():

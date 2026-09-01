@@ -15,7 +15,7 @@ from src.training.preprocessing import PreprocessorConfig, transform_features
 
 CHURN_BASELINE_NAMES = ["recency_rule_90d", "rfm_quartile", "logistic_regression"]
 CLV_BASELINE_NAMES = ["segment_mean", "revenue_180d_carryover"]
-CREDIT_BASELINE_NAMES = ["last_30d_carryover", "moving_avg_90d"]
+CREDIT_BASELINE_NAMES = ["last_30d_carryover", "moving_avg_90d", "runway_depletion"]
 
 
 # ── Churn baselines (score = churn-likelihood ranking) ───────────
@@ -118,3 +118,20 @@ def credit_moving_avg_90d(features: pd.DataFrame, horizon_days: int) -> np.ndarr
 
     monthly = pd.to_numeric(features["usage_total_180d"], errors="coerce").fillna(0.0) / 6.0
     return (monthly * (horizon_days / 30.0)).to_numpy()
+
+
+def credit_runway_depletion(features: pd.DataFrame, horizon_days: int) -> np.ndarray:
+    """Prepaid wallet depletion: steady burn over the horizon, capped by balance proxy.
+
+    When ``credit_balance_proxy`` is missing or zero, falls back to uncapped steady
+    burn (same burn rate as runway would imply without a balance ceiling).
+    """
+
+    balance = pd.to_numeric(features.get("credit_balance_proxy"), errors="coerce").fillna(0.0)
+    daily_burn = pd.to_numeric(features["usage_recent_90d"], errors="coerce").fillna(0.0) / 90.0
+    steady = (daily_burn * horizon_days).to_numpy()
+    bal = np.clip(balance.to_numpy(), 0.0, None)
+    out = np.where(daily_burn.to_numpy() > 0.0, steady, 0.0)
+    has_balance = bal > 0.0
+    out = np.where(has_balance, np.minimum(out, bal), out)
+    return out.astype(float)

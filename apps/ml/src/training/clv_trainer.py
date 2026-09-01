@@ -24,7 +24,7 @@ from src.training.metrics import (
     clv_composite_score,
     clv_metrics,
     clv_p_pay_metrics,
-    total_sum_calibration_slope,
+    fit_clv_magnitude_calibration,
 )
 from src.training.preprocessing import PreprocessorConfig, transform_features
 
@@ -281,15 +281,22 @@ def train_clv(
     twopart_bundle, _ = _fit_twopart_quantile(x_train, y_train, x_val, y_val)
 
     val_preds_raw = twopart_bundle.predict(x_val)
-    magnitude_slope = total_sum_calibration_slope(val_preds_raw, y_val.to_numpy())
-    notify(f"clv: total-sum calibration scale={magnitude_slope:.3f}")
+    magnitude_slope, magnitude_intercept = fit_clv_magnitude_calibration(
+        val_preds_raw, y_val.to_numpy()
+    )
+    notify(
+        f"clv: OLS magnitude calibration slope={magnitude_slope:.3f} "
+        f"intercept={magnitude_intercept:.1f}"
+    )
 
     validation_metrics = _eval_twopart_metrics(
-        twopart_bundle, x_val, y_val.to_numpy(), magnitude_slope
+        twopart_bundle, x_val, y_val.to_numpy(), magnitude_slope, magnitude_intercept
     )
-    test_preds = np.clip(magnitude_slope * twopart_bundle.predict(x_test), 0.0, None)
     test_metrics = _eval_twopart_metrics(
-        twopart_bundle, x_test, y_test.to_numpy(), magnitude_slope
+        twopart_bundle, x_test, y_test.to_numpy(), magnitude_slope, magnitude_intercept
+    )
+    test_preds = _apply_clv_magnitude(
+        twopart_bundle.predict(x_test), magnitude_slope, magnitude_intercept
     )
     test_ci_json = bootstrap_ci_regression(y_test.to_numpy(), test_preds)
 
@@ -338,7 +345,7 @@ def train_clv(
         preprocessor=preprocessor,
         test_ci_json=test_ci_json,
         magnitude_slope=magnitude_slope,
-        magnitude_intercept=0.0,
+        magnitude_intercept=magnitude_intercept,
         p_alive_thresholds=p_alive_thresholds,
         twopart_bundle=twopart_bundle,
         twopart_metrics=validation_metrics,
@@ -351,14 +358,23 @@ def _with_composite(metrics: dict[str, float]) -> dict[str, float]:
     return out
 
 
+def _apply_clv_magnitude(
+    raw: np.ndarray,
+    magnitude_slope: float,
+    magnitude_intercept: float,
+) -> np.ndarray:
+    return np.clip(magnitude_slope * np.asarray(raw, dtype=float) + magnitude_intercept, 0.0, None)
+
+
 def _eval_twopart_metrics(
     bundle: TwoPartQuantileBundle,
     x: pd.DataFrame,
     y_true: np.ndarray,
     magnitude_slope: float,
+    magnitude_intercept: float = 0.0,
 ) -> dict[str, float]:
     y_true = np.asarray(y_true, dtype=float)
-    preds = np.clip(magnitude_slope * bundle.predict(x), 0.0, None)
+    preds = _apply_clv_magnitude(bundle.predict(x), magnitude_slope, magnitude_intercept)
     metrics = clv_metrics(y_true, preds)
     metrics.update(clv_p_pay_metrics(y_true, bundle.p_pay(x)))
     pos = y_true > 0
@@ -389,8 +405,8 @@ def backtest_clv(
     x_test = transform_features(dataset.features("test"), preprocessor)
 
     bundle, _ = _fit_twopart_quantile(x_train, y_train, x_val, y_val)
-    slope = total_sum_calibration_slope(bundle.predict(x_val), y_val.to_numpy())
-    champion_metrics = _eval_twopart_metrics(bundle, x_test, y_test.to_numpy(), slope)
+    slope, intercept = fit_clv_magnitude_calibration(bundle.predict(x_val), y_val.to_numpy())
+    champion_metrics = _eval_twopart_metrics(bundle, x_test, y_test.to_numpy(), slope, intercept)
 
     segment = ClvSegmentMeanBaseline().fit(dataset.features("train"), y_train)
     baseline_metrics = {

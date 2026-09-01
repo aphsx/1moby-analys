@@ -527,7 +527,10 @@ def clv_composite_score(metrics: dict[str, float]) -> float:
 
 
 def total_sum_calibration_slope(val_preds: np.ndarray, val_actual: np.ndarray) -> float:
-    """Bounded multiplicative scale toward Σactual (ranking preserved)."""
+    """Bounded multiplicative scale toward Σactual (ranking preserved).
+
+    Legacy helper — prefer ``fit_clv_magnitude_calibration`` for new CLV runs.
+    """
 
     val_preds = np.asarray(val_preds, dtype=float)
     val_actual = np.asarray(val_actual, dtype=float)
@@ -538,6 +541,43 @@ def total_sum_calibration_slope(val_preds: np.ndarray, val_actual: np.ndarray) -
         return 1.0
     ratio = sum_actual / sum_pred
     return float(np.clip(ratio**0.5, 0.5, 2.0))
+
+
+def fit_clv_magnitude_calibration(
+    val_preds: np.ndarray,
+    val_actual: np.ndarray,
+    *,
+    min_slope: float = 0.01,
+) -> tuple[float, float]:
+    """Affine OLS magnitude calibration on validation (MODEL-DEEP-DIVE §A5).
+
+    Fitted on validation only; test never sees it. An increasing affine map
+    preserves Spearman ranking while correcting systematic scale bias for
+    ``revenue_at_risk``. Falls back to identity when data are insufficient or
+    the slope is non-positive (unstable champion / validation drift).
+  """
+
+    import logging
+
+    from sklearn.linear_model import LinearRegression
+
+    logger = logging.getLogger(__name__)
+    val_preds = np.asarray(val_preds, dtype=float)
+    val_actual = np.asarray(val_actual, dtype=float)
+    finite = np.isfinite(val_preds) & np.isfinite(val_actual)
+    if int(finite.sum()) < 2:
+        return 1.0, 0.0
+    lr = LinearRegression().fit(val_preds[finite].reshape(-1, 1), val_actual[finite])
+    slope = float(lr.coef_[0])
+    intercept = float(lr.intercept_)
+    if slope <= min_slope:
+        logger.warning(
+            "CLV magnitude calibration slope=%.4f <= %.4f; falling back to identity",
+            slope,
+            min_slope,
+        )
+        return 1.0, 0.0
+    return slope, intercept
 
 
 def rmsle(y_true: np.ndarray, y_pred: np.ndarray) -> float:

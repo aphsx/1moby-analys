@@ -77,9 +77,9 @@
 2. `bgnbd_gamma_gamma` — fit ตอนเทรนทุกครั้งเพื่อ `p_alive` และ health cuts (ไม่แข่งเป็น revenue champion แล้ว)
    *(โมเดลเก่า tweedie/hurdle/xgb ยังโหลดจาก artifact ได้ แต่ pipeline เทรนใหม่ใช้ twopart อย่างเดียว)*
 
-**Credit usage** (`credit_trainer.py`) — **LightGBM quantile regression**:
+**Credit usage** (`credit_trainer.py`) — **LightGBM quantile regression** (default):
 `LGBMRegressor(objective="quantile")` **5 quantile (p10/p25/p50/p75/p90) × 2 horizon (30/90 วัน) = 10 โมเดลย่อย**
-*(มี XGBoost quantile `reg:quantileerror` เป็น opt-in ผ่าน `ENABLE_XGB_CREDIT=1`)*
+*(XGBoost quantile `reg:quantileerror` แข่ง LGBM ต่อ horizon โดย default; ปิดด้วย `ENABLE_XGB_CREDIT=0`)*
 
 **Top-up timing** — `xgboost` AFT (`objective="survival:aft"`) 1 โมเดล
 
@@ -95,16 +95,16 @@
 
 - churn (3): `recency_rule_90d`, `rfm_quartile`, `logistic_regression`
 - clv (2): `segment_mean`, `revenue_180d_carryover`
-- credit (2): `last_30d_carryover`, `moving_avg_90d`
+- credit (3): `last_30d_carryover`, `moving_avg_90d`, `runway_depletion`
 
 ### 0.5 นับรวม "กี่ตัว"
 
 | มุมมอง | จำนวน |
 |---|---|
 | **ตระกูลอัลกอริทึม ML/สถิติที่ระบบใช้** | **~10**: LightGBM, XGBoost, Logistic Regression, Isotonic Regression, Linear Regression (OLS), Random Forest (opt), BG/NBD, Gamma-Gamma, TabICL, XGBoost-AFT |
-| **candidate ที่แข่งตอนเทรน (default)** | churn 3 + clv 3 + credit 1 ตระกูล(×10 โมเดลย่อย) + top-up 1 |
+| **candidate ที่แข่งตอนเทรน (default)** | churn 3 + clv 1 (twopart) + credit LGBM↔XGB/horizon + top-up 1 |
 | **โมเดลที่ "ขึ้น production" ต่อ run** | 3 champion (churn/clv/credit) + lifecycle(กฎ) + BG/NBD(p_alive) + top-up AFT |
-| **baseline** | 7 |
+| **baseline** | 8 |
 | **ไลบรารีหลัก** | `lightgbm`, `xgboost`, `scikit-learn`, `lifetimes`, `tabicl`(+`torch`), `optuna`, `shap` |
 
 > รายละเอียดสูตร/เกณฑ์คัดตัวชนะของแต่ละตัวอยู่ในหัวข้อ [4](#4-churn) (churn), [5](#5-clv) (CLV), [6](#6-credit-forecast) (credit) และเกณฑ์ promote ในหัวข้อ [10](#10-promotion-gate)
@@ -367,12 +367,12 @@ threshold ทั้ง 3 ค่า **ไม่ได้ fix** แต่ **คำ
 → `clv_trainer.py`; revenue champion = **`twopart`** เท่านั้น; **promote ด้วย `clv_composite` บน test** (หัวข้อ 9.2, 10)
 
 ```
-predicted_clv = magnitude_slope × P(รายได้>0) × E[รายได้ | รายได้>0]
+predicted_clv = magnitude_slope × P(รายได้>0) × E[รายได้ | รายได้>0] + magnitude_intercept
 ```
 
 - **P(รายได้>0):** LightGBM binary classifier
 - **E[รายได้|จ่าย]:** LightGBM quantile regression (log-space) — ให้ทั้ง point และช่วง p10–p90 สำหรับ payer
-- **`magnitude_slope`:** ปรับยอดรวม portfolio บน validation (`total_sum_calibration_slope`) — คง ranking ไว้
+- **`magnitude_slope` / `magnitude_intercept`:** OLS affine calibration บน validation (`fit_clv_magnitude_calibration`) — คง ranking ไว้; whale-tail blend กับ BG/NBD ที่ serve time สำหรับ top decile
 - **ไม่มี Optuna / candidate competition** — โครงสร้าง two-part ตรงกับ target ที่มีศูนย์เยอะ + whale
 
 ### 5.3 BG/NBD + Gamma-Gamma (p_alive เท่านั้น — ไม่ใช่ revenue champion)

@@ -22,6 +22,12 @@ Every doc in this repo and what it answers. Start at the top.
 > เดิมมี `ML-V2-OVERVIEW` / `ML-V2-OUTPUT-CONTRACT` / `ML-V2-TRAINING-PIPELINE` แยกไฟล์ —
 > ตอนนี้ยุบรวมเข้า `ML-CALCULATIONS-TH.md` (output contract = §13, training design/policy = §12) แล้ว
 
+## Research notes
+
+| Doc | What it covers | Language |
+|---|---|---|
+| [`RESEARCH-CLV-CREDIT-ALTERNATIVES-TH.md`](RESEARCH-CLV-CREDIT-ALTERNATIVES-TH.md) | ทางเลือกโมเดล CLV/Credit เทียบกับข้อมูล Moby — recommendation matrix, สิ่งที่ไม่ควรไล่, ลำดับ implement | TH |
+
 ## Features & workflow
 
 | Doc | What it covers | Language |
