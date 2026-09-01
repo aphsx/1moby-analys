@@ -28,7 +28,7 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
     typeof primary.value === "number" ? primaryInfo.fmt(primary.value) : String(primary.value);
 
   return (
-    <article className="surface lift flex flex-col p-4 sm:p-5">
+    <article className="surface lift flex flex-col overflow-visible p-4 sm:p-5">
       <header className="flex items-baseline justify-between gap-2">
         <h2 className="text-[12px] font-semibold uppercase tracking-wide text-[color:var(--ink-2)]">
           {entry.model_type}
@@ -69,8 +69,8 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
             {secondary.map(({ key, value }) => {
               const info = metricInfo(key);
               return (
-                <div key={key} className="min-w-0">
-                  <dt className="truncate text-[10.5px] text-[color:var(--ink-5)]">
+                <div key={key} className="min-w-0 overflow-visible">
+                  <dt className="text-[10.5px] text-[color:var(--ink-5)]">
                     <MetricLabel info={info} />
                   </dt>
                   <dd className="num text-[14px] font-semibold leading-snug">{info.fmt(value)}</dd>
