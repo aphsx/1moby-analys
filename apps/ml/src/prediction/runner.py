@@ -482,28 +482,25 @@ def _churn_shap_factors(
 
 
 def _blend_clv_tail(
-    tweedie_pred: np.ndarray,
+    base_pred: np.ndarray,
     *,
     bg_clv: np.ndarray,
     freq: np.ndarray,
     revenue: np.ndarray,
     tail_quantile: float = CLV_TAIL_QUANTILE,
 ) -> np.ndarray:
-    """Lift the whale tail of a Tweedie CLV with BG/NBD (REMEDIATION-PLAN P1).
+    """Lift the whale tail of a CLV point forecast with BG/NBD (serve-time).
 
-    The Tweedie tree cannot isolate the few very high-frequency / high-revenue
-    payers into pure leaves, so it pools them down and under-predicts whales.
-    BG/NBD scales with monetary value (no ceiling), so for the top-decile tail
-    take the higher of the two. Kept tight (top decile) because BG/NBD
-    over-predicts the body. Tail is defined relatively (quantiles), so it adapts
-    to any dataset scale; skipped on tiny runs where percentiles are unreliable.
-    `tail_quantile` can be overridden via the model card's `clv_tail_quantile` field.
+    Tree-based revenue models cannot extrapolate beyond training leaves, so they
+    under-predict whales. BG/NBD scales with monetary value (no ceiling), so for
+    the top-decile tail take the higher of the two. Kept tight (top decile)
+    because BG/NBD over-predicts the body.
     """
 
-    if len(tweedie_pred) < CLV_TAIL_MIN_POPULATION:
-        return tweedie_pred
+    if len(base_pred) < CLV_TAIL_MIN_POPULATION:
+        return base_pred
 
-    tail = np.zeros(len(tweedie_pred), dtype=bool)
+    tail = np.zeros(len(base_pred), dtype=bool)
     fok = freq[np.isfinite(freq)]
     if fok.size:
         cut = max(float(np.quantile(fok, tail_quantile)), CLV_TAIL_MIN_FREQUENCY)
@@ -514,8 +511,8 @@ def _blend_clv_tail(
             np.quantile(rok, tail_quantile)
         )
 
-    blended = tweedie_pred.copy()
-    blended[tail] = np.maximum(tweedie_pred[tail], bg_clv[tail])
+    blended = base_pred.copy()
+    blended[tail] = np.maximum(base_pred[tail], bg_clv[tail])
     return blended
 
 
@@ -532,94 +529,40 @@ def _apply_clv(
     clv_mask = frame["el_clv"].to_numpy()
     predicted = np.full(len(frame), np.nan)
     p_alive = np.full(len(frame), np.nan)
+    clv_pay_probability = np.full(len(frame), np.nan)
+    clv_interval: list[dict[str, float] | None] = [None] * len(frame)
 
     if clv_mask.any():
         eligible_acc = frame.loc[clv_mask, "acc_id"]
         rfm = build_rfm_summary(payments, eligible_acc, cutoff)
         bgnbd = model_object.get("bgnbd")
+        bg_pred = None
         if bgnbd is not None:
             bg_pred = bgnbd.predict_frame(rfm).set_index("acc_id")
             p_alive[clv_mask] = (
                 eligible_acc.map(bg_pred["p_alive"]).fillna(np.nan).to_numpy()
             )
-            if model_object["champion"] == "bgnbd_gamma_gamma":
-                predicted[clv_mask] = (
-                    eligible_acc.map(bg_pred["predicted_clv"]).fillna(0.0).to_numpy()
-                )
-        champion = model_object["champion"]
-        if champion in ("lgbm_tweedie", "xgb_tweedie", "hurdle"):
-            x = transform_features(features_raw[clv_mask], clv_bundle["preprocessor"])
-            ml_obj = (
-                model_object["tweedie"]
-                if champion == "lgbm_tweedie"
-                else model_object["xgb"]
-                if champion == "xgb_tweedie"
-                else model_object.get("hurdle")
-            )
-            if ml_obj is None:
-                logger.warning(
-                    "CLV champion is %s but model object is None; falling back to BG-NBD.",
-                    champion,
-                )
-            else:
-                ml_pred = np.clip(ml_obj.predict(x), 0, None)
-                if bgnbd is not None and champion != "hurdle":
-                    # BG-NBD tail blend only for point estimators — hurdle already models zeros.
-                    # tail_quantile is configurable via model_card so future runs can tighten/widen.
-                    tail_q = float(
-                        clv_bundle.get("model_card", {}).get(
-                            "clv_tail_quantile", CLV_TAIL_QUANTILE
-                        )
-                    )
-                    ml_pred = _blend_clv_tail(
-                        ml_pred,
-                        bg_clv=eligible_acc.map(bg_pred["predicted_clv"])
-                        .fillna(0.0)
-                        .to_numpy(),
-                        freq=pd.to_numeric(
-                            features_raw["payment_count_all"], errors="coerce"
-                        ).to_numpy()[clv_mask],
-                        revenue=pd.to_numeric(
-                            features_raw["total_revenue_all"], errors="coerce"
-                        ).to_numpy()[clv_mask],
-                        tail_quantile=tail_q,
-                    )
-                elif bgnbd is None and champion != "hurdle":
-                    logger.warning(
-                        "CLV champion is %s without a BG/NBD bundle; "
-                        "high-value tail will be under-predicted (no hybrid correction).",
-                        champion,
-                    )
-                # Apply OLS magnitude calibration: corrects systematic scale bias fitted on
-                # validation at training time. Preserves ranking; improves RMSLE/MAE.
-                mag_slope = float(model_object.get("magnitude_slope", 1.0))
-                mag_intercept = float(model_object.get("magnitude_intercept", 0.0))
-                ml_pred = np.clip(mag_slope * ml_pred + mag_intercept, 0.0, None)
-                predicted[clv_mask] = ml_pred
 
-    # ── Two-part representation (data-grounded): p_pay + value range + expected ──
-    # The bundled data is zero-inflated (77% earn 0) and whale-driven (top 1% =
-    # ~63% of revenue), so a single THB point is misleading. When the CLV artifact
-    # ships a two-part model we emit p_pay + a p10/p90 value range, and use its
-    # calibrated expected value (p_pay × median) as predicted_clv_6m.
-    twopart = model_object.get("twopart")
-    clv_pay_probability = np.full(len(frame), np.nan)
-    clv_interval: list[dict[str, float] | None] = [None] * len(frame)
-    if twopart is not None and clv_mask.any():
+        twopart = model_object.get("twopart")
+        if twopart is None:
+            champion = model_object.get("champion", "unknown")
+            raise RuntimeError(
+                f"CLV artifact champion={champion!r} is retired; retrain CLV (twopart)."
+            )
+
         xx = transform_features(features_raw[clv_mask], clv_bundle["preprocessor"])
         pp = np.clip(twopart.p_pay(xx), 0.0, 1.0)
         v10 = twopart.value_quantile(xx, 0.10)
         v50 = twopart.value_quantile(xx, 0.50)
         v90 = twopart.value_quantile(xx, 0.90)
         raw_expected = pp * v50
-        if bgnbd is not None:
-            bg_clv = eligible_acc.map(bg_pred["predicted_clv"]).fillna(0.0).to_numpy()
+        if bg_pred is not None:
             tail_q = float(
                 clv_bundle.get("model_card", {}).get("clv_tail_quantile", CLV_TAIL_QUANTILE)
             )
             raw_expected = _blend_clv_tail(
                 raw_expected,
-                bg_clv=bg_clv,
+                bg_clv=eligible_acc.map(bg_pred["predicted_clv"]).fillna(0.0).to_numpy(),
                 freq=pd.to_numeric(features_raw["payment_count_all"], errors="coerce")
                 .to_numpy()[clv_mask],
                 revenue=pd.to_numeric(features_raw["total_revenue_all"], errors="coerce")

@@ -30,7 +30,7 @@ from src.training.churn_trainer import (
     refit_for_backtest,
     train_churn_candidates,
 )
-from src.training.clv_trainer import backtest_clv, train_clv
+from src.training.clv_trainer import CLV_CHAMPION, backtest_clv, train_clv
 from src.training.credit_trainer import backtest_credit, train_credit
 from src.training.data import load_train_clean
 from src.training.drift import build_feature_baseline
@@ -788,11 +788,9 @@ def _train_and_register_clv(
 ) -> dict[str, Any]:
     progress("clv: two-part model + BG-NBD p_alive", 55)
     # Multi-cutoff pooling (train split only; val/test stay at the latest cutoff).
-    # The ML candidates (Tweedie / Hurdle) learn from the extra (features@t,
-    # revenue@t) pairs; BG-NBD collapses duplicate acc_ids so pooling is at worst
-    # neutral for it and never leaks (it fits RFM at the primary cutoff and never
-    # sees post-cutoff labels). Champion selection stays on the primary-cutoff
-    # validation split, so it remains a fair comparison.
+    # BG-NBD collapses duplicate acc_ids so pooling is at worst neutral for it
+    # and never leaks (it fits RFM at the primary cutoff and never sees
+    # post-cutoff labels).
     dataset = pool_train_rows(datasets.clv, [bt.clv for bt in backtest_sets])
     print(
         f"clv: pooled train rows {int((dataset.frame['split'] == 'train').sum())} "
@@ -812,9 +810,7 @@ def _train_and_register_clv(
         bt_preproc = fit_preprocessor(
             bt.clv.features("train"), _feature_schema_for_dataset(bt, bt.clv)
         )
-        champion_metrics, baseline_metrics = backtest_clv(
-            result, bt.clv, payments, bt.cutoff_date, horizon_days, bt_preproc
-        )
+        champion_metrics, baseline_metrics = backtest_clv(bt.clv, bt_preproc)
         backtest_rows.append(
             {
                 "cutoff_date": str(bt.cutoff_date.date()),
@@ -852,7 +848,7 @@ def _train_and_register_clv(
     }
     _p_pay_ece = result.test_metrics.get("p_pay_ece")
     clv_eval = promotion.CandidateEval(
-        name="twopart",
+        name=CLV_CHAMPION,
         leakage_ok=bool(leakage["passed"]),
         artifact_ok=True,
         primary_validation=float(result.validation_metrics["clv_composite"]),
@@ -873,8 +869,8 @@ def _train_and_register_clv(
     clv_decision = promotion.decide([clv_eval], CLV_PROMOTION_CONFIG)
     clv_selection_log = [
         {
-            "candidate": "twopart",
-            "internal_competition": result.competition,
+            "candidate": CLV_CHAMPION,
+            "internal_competition": {CLV_CHAMPION: result.validation_composite},
             "test_clv_composite": result.test_metrics["clv_composite"],
             "test_spearman": result.test_metrics["spearman"],
             "test_top_decile_capture": result.test_metrics["top_decile_capture"],
@@ -882,10 +878,10 @@ def _train_and_register_clv(
             "test_p_pay_roc_auc": result.test_metrics.get("p_pay_roc_auc"),
             "eligible": clv_decision.candidates[0].eligible,
             "composite": round(clv_decision.candidates[0].composite, 4),
-            "is_champion": clv_decision.winner == "twopart",
+            "is_champion": clv_decision.winner == CLV_CHAMPION,
             "reason": (
                 "🏆 champion — " + clv_decision.summary
-                if clv_decision.winner == "twopart"
+                if clv_decision.winner == CLV_CHAMPION
                 else "ไม่ผ่าน: " + "; ".join(clv_decision.candidates[0].reasons)
             ),
         }
@@ -908,14 +904,14 @@ def _train_and_register_clv(
         "model_type": "clv",
         "version": version,
         "method": "Two-part CLV (p_pay × value range) + BG-NBD p_alive",
-        "algorithm": "twopart",
+        "algorithm": CLV_CHAMPION,
         "cutoff_date": str(datasets.cutoff_date.date()),
         "horizon_days": horizon_days,
         "dataset_rows": int(len(dataset.frame)),
         "feature_set": f"{feature_contract.name}/{feature_contract.version}",
         "feature_code_hash": feature_contract.feature_code_hash,
         "params": _plain(result.twopart_bundle.params if result.twopart_bundle else {}),
-        "candidate_competition_val_composite": result.competition,
+        "candidate_competition_val_composite": {CLV_CHAMPION: result.validation_composite},
         "candidate_selection": clv_selection_log,
         "primary_metric": {
             "name": "CLV composite",
@@ -942,13 +938,8 @@ def _train_and_register_clv(
 
     model_object = {
         "kind": "clv_bundle",
-        "champion": result.champion_name,
+        "champion": CLV_CHAMPION,
         "bgnbd": result.bgnbd,
-        "tweedie": result.tweedie_model,
-        "tweedie_params": result.tweedie_params,
-        "xgb": result.xgb_model,
-        "xgb_params": result.xgb_params,
-        "hurdle": result.hurdle_bundle,
         "twopart": result.twopart_bundle,
         "horizon_days": horizon_days,
         "magnitude_slope": result.magnitude_slope,

@@ -63,6 +63,7 @@ def derive_p_alive_thresholds(p_alive_values: np.ndarray) -> dict[str, float]:
 RANDOM_SEED = 42
 BGNBD_PENALIZERS = [float(v) for v in np.logspace(-4, 0, 9)]
 EARLY_STOPPING_ROUNDS = 50
+CLV_CHAMPION = "twopart"
 
 
 @dataclass
@@ -97,26 +98,6 @@ class BgNbdBundle:
         out["predicted_clv"] = np.clip(np.asarray(n_purchases) * np.asarray(expected_value), 0, None)
         out["p_alive"] = np.clip(np.asarray(p_alive, dtype=float), 0.0, 1.0)
         return out
-
-
-@dataclass
-class HurdleBundle:
-    """2-stage zero-inflated model: LightGBM binary × LightGBM Gamma.
-
-    Stage 1 (classifier): P(revenue > 0) — trained on all rows.
-    Stage 2 (regressor):  E[revenue | revenue > 0] — trained on positive-only rows,
-                          Gamma objective appropriate for strictly positive right-skewed targets.
-    Final prediction: prob_positive × conditional_revenue (expectation by law of total expectation).
-    """
-
-    classifier: lgb.LGBMClassifier
-    regressor: lgb.LGBMRegressor
-    params: dict[str, Any]  # shared structural params (objective field excluded)
-
-    def predict(self, x: "pd.DataFrame") -> np.ndarray:
-        prob_positive = np.clip(self.classifier.predict_proba(x)[:, 1], 0.0, 1.0)
-        conditional = np.clip(self.regressor.predict(x), 0.0, None)
-        return prob_positive * conditional
 
 
 TWOPART_QUANTILES = (0.10, 0.50, 0.90)
@@ -158,14 +139,9 @@ class TwoPartQuantileBundle:
 
 @dataclass
 class ClvTrainResult:
-    champion_name: str  # always "twopart" for new runs; legacy artifacts may differ
     bgnbd: BgNbdBundle
-    tweedie_model: lgb.LGBMRegressor | None
-    tweedie_params: dict[str, Any]
-    xgb_model: Any | None
-    xgb_params: dict[str, Any]
-    hurdle_bundle: "HurdleBundle | None"
-    competition: dict[str, float]
+    twopart_bundle: TwoPartQuantileBundle
+    validation_composite: float
     validation_metrics: dict[str, float]
     test_metrics: dict[str, float]
     baseline_metrics: dict[str, dict[str, dict[str, float]]]
@@ -174,8 +150,6 @@ class ClvTrainResult:
     magnitude_slope: float = 1.0
     magnitude_intercept: float = 0.0
     p_alive_thresholds: dict[str, float] = field(default_factory=dict)
-    twopart_bundle: "TwoPartQuantileBundle | None" = None
-    twopart_metrics: dict[str, Any] = field(default_factory=dict)
 
 
 def build_rfm_summary(payments: pd.DataFrame, acc_ids: pd.Series, cutoff: pd.Timestamp) -> pd.DataFrame:
@@ -236,9 +210,6 @@ def train_clv(
     horizon_days: int,
     preprocessor: PreprocessorConfig,
     *,
-    tweedie_trials: int = 0,  # legacy kwarg — ignored
-    xgb_trials: int = 0,
-    hurdle_trials: int = 0,
     progress: Callable[[str], None] | None = None,
 ) -> ClvTrainResult:
     notify = progress or (lambda message: logger.info(message))
@@ -331,14 +302,9 @@ def train_clv(
     }
 
     return ClvTrainResult(
-        champion_name="twopart",
         bgnbd=best_bundle,
-        tweedie_model=None,
-        tweedie_params={},
-        xgb_model=None,
-        xgb_params={},
-        hurdle_bundle=None,
-        competition={"twopart": float(validation_metrics.get("clv_composite", 0.0))},
+        twopart_bundle=twopart_bundle,
+        validation_composite=float(validation_metrics.get("clv_composite", 0.0)),
         validation_metrics=validation_metrics,
         test_metrics=test_metrics,
         baseline_metrics=baseline_metrics,
@@ -347,8 +313,6 @@ def train_clv(
         magnitude_slope=magnitude_slope,
         magnitude_intercept=magnitude_intercept,
         p_alive_thresholds=p_alive_thresholds,
-        twopart_bundle=twopart_bundle,
-        twopart_metrics=validation_metrics,
     )
 
 
@@ -387,11 +351,7 @@ def _eval_twopart_metrics(
 
 
 def backtest_clv(
-    result: ClvTrainResult,
     dataset: SplitFrame,
-    payments: pd.DataFrame,
-    cutoff: pd.Timestamp,
-    horizon_days: int,
     preprocessor: PreprocessorConfig,
 ) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
     """Refit two-part CLV at an older cutoff; return test metrics + baselines."""

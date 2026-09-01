@@ -526,23 +526,6 @@ def clv_composite_score(metrics: dict[str, float]) -> float:
     )
 
 
-def total_sum_calibration_slope(val_preds: np.ndarray, val_actual: np.ndarray) -> float:
-    """Bounded multiplicative scale toward Σactual (ranking preserved).
-
-    Legacy helper — prefer ``fit_clv_magnitude_calibration`` for new CLV runs.
-    """
-
-    val_preds = np.asarray(val_preds, dtype=float)
-    val_actual = np.asarray(val_actual, dtype=float)
-    finite = np.isfinite(val_preds) & np.isfinite(val_actual)
-    sum_pred = float(np.clip(val_preds[finite], 0.0, None).sum()) if bool(finite.any()) else 0.0
-    sum_actual = float(val_actual[finite].sum()) if bool(finite.any()) else 0.0
-    if sum_pred <= 0.0 or sum_actual <= 0.0:
-        return 1.0
-    ratio = sum_actual / sum_pred
-    return float(np.clip(ratio**0.5, 0.5, 2.0))
-
-
 def fit_clv_magnitude_calibration(
     val_preds: np.ndarray,
     val_actual: np.ndarray,

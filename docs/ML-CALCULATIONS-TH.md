@@ -74,8 +74,7 @@
 
 **CLV — two-part revenue forecast** (`clv_trainer.py`) + **BG/NBD สำหรับ p_alive เท่านั้น**:
 1. `twopart` — `P(รายได้>0) × E[รายได้|จ่าย]` (LightGBM classifier + quantile value model) — **champion รายได้**
-2. `bgnbd_gamma_gamma` — fit ตอนเทรนทุกครั้งเพื่อ `p_alive` และ health cuts (ไม่แข่งเป็น revenue champion แล้ว)
-   *(โมเดลเก่า tweedie/hurdle/xgb ยังโหลดจาก artifact ได้ แต่ pipeline เทรนใหม่ใช้ twopart อย่างเดียว)*
+2. `bgnbd_gamma_gamma` — fit ตอนเทรนทุกครั้งเพื่อ `p_alive` และ health cuts (ไม่ใช่ revenue champion)
 
 **Credit usage** (`credit_trainer.py`) — **LightGBM quantile regression** (default):
 `LGBMRegressor(objective="quantile")` **5 quantile (p10/p25/p50/p75/p90) × 2 horizon (30/90 วัน) = 10 โมเดลย่อย**
