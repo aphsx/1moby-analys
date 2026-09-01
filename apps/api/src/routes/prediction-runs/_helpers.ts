@@ -155,6 +155,9 @@ export function mapOutput(row: OutputRow): PredictionOutput {
     churn_risk_level: (row.churnRiskLevel as RiskLevel | null) ?? null,
     churn_factors: (row.churnFactorsJson as ChurnFactor[] | null) ?? null,
     predicted_clv_6m: num(row.predictedClv6m),
+    clv_pay_probability: num(row.clvPayProbability),
+    clv_forecast_interval:
+      (row.clvForecastIntervalJson as PredictionOutput["clv_forecast_interval"]) ?? null,
     p_alive: num(row.pAlive),
     customer_value_tier: (row.customerValueTier ?? "none") as ValueTier,
     predicted_credit_usage_30d: num(row.predictedCreditUsage30d),

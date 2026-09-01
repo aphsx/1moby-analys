@@ -586,6 +586,8 @@ export const mlPredictionOutputs = pgTable(
     churnProbability: numeric("churn_probability", { precision: 5, scale: 4 }),
     churnRiskLevel: text("churn_risk_level"),
     predictedClv6m: numeric("predicted_clv_6m", { precision: 14, scale: 2 }),
+    clvPayProbability: numeric("clv_pay_probability", { precision: 5, scale: 4 }),
+    clvForecastIntervalJson: jsonb("clv_forecast_interval_json"),
     customerValueTier: text("customer_value_tier"),
     revenueAtRisk: numeric("revenue_at_risk", { precision: 14, scale: 2 }),
     predictedCreditUsage30d: numeric("predicted_credit_usage_30d", { precision: 14, scale: 2 }),

@@ -144,6 +144,12 @@ Usage trend: ${ml_output.usage_trend ?? "N/A"}
 Priority score: ${ml_output.priority_score ?? "N/A"}
 Revenue at risk: ${ml_output.revenue_at_risk != null ? "฿" + ml_output.revenue_at_risk.toLocaleString() : "N/A"}
 Predicted CLV 6m: ${ml_output.predicted_clv_6m != null ? "฿" + ml_output.predicted_clv_6m.toLocaleString() : "N/A"}
+CLV pay probability (6m): ${ml_output.clv_pay_probability != null ? (ml_output.clv_pay_probability * 100).toFixed(1) + "%" : "N/A"}
+CLV value-if-pay range (p10–p90): ${
+  ml_output.clv_forecast_interval
+    ? `฿${ml_output.clv_forecast_interval.p10.toLocaleString()} – ฿${ml_output.clv_forecast_interval.p90.toLocaleString()} (p50 ฿${ml_output.clv_forecast_interval.p50.toLocaleString()})`
+    : "N/A"
+}
 P(alive): ${ml_output.p_alive != null ? (ml_output.p_alive * 100).toFixed(1) + "%" : "N/A"}
 Churn factors: ${formatChurnFactors(ml_output.churn_factors)}
 </data>`;

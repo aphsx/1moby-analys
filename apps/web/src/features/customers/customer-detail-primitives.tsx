@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
+import { formatCurrency } from "@/lib/format";
 import { composeReasoning } from "./reasoning";
 import type { CustomerDetail } from "./customer-detail-view";
 
@@ -166,8 +167,38 @@ function ReasonSection({
 
 export function ReasoningStack({ customer }: { customer: CustomerDetail }) {
   const { drivers, narrative } = composeReasoning(customer);
+  const clvPayPct =
+    customer.clv_pay_probability != null ? customer.clv_pay_probability * 100 : null;
+  const clvInterval = customer.clv_forecast_interval;
+  const showClvBreakdown = clvPayPct != null && clvInterval != null;
+
   return (
     <div className="space-y-5">
+      {showClvBreakdown && (
+        <ReasonSection label="CLV (two-part)" order={0}>
+          <ul className="space-y-2">
+            <li className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
+              <span className="text-[12.5px] text-[color:var(--ink-2)]">โอกาสมีรายได้ 6 เดือน</span>
+              <span className="num shrink-0 text-[12.5px] font-semibold text-[color:var(--ink-1)]">
+                {clvPayPct!.toFixed(1)}%
+              </span>
+            </li>
+            <li className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
+              <span className="text-[12.5px] text-[color:var(--ink-2)]">มูลค่าถ้าจ่าย (p50)</span>
+              <span className="num shrink-0 text-[12.5px] font-semibold text-[color:var(--ink-1)]">
+                {formatCurrency(clvInterval!.p50)}
+              </span>
+            </li>
+            <li className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
+              <span className="text-[12.5px] text-[color:var(--ink-2)]">ช่วงมูลค่า (p10–p90)</span>
+              <span className="num shrink-0 text-[12.5px] font-semibold text-[color:var(--ink-1)]">
+                {formatCurrency(clvInterval!.p10)} – {formatCurrency(clvInterval!.p90)}
+              </span>
+            </li>
+          </ul>
+        </ReasonSection>
+      )}
+
       {drivers.length > 0 && (
         <ReasonSection label="ปัจจัยความเสี่ยง (SHAP)" order={1}>
           <ul className="space-y-2">

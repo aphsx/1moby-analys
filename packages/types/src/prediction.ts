@@ -72,6 +72,10 @@ export interface PredictionOutput {
   churn_risk_level: RiskLevel | null;
   churn_factors: ChurnFactor[] | null;
   predicted_clv_6m: number | null;
+  /** P(future_revenue_6m > 0) from two-part CLV — null when champion has no twopart bundle. */
+  clv_pay_probability: number | null;
+  /** THB value-if-pay range (p10/p50/p90) — null when two-part CLV not served. */
+  clv_forecast_interval: { p10: number; p50: number; p90: number } | null;
   p_alive: number | null;
   customer_value_tier: ValueTier;
   predicted_credit_usage_30d: number | null;

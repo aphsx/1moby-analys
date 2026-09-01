@@ -418,10 +418,17 @@ function buildCustomer(runId: string, cutoff: string, accId: number): Prediction
 
   // clv model — active only
   let clv: number | null = null;
+  let clvPayProbability: number | null = null;
+  let clvForecastInterval: PredictionOutput["clv_forecast_interval"] = null;
   let pAlive: number | null = null;
   if (isActive) {
     const scale = stage === "Active Paid" ? totalRevenue / Math.max(ageDays / 180, 1) : r() * 1500;
-    clv = Math.round(Math.max(0, scale * (0.4 + r() * 1.4)) * 100) / 100;
+    clvPayProbability = Math.round((0.15 + r() * 0.75) * 10000) / 10000;
+    const p50 = Math.round(Math.max(500, scale * (0.5 + r() * 2)) * 100) / 100;
+    const p10 = Math.round(p50 * (0.35 + r() * 0.25) * 100) / 100;
+    const p90 = Math.round(p50 * (1.4 + r() * 1.2) * 100) / 100;
+    clvForecastInterval = { p10, p50, p90 };
+    clv = Math.round(clvPayProbability * p50 * 100) / 100;
     pAlive = Math.round((isActive ? 0.55 + r() * 0.44 : r() * 0.4) * 10000) / 10000;
   }
 
@@ -498,6 +505,8 @@ function buildCustomer(runId: string, cutoff: string, accId: number): Prediction
     churn_risk_level: churnP === null ? null : riskLevel(churnP),
     churn_factors: factors,
     predicted_clv_6m: clv,
+    clv_pay_probability: clvPayProbability,
+    clv_forecast_interval: clvForecastInterval,
     p_alive: pAlive,
     customer_value_tier: "none", // assigned after population percentiles below
     predicted_credit_usage_30d: credit30,

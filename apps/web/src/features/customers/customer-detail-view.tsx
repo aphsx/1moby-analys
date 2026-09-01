@@ -30,6 +30,8 @@ export type CustomerDetail = {
   churn_probability: number | null;
   churn_risk_level: string | null;
   predicted_clv_6m: number | null;
+  clv_pay_probability: number | null;
+  clv_forecast_interval: { p10: number; p50: number; p90: number } | null;
   p_alive: number | null;
   customer_value_tier: string;
   revenue_at_risk: number | null;
@@ -78,6 +80,10 @@ export function CustomerDetailView({
 }) {
   const churnPct = customer.churn_probability != null ? customer.churn_probability * 100 : null;
   const pAlivePct = customer.p_alive != null ? customer.p_alive * 100 : null;
+  const clvPayPct =
+    customer.clv_pay_probability != null ? customer.clv_pay_probability * 100 : null;
+  const clvInterval = customer.clv_forecast_interval;
+  const hasTwoPartClv = clvPayPct != null && clvInterval != null;
   const latestUsage = usageTrend.at(-1);
   const peakUsage = usageTrend.length > 0 ? Math.max(...usageTrend.map((point) => point.total)) : null;
   const showSubStage =
@@ -90,6 +96,10 @@ export function CustomerDetailView({
     const base = point.toLocaleString();
     if (p10 == null || p90 == null) return base;
     return `${base} (${p10.toLocaleString()}–${p90.toLocaleString()})`;
+  };
+  const clvRange = (): string => {
+    if (!clvInterval) return "—";
+    return `${formatCurrency(clvInterval.p10)} – ${formatCurrency(clvInterval.p90)}`;
   };
   const interval = customer.credit_forecast_interval;
 
@@ -155,10 +165,22 @@ export function CustomerDetailView({
                   hint="ยังใช้บริการอยู่ (BG/NBD)"
                   valueColor={MOBY_BRAND.blue}
                 />
+                {hasTwoPartClv && (
+                  <HeroMetric
+                    label="P(จ่าย 6m)"
+                    value={`${clvPayPct!.toFixed(0)}%`}
+                    hint="โอกาสมีรายได้ใน 6 เดือน"
+                    valueColor={MOBY_BRAND.blue}
+                  />
+                )}
                 <HeroMetric
                   label="CLV 6m"
                   value={customer.predicted_clv_6m != null ? formatCurrency(customer.predicted_clv_6m) : "—"}
-                  hint={customer.customer_value_tier}
+                  hint={
+                    hasTwoPartClv
+                      ? `${customer.customer_value_tier} · P(จ่าย)×มูลค่ากลาง`
+                      : customer.customer_value_tier
+                  }
                 />
                 <HeroMetric
                   label="Revenue risk"
@@ -228,6 +250,15 @@ export function CustomerDetailView({
                 label="เครดิต 90 วัน (p10–90)"
                 value={creditRange(customer.predicted_credit_usage_90d, interval?.p10_90d ?? null, interval?.p90_90d ?? null)}
               />
+              {hasTwoPartClv && (
+                <>
+                  <FactCard label="P(จ่าย 6m)" value={`${clvPayPct!.toFixed(1)}%`} />
+                  <FactCard
+                    label="มูลค่าถ้าจ่าย (p10–p90)"
+                    value={clvRange()}
+                  />
+                </>
+              )}
             </div>
           </Panel>
 
