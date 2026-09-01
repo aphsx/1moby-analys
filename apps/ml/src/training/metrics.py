@@ -283,7 +283,9 @@ def bootstrap_ci_regression(
     y_pred = np.asarray(y_pred, dtype=float)
     rng = np.random.default_rng(seed)
     n = len(y_true)
-    SKIP = {"n"}
+    # total_actual/total_predicted are cohort sums, not per-sample rates — a
+    # percentile CI over them is meaningless, so skip (revenue_bias_ratio keeps one).
+    SKIP = {"n", "total_actual", "total_predicted"}
     boot_dist: dict[str, list[float]] = {}
     for _ in range(n_boot):
         idx = rng.integers(0, n, size=n)
@@ -462,6 +464,14 @@ def clv_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     corr = spearmanr(y_true, y_pred).statistic if len(y_true) > 2 else float("nan")
+    # Portfolio-level revenue accuracy: the business reads Σ predicted_clv as the
+    # "expected future revenue" for the cohort, so we measure it explicitly.
+    # revenue_bias_ratio = Σpred / Σactual (1.0 = unbiased; >1 over-, <1 under-forecast).
+    total_actual = float(y_true.sum())
+    total_predicted = float(np.clip(y_pred, 0.0, None).sum())
+    revenue_bias_ratio = (
+        round(total_predicted / total_actual, 4) if total_actual > 0 else 0.0
+    )
     return {
         "spearman": round(float(0.0 if np.isnan(corr) else corr), 4),
         "mae": round(float(mean_absolute_error(y_true, y_pred)), 2),
@@ -469,6 +479,9 @@ def clv_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
         "rmsle": round(rmsle(y_true, y_pred), 4),
         "smape": round(smape(y_true, y_pred), 4),
         "top_decile_capture": round(top_decile_capture(y_true, y_pred), 4),
+        "total_actual": round(total_actual, 2),
+        "total_predicted": round(total_predicted, 2),
+        "revenue_bias_ratio": revenue_bias_ratio,
         "n": int(len(y_true)),
     }
 
