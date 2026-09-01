@@ -75,6 +75,37 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     higherIsBetter: false,
   },
   // ── CLV ──
+  // ── CLV (two-part composite) ──
+  clv_composite: {
+    label: "CLV composite",
+    tooltip: "คะแนนรวม: Spearman + top-decile + portfolio bias + range coverage + p_pay ECE",
+    fmt: dec3,
+    higherIsBetter: true,
+  },
+  p_pay_roc_auc: {
+    label: "P(pay) ROC-AUC",
+    tooltip: "แยกลูกค้าที่จะมีรายได้ใน 6 เดือนได้ดีแค่ไหน",
+    fmt: dec3,
+    higherIsBetter: true,
+  },
+  p_pay_ece: {
+    label: "P(pay) ECE",
+    tooltip: "ความตรงของความน่าจะเป็นจ่าย — ยิ่งต่ำยิ่งดี",
+    fmt: dec3,
+    higherIsBetter: false,
+  },
+  revenue_bias_ratio: {
+    label: "Portfolio bias",
+    tooltip: "Σ ทำนาย / Σ จริง — 1.0 = ยอดรวมไม่เอียง",
+    fmt: (v: number) => `${v.toFixed(2)}×`,
+    higherIsBetter: false,
+  },
+  range_coverage: {
+    label: "Value range coverage",
+    tooltip: "รายได้จริง (ถ้าจ่าย) ตกในช่วง p10–p90 กี่ %",
+    fmt: pct1,
+    higherIsBetter: true,
+  },
   spearman: {
     label: "Spearman",
     tooltip: "จัดอันดับลูกค้าตามมูลค่าได้ถูกแค่ไหน — ค่าหลักของ CLV",

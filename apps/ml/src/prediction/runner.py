@@ -611,7 +611,8 @@ def _apply_clv(
         v10 = twopart.value_quantile(xx, 0.10)
         v50 = twopart.value_quantile(xx, 0.50)
         v90 = twopart.value_quantile(xx, 0.90)
-        expected = np.clip(pp * v50, 0.0, None)
+        mag_slope = float(model_object.get("magnitude_slope", 1.0))
+        expected = np.clip(mag_slope * pp * v50, 0.0, None)
         predicted[clv_mask] = expected  # data-grounded point CLV
         clv_pay_probability[clv_mask] = pp
         for i, fp in enumerate(np.flatnonzero(clv_mask)):

@@ -334,7 +334,9 @@ def compute_clv_outcome(
 
     config = LabelConfig(cutoff_date=cutoff, horizon_days=horizon_days)
     labels = build_clv_labels(customers, payments, usage, config)
-    scored = outputs.loc[outputs["predicted_clv_6m"].notna(), ["acc_id", "predicted_clv_6m"]]
+    cols = ["acc_id", "predicted_clv_6m", "clv_pay_probability", "clv_forecast_interval_json"]
+    present = [c for c in cols if c in outputs.columns]
+    scored = outputs.loc[outputs["predicted_clv_6m"].notna(), present]
     joined = scored.merge(labels[["acc_id", "future_revenue_6m"]], on="acc_id", how="inner")
 
     context: dict[str, Any] = {
@@ -349,9 +351,21 @@ def compute_clv_outcome(
             context,
         )
 
+    p_pay = joined["clv_pay_probability"].to_numpy(dtype=float) if "clv_pay_probability" in joined else None
+    v10 = v90 = None
+    if "clv_forecast_interval_json" in joined:
+        intervals = joined["clv_forecast_interval_json"].apply(
+            lambda v: v if isinstance(v, dict) else None
+        )
+        v10 = intervals.apply(lambda d: d.get("p10") if d else np.nan).to_numpy(dtype=float)
+        v90 = intervals.apply(lambda d: d.get("p90") if d else np.nan).to_numpy(dtype=float)
+
     metrics = realized_clv_metrics(
         joined["future_revenue_6m"].to_numpy(dtype=float),
         joined["predicted_clv_6m"].to_numpy(dtype=float),
+        p_pay=p_pay,
+        value_p10=v10,
+        value_p90=v90,
     )
     context["realized_total_revenue"] = round(float(joined["future_revenue_6m"].sum()), 2)
     context["predicted_total_clv"] = round(float(joined["predicted_clv_6m"].sum()), 2)

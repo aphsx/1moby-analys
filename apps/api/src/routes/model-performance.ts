@@ -30,7 +30,7 @@ type ModelType = (typeof MODEL_TYPES)[number];
 // Primary headline metric per model type, read from a version's test metrics.
 const PRIMARY_METRIC: Record<ModelType, { key: string; name: string }> = {
   churn: { key: "pr_auc", name: "PR-AUC" },
-  clv: { key: "spearman", name: "Spearman" },
+  clv: { key: "clv_composite", name: "CLV composite" },
   credit: { key: "coverage_p10_p90", name: "Coverage p10–p90" },
 };
 
@@ -77,16 +77,19 @@ interface ModelCard {
   // Candidate competition snapshots (present per model type that runs one).
   candidate_competition_cv_pr_auc?: Record<string, number>;
   candidate_competition_val_spearman?: Record<string, number>;
+  candidate_competition_val_composite?: Record<string, number>;
+  component_metrics?: Record<string, number>;
   candidate_selection?: SelectionEntry[];
 }
 
 /** Rebuild the candidate competition (ranked, champion-flagged) from a card. */
 function buildCompetition(card: ModelCard): CandidateResult[] | undefined {
   const churn = card.candidate_competition_cv_pr_auc;
-  const clv = card.candidate_competition_val_spearman;
+  const clv =
+    card.candidate_competition_val_composite ?? card.candidate_competition_val_spearman;
   const scores = churn ?? clv;
   if (!scores || Object.keys(scores).length === 0) return undefined;
-  const cvMetric = churn ? "CV PR-AUC" : "Val Spearman";
+  const cvMetric = churn ? "CV PR-AUC" : clv === card.candidate_competition_val_composite ? "Val composite" : "Val Spearman";
 
   const selection = new Map<string, SelectionEntry>();
   for (const entry of card.candidate_selection ?? []) {

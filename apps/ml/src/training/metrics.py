@@ -486,6 +486,60 @@ def clv_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     }
 
 
+def clv_p_pay_metrics(y_true: np.ndarray, p_pay: np.ndarray) -> dict[str, float]:
+    """Binary pay/no-pay metrics for the two-part CLV retention leg."""
+
+    y_true = (np.asarray(y_true, dtype=float) > 0).astype(int)
+    p_pay = np.clip(np.asarray(p_pay, dtype=float), 0.0, 1.0)
+    if len(np.unique(y_true)) < 2:
+        return {"p_pay_roc_auc": float("nan"), "p_pay_ece": float("nan"), "p_pay_brier": float("nan")}
+    from sklearn.metrics import roc_auc_score
+
+    return {
+        "p_pay_roc_auc": round(float(roc_auc_score(y_true, p_pay)), 4),
+        "p_pay_ece": round(expected_calibration_error(y_true, p_pay), 4),
+        "p_pay_brier": round(float(brier_score_loss(y_true, p_pay)), 4),
+    }
+
+
+def clv_composite_score(metrics: dict[str, float]) -> float:
+    """Multi-metric CLV quality score (higher is better).
+
+    Combines ranking (Spearman), business capture (top-decile), portfolio
+    calibration (revenue_bias_ratio → 1.0), value-range coverage, and p_pay ECE.
+    Used for promotion instead of Spearman alone.
+    """
+
+    spearman = float(metrics.get("spearman") or 0.0)
+    top10 = float(metrics.get("top_decile_capture") or 0.0)
+    bias = metrics.get("revenue_bias_ratio")
+    if bias is not None and float(bias) > 0:
+        bias_score = max(0.0, 1.0 - min(abs(float(np.log(float(bias)))), 1.0))
+    else:
+        bias_score = 0.0
+    coverage = float(metrics.get("range_coverage") or 0.0)
+    ece = metrics.get("p_pay_ece")
+    pay_score = max(0.0, 1.0 - float(ece)) if ece is not None and not np.isnan(float(ece)) else 0.85
+    return round(
+        0.35 * spearman + 0.25 * top10 + 0.20 * bias_score + 0.10 * coverage + 0.10 * pay_score,
+        4,
+    )
+
+
+def total_sum_calibration_slope(val_preds: np.ndarray, val_actual: np.ndarray) -> float:
+    """Bounded multiplicative scale toward Σactual (ranking preserved)."""
+
+    val_preds = np.asarray(val_preds, dtype=float)
+    val_actual = np.asarray(val_actual, dtype=float)
+    finite = np.isfinite(val_preds) & np.isfinite(val_actual)
+    sum_pred = float(np.clip(val_preds[finite], 0.0, None).sum()) if bool(finite.any()) else 0.0
+    sum_actual = float(val_actual[finite].sum()) if bool(finite.any()) else 0.0
+    if sum_pred <= 0.0 or sum_actual <= 0.0:
+        return 1.0
+    ratio = sum_actual / sum_pred
+    return float(np.clip(ratio**0.5, 0.5, 2.0))
+
+
 def rmsle(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Root Mean Squared Log Error — scale-invariant, penalises under-prediction less for zeros."""
     y_true = np.clip(np.asarray(y_true, dtype=float), 0.0, None)

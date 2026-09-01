@@ -88,13 +88,14 @@ CHURN_PROMOTION_CONFIG = promotion.PromotionConfig(
     calibration_penalty=1.0,
 )
 CLV_PROMOTION_CONFIG = promotion.PromotionConfig(
-    primary_metric="spearman",
+    primary_metric="clv_composite",
     higher_is_better=True,
     champion_margin=0.0,
     champion_margin_rel=0.01,
     stability_max_rel_drop=0.30,
-    calibration_ceiling=None,
-    calibration_target=None,
+    calibration_ceiling=0.10,
+    calibration_target=0.05,
+    calibration_penalty=0.5,
 )
 # Coverage must be in (0.75, 0.90]. calibration_error = max(0, coverage − 0.90):
 #   if coverage ≤ 0.90 → calibration_error = 0.0 → passes the safety ceiling
@@ -785,7 +786,7 @@ def _train_and_register_clv(
     created_by: str | None,
     progress: Callable[[str, int], None],
 ) -> dict[str, Any]:
-    progress("clv: candidates (BG-NBD vs Tweedie)", 55)
+    progress("clv: two-part model + BG-NBD p_alive", 55)
     # Multi-cutoff pooling (train split only; val/test stay at the latest cutoff).
     # The ML candidates (Tweedie / Hurdle) learn from the extra (features@t,
     # revenue@t) pairs; BG-NBD collapses duplicate acc_ids so pooling is at worst
@@ -821,7 +822,7 @@ def _train_and_register_clv(
                 "baselines": baseline_metrics,
             }
         )
-        print(f"clv backtest {bt.cutoff_date.date()}: spearman {champion_metrics['spearman']}")
+        print(f"clv backtest {bt.cutoff_date.date()}: composite {champion_metrics.get('clv_composite')}")
 
     progress("clv: leakage tests", 68)
     leakage = run_regression_leakage_suite(dataset, preprocessor, ["future_revenue_6m"])
@@ -831,52 +832,60 @@ def _train_and_register_clv(
     )
     print(f"clv: leakage suite passed={leakage['passed']}")
 
-    baseline_best_test = max(
-        result.baseline_metrics[name]["test"]["spearman"] for name in CLV_BASELINE_NAMES
-    )
     baseline_best_name = max(
-        CLV_BASELINE_NAMES, key=lambda name: result.baseline_metrics[name]["test"]["spearman"]
+        CLV_BASELINE_NAMES,
+        key=lambda name: result.baseline_metrics[name]["test"]["clv_composite"],
     )
+    baseline_best_test = result.baseline_metrics[baseline_best_name]["test"]["clv_composite"]
 
-    # ── CLV promotion gate (two-stage safety/quality policy) ──────
+    # ── CLV promotion gate (two-stage; composite + p_pay ECE) ───────
     _clv_test_ci: tuple[float, float] | None = None
     if result.test_ci_json and "spearman" in result.test_ci_json:
         _ci = result.test_ci_json["spearman"]
         _clv_test_ci = (float(_ci["ci_lower"]), float(_ci["ci_upper"]))
-    _clv_primary_backtests = {row["cutoff_date"]: row["metrics"]["spearman"] for row in backtest_rows}
+    _clv_primary_backtests = {
+        row["cutoff_date"]: row["metrics"]["clv_composite"] for row in backtest_rows
+    }
     _clv_baseline_backtests = {
-        row["cutoff_date"]: max(b["spearman"] for b in row["baselines"].values())
+        row["cutoff_date"]: max(b["clv_composite"] for b in row["baselines"].values())
         for row in backtest_rows
     }
+    _p_pay_ece = result.test_metrics.get("p_pay_ece")
     clv_eval = promotion.CandidateEval(
-        name=result.champion_name,
+        name="twopart",
         leakage_ok=bool(leakage["passed"]),
         artifact_ok=True,
-        primary_validation=result.validation_metrics["spearman"],
-        primary_test=result.test_metrics["spearman"],
+        primary_validation=float(result.validation_metrics["clv_composite"]),
+        primary_test=float(result.test_metrics["clv_composite"]),
         baseline_validation=max(
-            result.baseline_metrics[n]["validation"]["spearman"] for n in CLV_BASELINE_NAMES
+            result.baseline_metrics[n]["validation"]["clv_composite"] for n in CLV_BASELINE_NAMES
         ),
-        baseline_test=baseline_best_test,
+        baseline_test=max(
+            result.baseline_metrics[n]["test"]["clv_composite"] for n in CLV_BASELINE_NAMES
+        ),
         primary_backtests=_clv_primary_backtests,
         baseline_backtests=_clv_baseline_backtests,
-        champion_backtests=_incumbent_backtests_by_metric("clv", "spearman"),
-        incumbent_primary_test=_incumbent_primary_test("clv", "spearman"),
-        calibration_error=None,
+        champion_backtests=_incumbent_backtests_by_metric("clv", "clv_composite"),
+        incumbent_primary_test=_incumbent_primary_test("clv", "clv_composite"),
+        calibration_error=float(_p_pay_ece) if _p_pay_ece is not None and not np.isnan(_p_pay_ece) else None,
         primary_test_ci=_clv_test_ci,
     )
     clv_decision = promotion.decide([clv_eval], CLV_PROMOTION_CONFIG)
     clv_selection_log = [
         {
-            "candidate": result.champion_name,
+            "candidate": "twopart",
             "internal_competition": result.competition,
+            "test_clv_composite": result.test_metrics["clv_composite"],
             "test_spearman": result.test_metrics["spearman"],
+            "test_top_decile_capture": result.test_metrics["top_decile_capture"],
+            "test_revenue_bias_ratio": result.test_metrics.get("revenue_bias_ratio"),
+            "test_p_pay_roc_auc": result.test_metrics.get("p_pay_roc_auc"),
             "eligible": clv_decision.candidates[0].eligible,
             "composite": round(clv_decision.candidates[0].composite, 4),
-            "is_champion": clv_decision.winner == result.champion_name,
+            "is_champion": clv_decision.winner == "twopart",
             "reason": (
                 "🏆 champion — " + clv_decision.summary
-                if clv_decision.winner == result.champion_name
+                if clv_decision.winner == "twopart"
                 else "ไม่ผ่าน: " + "; ".join(clv_decision.candidates[0].reasons)
             ),
         }
@@ -898,26 +907,31 @@ def _train_and_register_clv(
     model_card = {
         "model_type": "clv",
         "version": version,
-        "method": "BG-NBD + Gamma-Gamma vs LightGBM Tweedie vs XGBoost Tweedie vs LightGBM Hurdle",
-        "algorithm": result.champion_name,
+        "method": "Two-part CLV (p_pay × value range) + BG-NBD p_alive",
+        "algorithm": "twopart",
         "cutoff_date": str(datasets.cutoff_date.date()),
         "horizon_days": horizon_days,
         "dataset_rows": int(len(dataset.frame)),
         "feature_set": f"{feature_contract.name}/{feature_contract.version}",
         "feature_code_hash": feature_contract.feature_code_hash,
-        "params": (
-            _plain(result.tweedie_params) if result.champion_name == "lgbm_tweedie"
-            else _plain(result.xgb_params) if result.champion_name == "xgb_tweedie"
-            else {"stage1": "lgbm_binary", "stage2": "lgbm_gamma", **_plain(result.hurdle_bundle.params)} if result.champion_name == "hurdle"
-            else {"penalizer": result.bgnbd.penalizer}
-        ),
-        "candidate_competition_val_spearman": result.competition,
+        "params": _plain(result.twopart_bundle.params if result.twopart_bundle else {}),
+        "candidate_competition_val_composite": result.competition,
         "candidate_selection": clv_selection_log,
         "primary_metric": {
-            "name": "Spearman",
-            "value": result.test_metrics["spearman"],
-            "baseline": baseline_best_test,
+            "name": "CLV composite",
+            "value": result.test_metrics["clv_composite"],
+            "baseline": max(
+                result.baseline_metrics[n]["test"]["clv_composite"] for n in CLV_BASELINE_NAMES
+            ),
             "baseline_name": baseline_best_name,
+        },
+        "component_metrics": {
+            "spearman": result.test_metrics["spearman"],
+            "top_decile_capture": result.test_metrics["top_decile_capture"],
+            "revenue_bias_ratio": result.test_metrics.get("revenue_bias_ratio"),
+            "range_coverage": result.test_metrics.get("range_coverage"),
+            "p_pay_roc_auc": result.test_metrics.get("p_pay_roc_auc"),
+            "p_pay_ece": result.test_metrics.get("p_pay_ece"),
         },
         "test_ci": result.test_ci_json,
         "backtests": backtest_rows,
@@ -1039,8 +1053,8 @@ def _train_and_register_clv(
 
     return {
         "model_type": "clv",
-        "primary_metric_name": "Spearman",
-        "primary_metric_value": result.test_metrics["spearman"],
+        "primary_metric_name": "CLV composite",
+        "primary_metric_value": result.test_metrics["clv_composite"],
         "baseline_name": baseline_best_name,
         "baseline_value": baseline_best_test,
         "calibration_ece": None,

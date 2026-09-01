@@ -17,7 +17,9 @@ from sklearn.metrics import mean_absolute_error
 from src.training.metrics import (
     calibration_curve_points,
     churn_metrics,
+    clv_composite_score,
     clv_metrics,
+    clv_p_pay_metrics,
     confusion_at_threshold,
     interval_coverage,
     lift_table,
@@ -51,12 +53,35 @@ def realized_churn_metrics(
     }
 
 
-def realized_clv_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    """Realized revenue vs predicted CLV — Spearman/MAE/top-decile capture."""
+def realized_clv_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    *,
+    p_pay: np.ndarray | None = None,
+    value_p10: np.ndarray | None = None,
+    value_p90: np.ndarray | None = None,
+) -> dict[str, float]:
+    """Realized revenue vs served CLV (point + optional two-part legs)."""
 
-    return round_metrics(
-        clv_metrics(np.asarray(y_true, dtype=float), np.asarray(y_pred, dtype=float))
-    )
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    metrics = clv_metrics(y_true, y_pred)
+    if p_pay is not None:
+        metrics.update(clv_p_pay_metrics(y_true, np.asarray(p_pay, dtype=float)))
+    if value_p10 is not None and value_p90 is not None:
+        pos = y_true > 0
+        if int(pos.sum()) >= MIN_SAMPLES:
+            metrics["range_coverage"] = round(
+                float(
+                    (
+                        (y_true[pos] >= np.asarray(value_p10, dtype=float)[pos])
+                        & (y_true[pos] <= np.asarray(value_p90, dtype=float)[pos])
+                    ).mean()
+                ),
+                4,
+            )
+    metrics["clv_composite"] = clv_composite_score(metrics)
+    return round_metrics(metrics)
 
 
 def realized_credit_metrics(frames: dict[int, pd.DataFrame]) -> dict[str, float]:
