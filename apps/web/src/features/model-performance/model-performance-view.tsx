@@ -1,16 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity } from "lucide-react";
+import { Activity, CircleHelp } from "lucide-react";
 import { EmptyState, PageHeader, Skeleton } from "@/components/ui";
 import { fetchModelPerformance, type ModelPerfEntry } from "@/lib/ml-api";
 import { ChurnDiagnostics } from "./churn-diagnostics";
+import { MetricHelp, MetricLabel } from "./metric-help";
 import {
   formatBaselineName,
   metricInfo,
   metricInfoByLabel,
   pickSecondaryMetrics,
 } from "./metric-info";
+import { BASELINE_HELP, MODEL_TYPE_HELP } from "./model-type-help";
 
 // This page is READ-ONLY: it shows the metrics of the current production
 // champion per model type. Version management (set production / delete) lives on
@@ -38,7 +40,9 @@ export function ModelPerformanceView() {
 
       <div className="mt-4 space-y-5 px-4 sm:px-6 lg:px-8">
         <p className="max-w-4xl text-[12.5px] leading-6 text-[color:var(--ink-4)]">
-          แสดง metric ของโมเดล production ปัจจุบัน (ดูอย่างเดียว) — จัดการเวอร์ชัน/ลบได้ที่หน้า Model Training
+          แสดง metric ของโมเดล production ปัจจุบัน (ดูอย่างเดียว) — กด{" "}
+          <CircleHelp className="inline h-3.5 w-3.5 align-[-2px] text-[color:var(--ink-5)]" />{" "}
+          ข้างชื่อ metric เพื่อดูว่าตัวเลขหมายถึงอะไร · จัดการเวอร์ชันได้ที่หน้า Model Training
         </p>
 
         {error && <EmptyState icon={Activity} title="โหลด model performance ไม่สำเร็จ" hint={error} />}
@@ -81,11 +85,24 @@ function MetricSummaryCard({ entry }: { entry: ModelPerfEntry }) {
   const primaryValue =
     typeof primary.value === "number" ? primaryInfo.fmt(primary.value) : String(primary.value);
 
+  const modelHelp = MODEL_TYPE_HELP[entry.model_type];
+
   return (
-    <section className="surface lift p-5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-5)]">
-        {entry.model_type}
-      </p>
+    <section className="surface lift overflow-visible p-5">
+      <div className="flex items-center gap-1">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-5)]">
+          {entry.model_type}
+        </p>
+        {modelHelp ? (
+          <MetricHelp
+            info={{
+              label: modelHelp.label,
+              tooltip: modelHelp.help,
+              help: modelHelp.help,
+            }}
+          />
+        ) : null}
+      </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <span className="rounded-full bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-[color:var(--ink-3)]">
           {entry.method}
@@ -95,29 +112,38 @@ function MetricSummaryCard({ entry }: { entry: ModelPerfEntry }) {
         </span>
       </div>
 
-      <p className="mt-5 text-[12px] font-semibold text-[color:var(--ink-5)]" title={primaryInfo.tooltip}>
-        {primaryInfo.label}
-      </p>
+      <div className="mt-5 flex items-center gap-1 text-[12px] font-semibold text-[color:var(--ink-5)]">
+        <MetricLabel info={primaryInfo} />
+      </div>
       <p className="num mt-1 text-[34px] font-semibold leading-none">{primaryValue}</p>
       {primary.baseline !== undefined && primary.baseline > 0 && (
-        <p className="mt-1 text-[11.5px] text-[color:var(--ink-5)]">
-          baseline {formatBaselineName(primary.baseline_name ?? "baseline")}:{" "}
-          <span className="num">
-            {typeof primary.baseline === "number"
-              ? primaryInfo.fmt(primary.baseline)
-              : primary.baseline}
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-[11.5px] text-[color:var(--ink-5)]">
+          <span>
+            baseline {formatBaselineName(primary.baseline_name ?? "baseline")}:{" "}
+            <span className="num">
+              {typeof primary.baseline === "number"
+                ? primaryInfo.fmt(primary.baseline)
+                : primary.baseline}
+            </span>
           </span>
-        </p>
+          <MetricHelp
+            info={{
+              label: "Baseline",
+              tooltip: BASELINE_HELP,
+              help: BASELINE_HELP,
+            }}
+          />
+        </div>
       )}
 
       <div className="mt-5 space-y-3">
         {metricRows.map(({ key, value }) => {
           const info = metricInfo(key);
           return (
-            <div key={key} className="grid grid-cols-[1fr_auto] gap-4 rounded-xl bg-gray-50 px-3 py-2.5">
-              <p className="text-[12px] font-semibold text-[color:var(--ink-2)]" title={info.tooltip}>
-                {info.label}
-              </p>
+            <div key={key} className="grid grid-cols-[1fr_auto] items-center gap-4 rounded-xl bg-gray-50 px-3 py-2.5">
+              <div className="text-[12px] font-semibold text-[color:var(--ink-2)]">
+                <MetricLabel info={info} />
+              </div>
               <p className="num text-[15px] font-semibold">{info.fmt(value)}</p>
             </div>
           );

@@ -8,6 +8,7 @@
 
 import type { ModelPerfEntry } from "@/lib/ml-api";
 import { StatusPill } from "@/components/ui";
+import { MetricHelp } from "./metric-help";
 import { metricInfo } from "./metric-info";
 
 const PANEL_TITLE = "text-[13px] font-semibold text-[color:var(--ink-2)]";
@@ -75,8 +76,9 @@ function CalibrationPanel({
           ))}
         </svg>
         <div className="w-full text-center">
-          <div className="text-[10.5px] font-semibold uppercase tracking-[.08em] text-[color:var(--ink-5)]" title={metricInfo("ece").tooltip}>
+          <div className="flex items-center justify-center gap-1 text-[10.5px] font-semibold uppercase tracking-[.08em] text-[color:var(--ink-5)]">
             ECE
+            <MetricHelp info={metricInfo("ece")} placement="top" />
           </div>
           <div className="num text-[22px] font-semibold leading-none">
             {calibration.ece.toFixed(3)}
@@ -172,7 +174,10 @@ function LiftPanel({
   const topDecile = liftTable.find((r) => r.decile === 1) ?? liftTable[0];
   return (
     <div className="surface-soft p-4">
-      <div className={PANEL_TITLE}>Lift by decile</div>
+      <div className={`${PANEL_TITLE} flex items-center gap-1`}>
+        Lift by decile
+        <MetricHelp info={metricInfo("lift_at_top10pct")} placement="top" />
+      </div>
       <p className={PANEL_HINT} title={metricInfo("lift_at_top10pct").tooltip}>
         เรียงลูกค้าตามคะแนนเสี่ยง แล้วแบ่งเป็น 10 กลุ่ม
       </p>
