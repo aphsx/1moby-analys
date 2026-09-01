@@ -10,4 +10,11 @@ export async function ensureImportSchemaCompat(): Promise<void> {
     sql`ALTER TABLE train_data_sources DROP CONSTRAINT IF EXISTS train_data_sources_file_checksum_sha256_key`
   );
   await db.execute(sql`ALTER TABLE "user" DROP COLUMN IF EXISTS role`);
+  // Data-grounded CLV: retention probability + value range (two-part model).
+  await db.execute(
+    sql`ALTER TABLE ml_prediction_outputs ADD COLUMN IF NOT EXISTS clv_pay_probability numeric(5,4)`
+  );
+  await db.execute(
+    sql`ALTER TABLE ml_prediction_outputs ADD COLUMN IF NOT EXISTS clv_forecast_interval_json jsonb`
+  );
 }

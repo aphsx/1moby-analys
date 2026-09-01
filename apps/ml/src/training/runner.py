@@ -935,6 +935,7 @@ def _train_and_register_clv(
         "xgb": result.xgb_model,
         "xgb_params": result.xgb_params,
         "hurdle": result.hurdle_bundle,
+        "twopart": result.twopart_bundle,
         "horizon_days": horizon_days,
         "magnitude_slope": result.magnitude_slope,
         "magnitude_intercept": result.magnitude_intercept,

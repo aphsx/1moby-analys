@@ -243,6 +243,8 @@ CREATE TABLE public.ml_prediction_outputs (
     churn_risk_level text,
     churn_factors_json jsonb,
     predicted_clv_6m numeric(14,2),
+    clv_pay_probability numeric(5,4),
+    clv_forecast_interval_json jsonb,
     p_alive numeric(5,4),
     customer_value_tier text,
     revenue_at_risk numeric(14,2),
