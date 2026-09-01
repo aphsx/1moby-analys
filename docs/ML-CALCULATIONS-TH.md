@@ -649,7 +649,8 @@ needs_review = ( churn ∈ {high,critical}
 
 | Metric | สูตร |
 |---|---|
-| `spearman` | `spearmanr(y_true, y_pred)` — สหสัมพันธ์เชิงอันดับ (**เกณฑ์เลือกผู้ชนะ + promote**) |
+| `spearman` | `spearmanr(y_true, y_pred)` — สหสัมพันธ์เชิงอันดับ (องค์ประกอบของ `clv_composite`) |
+| `clv_composite` | คะแนนรวม: Spearman + top-decile + portfolio bias + range coverage + p_pay ECE (**เกณฑ์ promote**) |
 | `mae` | `mean_absolute_error` |
 | `rmse` | `sqrt(mean((y−ŷ)²))` |
 | `rmsle` | `sqrt(mean((log1p(ŷ) − log1p(y))²))` (scale-invariant) |
@@ -703,7 +704,7 @@ metric ตอนเทรน (ข้อ 9.1–9.3) วัดบน **test/backte
 **ถ้าไม่ผ่าน:** ไม่เรียก `promote_model_version` → **alias production ตัวเดิมคงอยู่** แต่ version ใหม่ยังถูกบันทึก
 (artifact/metrics เก็บไว้ให้ตรวจได้) สรุปจะขึ้นว่า "ไม่มี candidate ผ่าน safety gate — คง champion เดิมไว้"
 
-**เกณฑ์หลักต่อโมเดล:** churn = `pr_auc`, clv = `spearman`, credit = `coverage_p10_p90`
+**เกณฑ์หลักต่อโมเดล:** churn = `pr_auc`, clv = `clv_composite`, credit = `coverage_p10_p90`
 (`ECE_LIMIT=0.05`, `COVERAGE_RANGE=(0.75, 0.90)`)
 
 ---

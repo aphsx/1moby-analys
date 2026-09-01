@@ -1236,8 +1236,9 @@ def _train_and_register_credit(
         "primary_metric": {
             "name": "Coverage p10–p90",
             "value": coverage,
-            "baseline": 0.0,
-            "baseline_name": baseline_best_name,
+            # Point baselines have no interval — promotion floor is the coverage baseline.
+            "baseline": COVERAGE_RANGE[0],
+            "baseline_name": "target_75pct",
         },
         "test_ci": result.test_ci_json,
         "backtests": backtest_rows,
@@ -1350,8 +1351,8 @@ def _train_and_register_credit(
         "model_type": "credit",
         "primary_metric_name": "Coverage p10–p90",
         "primary_metric_value": coverage,
-        "baseline_name": baseline_best_name,
-        "baseline_value": 0.0,
+        "baseline_name": "target_75pct",
+        "baseline_value": COVERAGE_RANGE[0],
         "calibration_ece": None,
         "leakage_passed": bool(leakage["passed"]),
         "promoted": promote,

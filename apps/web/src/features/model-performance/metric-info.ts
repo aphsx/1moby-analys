@@ -108,7 +108,7 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
   },
   spearman: {
     label: "Spearman",
-    tooltip: "จัดอันดับลูกค้าตามมูลค่าได้ถูกแค่ไหน — ค่าหลักของ CLV",
+    tooltip: "จัดอันดับลูกค้าตามมูลค่า — องค์ประกอบหลักของ CLV composite",
     fmt: dec3,
     higherIsBetter: true,
   },
@@ -167,6 +167,18 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     fmt: pct1,
     higherIsBetter: true,
   },
+  urgent_topup_recall: {
+    label: "Urgent recall",
+    tooltip: "bucket \"ต้อง top-up ≤14 วัน\" เตือนครบแค่ไหน — เป้า > 0.7",
+    fmt: pct1,
+    higherIsBetter: true,
+  },
+  urgent_topup_precision: {
+    label: "Urgent precision",
+    tooltip: "bucket \"ต้อง top-up ≤14 วัน\" เตือนถูกแค่ไหน",
+    fmt: pct1,
+    higherIsBetter: true,
+  },
   urgent_recall: {
     label: "Urgent recall",
     tooltip: "bucket \"ต้อง top-up ≤14 วัน\" เตือนครบแค่ไหน — เป้า > 0.7",
@@ -181,6 +193,25 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
   },
 };
 
+/** Map model_card primary_metric.name → METRIC_INFO key. */
+const PRIMARY_LABEL_TO_KEY: Record<string, string> = {
+  "PR-AUC": "pr_auc",
+  "CLV composite": "clv_composite",
+  "Coverage p10–p90": "coverage_p10_p90",
+  "Rule coverage": "coverage_p10_p90",
+};
+
+/** Secondary metrics shown per model type (test split, in order). */
+export const SECONDARY_METRICS: Record<string, string[]> = {
+  churn: ["recall_at_top10pct", "lift_at_top10pct", "ece", "f1"],
+  clv: ["spearman", "p_pay_roc_auc", "top_decile_capture", "revenue_bias_ratio", "range_coverage", "p_pay_ece"],
+  credit: ["coverage_p10_p90_30d", "coverage_p10_p90_90d", "mae_30d", "mae_90d", "urgent_topup_recall", "urgent_topup_precision"],
+};
+
+const BASELINE_NAME_LABELS: Record<string, string> = {
+  target_75pct: "เป้า 75%",
+};
+
 /** Lookup with a safe fallback for metric keys the UI doesn't know yet. */
 export function metricInfo(key: string): MetricInfo {
   return (
@@ -191,6 +222,32 @@ export function metricInfo(key: string): MetricInfo {
       higherIsBetter: true,
     }
   );
+}
+
+/** Resolve primary_metric.name (display label) to METRIC_INFO metadata. */
+export function metricInfoByLabel(label: string): MetricInfo {
+  const key = PRIMARY_LABEL_TO_KEY[label] ?? label;
+  return metricInfo(key);
+}
+
+export function formatBaselineName(name: string): string {
+  return BASELINE_NAME_LABELS[name] ?? name.replaceAll("_", " ");
+}
+
+/** Pick curated secondary metrics for a model card. */
+export function pickSecondaryMetrics(
+  modelType: string,
+  metrics: Record<string, number>,
+  componentMetrics?: Record<string, number>,
+): Array<{ key: string; value: number }> {
+  const keys = SECONDARY_METRICS[modelType] ?? [];
+  const merged = { ...metrics, ...componentMetrics };
+  return keys
+    .filter((key) => {
+      const v = merged[key];
+      return typeof v === "number" && Number.isFinite(v);
+    })
+    .map((key) => ({ key, value: merged[key]! }));
 }
 
 export const SPLIT_ORDER = ["validation", "test", "backtest_avg"] as const;

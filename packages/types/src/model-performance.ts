@@ -43,6 +43,8 @@ export interface ModelPerfEntry {
   dataset_rows: number | null;
   feature_set: string | null;
   primary_metric: { name: string; value: number | string; baseline?: number; baseline_name?: string };
+  /** CLV component breakdown from model_card (p_pay AUC, top-decile, etc.). */
+  component_metrics?: Record<string, number>;
   splits: SplitMetrics[];
   baselines: { name: string; metrics: Record<string, number> }[];
   competition?: CandidateResult[];

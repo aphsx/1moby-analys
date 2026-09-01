@@ -34,6 +34,9 @@ const PRIMARY_METRIC: Record<ModelType, { key: string; name: string }> = {
   credit: { key: "coverage_p10_p90", name: "Coverage p10–p90" },
 };
 
+/** Credit coverage baselines are point-forecast rules — promotion floor is 75%. */
+const CREDIT_COVERAGE_BASELINE = 0.75;
+
 function isModelType(value: string): value is ModelType {
   return (MODEL_TYPES as readonly string[]).includes(value);
 }
@@ -176,6 +179,16 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
     .filter((row) => row.baselineName !== null && row.datasetSplit === "test")
     .map((row) => ({ name: row.baselineName as string, metrics: asMetrics(row.metricsJson) }));
 
+  let primaryBaseline = card.primary_metric?.baseline;
+  let primaryBaselineName = card.primary_metric?.baseline_name;
+  if (
+    modelType === "credit" &&
+    (primaryBaseline === undefined || primaryBaseline === 0)
+  ) {
+    primaryBaseline = CREDIT_COVERAGE_BASELINE;
+    primaryBaselineName = "target_75pct";
+  }
+
   const entry: ModelPerfEntry = {
     model_type: modelType,
     method: card.method ?? "",
@@ -186,18 +199,18 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
     dataset_rows: card.dataset_rows ?? null,
     feature_set: card.feature_set ?? null,
     primary_metric: {
-      name: card.primary_metric?.name ?? "",
+      name: card.primary_metric?.name ?? PRIMARY_METRIC[modelType].name,
       value: card.primary_metric?.value ?? "",
-      ...(card.primary_metric?.baseline !== undefined
-        ? { baseline: card.primary_metric.baseline }
-        : {}),
-      ...(card.primary_metric?.baseline_name !== undefined
-        ? { baseline_name: card.primary_metric.baseline_name }
-        : {}),
+      ...(primaryBaseline !== undefined ? { baseline: primaryBaseline } : {}),
+      ...(primaryBaselineName !== undefined ? { baseline_name: primaryBaselineName } : {}),
     },
     splits,
     baselines,
   };
+
+  if (card.component_metrics && Object.keys(card.component_metrics).length > 0) {
+    entry.component_metrics = card.component_metrics;
+  }
 
   const competition = buildCompetition(card);
   if (competition) entry.competition = competition;

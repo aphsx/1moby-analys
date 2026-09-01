@@ -5,7 +5,12 @@ import { Activity } from "lucide-react";
 import { EmptyState, PageHeader, Skeleton } from "@/components/ui";
 import { fetchModelPerformance, type ModelPerfEntry } from "@/lib/ml-api";
 import { ChurnDiagnostics } from "./churn-diagnostics";
-import { metricInfo } from "./metric-info";
+import {
+  formatBaselineName,
+  metricInfo,
+  metricInfoByLabel,
+  pickSecondaryMetrics,
+} from "./metric-info";
 
 // This page is READ-ONLY: it shows the metrics of the current production
 // champion per model type. Version management (set production / delete) lives on
@@ -68,13 +73,13 @@ export function ModelPerformanceView() {
 
 function MetricSummaryCard({ entry }: { entry: ModelPerfEntry }) {
   const primary = entry.primary_metric;
-  const primaryInfo = metricInfo(primary.name);
+  const primaryInfo = metricInfoByLabel(primary.name);
   const split = entry.splits.find((item) => item.split === "test") ?? entry.splits[0] ?? null;
   const metricRows = split
-    ? Object.entries(split.metrics)
-        .filter(([, value]) => typeof value === "number" && Number.isFinite(value))
-        .slice(0, 4)
+    ? pickSecondaryMetrics(entry.model_type, split.metrics, entry.component_metrics)
     : [];
+  const primaryValue =
+    typeof primary.value === "number" ? primaryInfo.fmt(primary.value) : String(primary.value);
 
   return (
     <section className="surface lift p-5">
@@ -93,25 +98,27 @@ function MetricSummaryCard({ entry }: { entry: ModelPerfEntry }) {
       <p className="mt-5 text-[12px] font-semibold text-[color:var(--ink-5)]" title={primaryInfo.tooltip}>
         {primaryInfo.label}
       </p>
-      <p className="num mt-1 text-[34px] font-semibold leading-none">
-        {formatMetric(primary.value)}
-      </p>
-      {primary.baseline !== undefined && (
+      <p className="num mt-1 text-[34px] font-semibold leading-none">{primaryValue}</p>
+      {primary.baseline !== undefined && primary.baseline > 0 && (
         <p className="mt-1 text-[11.5px] text-[color:var(--ink-5)]">
-          baseline {primary.baseline_name ?? "baseline"}:{" "}
-          <span className="num">{formatMetric(primary.baseline)}</span>
+          baseline {formatBaselineName(primary.baseline_name ?? "baseline")}:{" "}
+          <span className="num">
+            {typeof primary.baseline === "number"
+              ? primaryInfo.fmt(primary.baseline)
+              : primary.baseline}
+          </span>
         </p>
       )}
 
       <div className="mt-5 space-y-3">
-        {metricRows.map(([name, value]) => {
-          const info = metricInfo(name);
+        {metricRows.map(({ key, value }) => {
+          const info = metricInfo(key);
           return (
-            <div key={name} className="grid grid-cols-[1fr_auto] gap-4 rounded-xl bg-gray-50 px-3 py-2.5">
+            <div key={key} className="grid grid-cols-[1fr_auto] gap-4 rounded-xl bg-gray-50 px-3 py-2.5">
               <p className="text-[12px] font-semibold text-[color:var(--ink-2)]" title={info.tooltip}>
                 {info.label}
               </p>
-              <p className="num text-[15px] font-semibold">{formatMetric(value)}</p>
+              <p className="num text-[15px] font-semibold">{info.fmt(value)}</p>
             </div>
           );
         })}
@@ -184,10 +191,4 @@ function CandidateCompetition({
       )}
     </div>
   );
-}
-
-function formatMetric(value: number | string): string {
-  if (typeof value === "string") return value;
-  if (Number.isInteger(value) && Math.abs(value) >= 10) return value.toLocaleString();
-  return value.toFixed(value < 1 ? 3 : 2);
 }
