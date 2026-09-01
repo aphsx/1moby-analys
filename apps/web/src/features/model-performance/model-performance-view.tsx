@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Activity, ChevronDown, CircleHelp } from "lucide-react";
 import { EmptyState, PageHeader, Skeleton } from "@/components/ui";
 import { fetchModelPerformance, type ModelPerfEntry } from "@/lib/ml-api";
-import { ChurnDiagnostics } from "./churn-diagnostics";
 import { MetricHelp, MetricLabel } from "./metric-help";
 import {
   formatBaselineName,
@@ -179,12 +178,6 @@ function MetricSummaryCard({ entry }: { entry: ModelPerfEntry }) {
       {entry.notes ? (
         <p className="mt-4 text-[11.5px] leading-5 text-[color:var(--ink-5)]">{entry.notes}</p>
       ) : null}
-
-      {entry.model_type === "churn" && (
-        <div className="mt-4 border-t border-gray-100 pt-4">
-          <ChurnDiagnostics entry={entry} />
-        </div>
-      )}
     </section>
   );
 }
@@ -263,11 +256,6 @@ function CandidateCompetition({
               </div>
             ))}
           </div>
-          {champion?.reason && (
-            <p className="mt-2 pl-5 text-[11px] leading-5 text-[color:var(--ink-5)]">
-              เหตุผลที่เลือก: {champion.reason}
-            </p>
-          )}
         </>
       )}
     </div>
