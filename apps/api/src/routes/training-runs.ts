@@ -4,8 +4,8 @@
  *
  * Org-shared model: reads are org-wide for any authenticated user; triggering
  * training and deleting a finished run are available to any authenticated user
- * (blocked while any of its model versions are production or still referenced
- * by a prediction run).
+ * (blocked while still referenced by a prediction run; production champions
+ * owned by the run are auto-repointed or cleared when safe to delete).
  */
 import Elysia, { t } from "elysia";
 import { desc, eq, sql } from "drizzle-orm";
@@ -240,8 +240,9 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
     { params: t.Object({ id: t.String() }) }
   )
   // Delete a training run from history (and cascade its model versions).
-  // Any authenticated user. Active/pending runs stay; production champions and
-  // versions still referenced by prediction runs must be cleared first.
+  // Any authenticated user. Active/pending runs stay. Prediction runs that
+  // still reference versions from this run block delete. Production champions
+  // owned by the run are auto-repointed (or cleared when no replacement exists).
   .delete(
     "/:id",
     async ({ params, userId, set }) => {
@@ -263,15 +264,12 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
         .from(mlModelVersions)
         .where(eq(mlModelVersions.trainingRunId, run.id));
 
-      const production = versions.filter((v) => v.isActive || v.status === "production");
-      if (production.length > 0) {
-        const names = production.map((v) => `${v.modelType} ${v.version}`).join(", ");
-        set.status = 409;
-        return {
-          message: `Cannot delete — still production champion: ${names}. Switch production to another version first.`,
-          error_code: "training_run_has_production_models",
-        };
-      }
+      let productionRepointed: Array<{
+        model_type: string;
+        from_version: string;
+        to_version: string;
+      }> = [];
+      let productionCleared: Array<{ model_type: string; from_version: string }> = [];
 
       if (versions.length > 0) {
         const refs = await db
@@ -304,6 +302,34 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
           };
         }
 
+        const production = versions.filter((v) => v.isActive || v.status === "production");
+        if (production.length > 0) {
+          try {
+            const repoint = (await triggerMlJob("/internal/repoint-production-for-training-run", {
+              training_run_id: run.id,
+              created_by: userId ?? null,
+            })) as {
+              repointed?: Array<{
+                model_type: string;
+                from_version: string;
+                to_version: string;
+              }>;
+              cleared?: Array<{ model_type: string; from_version: string }>;
+            };
+            productionRepointed = repoint.repointed ?? [];
+            productionCleared = repoint.cleared ?? [];
+          } catch (error) {
+            const upstream = (error as { upstreamStatus?: number }).upstreamStatus;
+            set.status = upstream === 400 ? 409 : 502;
+            return {
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to repoint production champions before delete",
+            };
+          }
+        }
+
         // Remove artifacts + registry rows via ML service before cascading the
         // training run (DB cascade alone would leave orphan .pkl directories).
         for (const version of versions) {
@@ -331,7 +357,11 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
       }
 
       await db.delete(mlTrainingRuns).where(eq(mlTrainingRuns.id, run.id));
-      return { deleted: true };
+      return {
+        deleted: true,
+        ...(productionRepointed.length > 0 ? { production_repointed: productionRepointed } : {}),
+        ...(productionCleared.length > 0 ? { production_cleared: productionCleared } : {}),
+      };
     },
     { params: t.Object({ id: t.String() }) }
   );

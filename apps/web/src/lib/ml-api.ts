@@ -256,8 +256,21 @@ export async function fetchTrainingRuns(): Promise<TrainingRun[]> {
   return getJson("/api/training-runs");
 }
 
+export interface DeleteTrainingRunResult {
+  deleted: boolean;
+  production_repointed?: Array<{
+    model_type: string;
+    from_version: string;
+    to_version: string;
+  }>;
+  production_cleared?: Array<{
+    model_type: string;
+    from_version: string;
+  }>;
+}
+
 /** DELETE /training-runs/:id — remove a finished training run (+ its model versions). */
-export async function deleteTrainingRun(id: string): Promise<{ deleted: boolean }> {
+export async function deleteTrainingRun(id: string): Promise<DeleteTrainingRunResult> {
   if (IS_ML_MOCK) return { deleted: true };
   return sendJson(`/api/training-runs/${id}`, "DELETE");
 }

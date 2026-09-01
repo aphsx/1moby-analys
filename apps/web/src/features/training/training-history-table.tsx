@@ -3,7 +3,8 @@
  * Training history — one row per training run (all runs, newest first).
  * Shows status, creator, cutoff/horizon, when it ran, duration, and the
  * gate/promotion outcome. Any authenticated user can delete a finished run
- * (blocked if production or prediction runs still reference models from this run).
+ * (blocked if prediction runs still reference models from this run; production
+ * champions owned by the run are auto-repointed or cleared when safe).
  */
 
 import { useState } from "react";
@@ -75,13 +76,29 @@ export function TrainingHistoryTable({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TrainingRun | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function formatDeleteNotice(result: Awaited<ReturnType<typeof deleteTrainingRun>>): string | null {
+    const parts: string[] = [];
+    for (const item of result.production_repointed ?? []) {
+      parts.push(`${item.model_type}: สลับ production จาก ${item.from_version} → ${item.to_version}`);
+    }
+    for (const item of result.production_cleared ?? []) {
+      parts.push(
+        `${item.model_type}: ยกเลิก production (${item.from_version}) — ต้องเทรนใหม่ก่อน predict`
+      );
+    }
+    return parts.length > 0 ? parts.join(" · ") : null;
+  }
 
   async function remove(run: TrainingRun) {
     setDeletingId(run.id);
     setError(null);
+    setNotice(null);
     try {
-      await deleteTrainingRun(run.id);
+      const result = await deleteTrainingRun(run.id);
       setPendingDelete(null);
+      setNotice(formatDeleteNotice(result));
       onDeleted?.();
     } catch (e: unknown) {
       setError(getDisplayError(e, "ลบ training run ไม่สำเร็จ") ?? "ลบ training run ไม่สำเร็จ");
@@ -96,8 +113,13 @@ export function TrainingHistoryTable({
       <SectionCard
         eyebrow="Training history"
         title="ประวัติการเทรนทั้งหมด"
-        hint="หนึ่งแถวต่อหนึ่งรอบเทรน — ใหม่สุดอยู่บน · ลบได้ถ้าไม่ใช่ production และไม่มี prediction ที่ใช้โมเดลจากรอบนั้น"
+        hint="หนึ่งแถวต่อหนึ่งรอบเทรน — ใหม่สุดอยู่บน · ลบได้ถ้าไม่มี prediction ที่ใช้โมเดลจากรอบนั้น (production จะสลับอัตโนมัติถ้ามีเวอร์ชันอื่น)"
       >
+        {notice && (
+          <div className="mb-3 rounded-xl border border-[color:var(--ok)] bg-[color:var(--ok-bg)] px-3 py-2 text-[12.5px] text-[color:var(--ok)]">
+            {notice}
+          </div>
+        )}
         {error && (
           <div className="mb-3 rounded-xl border border-[color:var(--danger)] bg-[color:var(--danger-bg)] px-3 py-2 text-[12.5px] text-[color:var(--danger)]">
             {error}

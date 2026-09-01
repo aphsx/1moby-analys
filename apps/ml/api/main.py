@@ -162,6 +162,32 @@ async def internal_model_activate(request: Request):
     return {"activated": True, **result}
 
 
+@app.post("/internal/repoint-production-for-training-run")
+async def internal_repoint_production_for_training_run(request: Request):
+    """Move production off champions owned by a training run before deleting it.
+
+    Synchronous: only safe when no prediction runs reference versions from the
+    run (the API checks that first). Repoints to the newest remaining version
+    per model type, or clears production when no replacement exists.
+    """
+    _require_internal_token(request)
+    body = await request.json()
+    training_run_id = body.get("training_run_id")
+    if not training_run_id:
+        raise HTTPException(400, "training_run_id is required")
+
+    from src.training.registry import repoint_production_away_from_training_run
+
+    try:
+        result = repoint_production_away_from_training_run(
+            training_run_id=training_run_id,
+            created_by=body.get("created_by"),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"repointed": True, **result}
+
+
 @app.post("/internal/model-delete")
 async def internal_model_delete(request: Request):
     """Permanently delete a non-production model version (UI action).

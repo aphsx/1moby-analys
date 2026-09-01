@@ -558,6 +558,184 @@ def delete_model_version(
     }
 
 
+def clear_production_champion(
+    *,
+    model_type: str,
+    reason: str,
+    created_by: str | None = None,
+    expected_version_id: str | None = None,
+) -> None:
+    """Remove the production alias when no replacement version exists.
+
+    Archives the incumbent champion (if any) and records the change in
+    ml_model_activation_history. Used when deleting the only production
+    version for a model type and no prediction runs still reference it.
+    """
+
+    with create_engine(database_url()).begin() as conn:
+        conn.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+            {"lock_key": f"model-promotion:{model_type}"},
+        )
+        previous = conn.execute(
+            text(
+                """
+                SELECT model_version_id::text
+                FROM ml_model_aliases
+                WHERE model_type = :model_type AND alias = :alias
+                """
+            ),
+            {"model_type": model_type, "alias": PRODUCTION_ALIAS},
+        ).scalar()
+        if previous is None:
+            return
+        if expected_version_id is not None and previous != expected_version_id:
+            raise ValueError(
+                f"Production champion for {model_type} changed before clear "
+                f"(expected {expected_version_id}, found {previous})"
+            )
+
+        conn.execute(
+            text(
+                """
+                UPDATE ml_model_versions
+                SET is_active = FALSE, status = 'archived', deactivated_at = NOW()
+                WHERE id = CAST(:version_id AS UUID) AND model_type = :model_type
+                """
+            ),
+            {"version_id": previous, "model_type": model_type},
+        )
+        conn.execute(
+            text(
+                """
+                DELETE FROM ml_model_aliases
+                WHERE model_type = :model_type AND alias = :alias
+                """
+            ),
+            {"model_type": model_type, "alias": PRODUCTION_ALIAS},
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO ml_model_activation_history (
+                  model_type, previous_model_version_id, new_model_version_id,
+                  action, reason, created_by
+                ) VALUES (
+                  :model_type, CAST(:previous AS UUID), NULL,
+                  'clear_production', :reason, :created_by
+                )
+                """
+            ),
+            {
+                "model_type": model_type,
+                "previous": previous,
+                "reason": reason,
+                "created_by": created_by,
+            },
+        )
+
+
+def repoint_production_away_from_training_run(
+    *,
+    training_run_id: str,
+    created_by: str | None = None,
+) -> dict[str, Any]:
+    """Move production off champions owned by a training run before deleting it.
+
+    Call only after confirming no prediction runs reference versions from this
+    run. For each model type whose production alias points at a version in the
+    run, promote the newest remaining version outside the run; if none exists,
+    clear production so prediction will skip that model until retrain.
+    """
+
+    repointed: list[dict[str, str]] = []
+    cleared: list[dict[str, str]] = []
+
+    with create_engine(database_url()).connect() as conn:
+        champions = conn.execute(
+            text(
+                """
+                SELECT v.id::text AS id, v.model_type, v.version
+                FROM ml_model_versions v
+                JOIN ml_model_aliases a
+                  ON a.model_version_id = v.id
+                 AND a.model_type = v.model_type
+                 AND a.alias = :alias
+                WHERE v.training_run_id = CAST(:run_id AS UUID)
+                """
+            ),
+            {"run_id": training_run_id, "alias": PRODUCTION_ALIAS},
+        ).mappings().all()
+
+    for champ in champions:
+        model_type = champ["model_type"]
+        with create_engine(database_url()).connect() as conn:
+            replacement = conn.execute(
+                text(
+                    """
+                    SELECT id::text AS id, version
+                    FROM ml_model_versions
+                    WHERE model_type = :model_type
+                      AND training_run_id != CAST(:run_id AS UUID)
+                      AND artifact_path IS NOT NULL
+                    ORDER BY trained_at DESC NULLS LAST, created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {"model_type": model_type, "run_id": training_run_id},
+            ).mappings().first()
+
+        if replacement:
+            promote_model_version(
+                model_type=model_type,
+                model_version_id=replacement["id"],
+                reason=(
+                    f"Auto-repointed from {champ['version']} before deleting "
+                    f"training run {training_run_id}"
+                ),
+                created_by=created_by,
+                action="auto_repoint",
+            )
+            repointed.append(
+                {
+                    "model_type": model_type,
+                    "from_version": champ["version"],
+                    "to_version": replacement["version"],
+                }
+            )
+        else:
+            clear_production_champion(
+                model_type=model_type,
+                reason=(
+                    f"Cleared production {champ['version']} — no other version exists "
+                    f"before deleting training run {training_run_id}"
+                ),
+                created_by=created_by,
+                expected_version_id=champ["id"],
+            )
+            cleared.append(
+                {
+                    "model_type": model_type,
+                    "from_version": champ["version"],
+                }
+            )
+
+    with create_engine(database_url()).begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE ml_model_versions
+                SET is_active = FALSE, status = 'archived', deactivated_at = NOW()
+                WHERE training_run_id = CAST(:run_id AS UUID)
+                  AND (is_active = TRUE OR status = 'production')
+                """
+            ),
+            {"run_id": training_run_id},
+        )
+
+    return {"repointed": repointed, "cleared": cleared}
+
+
 def activate_model_version(
     *,
     model_type: str,
