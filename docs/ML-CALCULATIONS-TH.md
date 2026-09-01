@@ -41,6 +41,7 @@
 7. [Derived Business Fields — revenue at risk, value tier, segment, score](#7-derived-business-fields)
 8. [Training Pipeline — Gate, การแบ่งข้อมูล, baseline, การกันข้อมูลรั่ว](#8-training-pipeline)
 9. [Metrics — F1 / PR-AUC / ECE / Spearman / coverage คำนวณอย่างไร](#9-metrics)
+   - [9.0 มาตรฐานการวัด (Industry standard)](#90-มาตรฐานการวัด-industry-standard)
 10. [Promotion Gate — โมเดลใหม่จะขึ้น production ได้ต้องผ่านอะไรบ้าง](#10-promotion-gate)
 11. [ภาคผนวก: ตารางค่าคงที่ทั้งหมด](#11-ภาคผนวก-ตารางค่าคงที่)
 12. [Design contract & policy (หลักการ/นโยบาย/เหตุผล)](#12-design-contract--policy-สัญญาการออกแบบ--นโยบาย)
@@ -71,11 +72,10 @@
 3. `tabicl` — TabICL v2 (tabular foundation model, ต้องมี torch)
    *(มี `RandomForestClassifier` เป็นตัวเลือกเสริมได้ผ่าน env `CHURN_CANDIDATES`)*
 
-**CLV — 3 ตัว default + 1 opt-in** (`clv_trainer.py`) เลือกด้วย **validation Spearman**:
-1. `bgnbd_gamma_gamma` — `lifetimes.BetaGeoFitter` + `GammaGammaFitter`
-2. `lgbm_tweedie` — `LGBMRegressor(objective="tweedie")`
-3. `hurdle` — `LGBMClassifier` (จะซื้อไหม) × `LGBMRegressor(objective="gamma")` (ซื้อเท่าไร)
-4. `xgb_tweedie` — `XGBRegressor` (เปิดด้วย `ENABLE_XGB_CLV=1`)
+**CLV — two-part revenue forecast** (`clv_trainer.py`) + **BG/NBD สำหรับ p_alive เท่านั้น**:
+1. `twopart` — `P(รายได้>0) × E[รายได้|จ่าย]` (LightGBM classifier + quantile value model) — **champion รายได้**
+2. `bgnbd_gamma_gamma` — fit ตอนเทรนทุกครั้งเพื่อ `p_alive` และ health cuts (ไม่แข่งเป็น revenue champion แล้ว)
+   *(โมเดลเก่า tweedie/hurdle/xgb ยังโหลดจาก artifact ได้ แต่ pipeline เทรนใหม่ใช้ twopart อย่างเดียว)*
 
 **Credit usage** (`credit_trainer.py`) — **LightGBM quantile regression**:
 `LGBMRegressor(objective="quantile")` **5 quantile (p10/p25/p50/p75/p90) × 2 horizon (30/90 วัน) = 10 โมเดลย่อย**
@@ -363,17 +363,19 @@ threshold ทั้ง 3 ค่า **ไม่ได้ fix** แต่ **คำ
 `future_revenue_6m` = ผลรวม `amount` ของ payment ในช่วง `[cutoff, cutoff+180)` (ถ้าไม่มี = 0)
 → `labels.py` `build_clv_labels()`
 
-### 5.2 โมเดลที่แข่งกัน + เกณฑ์เลือก
-→ `clv_trainer.py`; **เกณฑ์ผู้ชนะ = validation Spearman ρ สูงสุด** (~351–367)
+### 5.2 โมเดลรายได้ (two-part) + เกณฑ์ promote
+→ `clv_trainer.py`; revenue champion = **`twopart`** เท่านั้น; **promote ด้วย `clv_composite` บน test** (หัวข้อ 9.2, 10)
 
-| Candidate | ชนิด | tuning |
-|---|---|---|
-| `bgnbd_gamma_gamma` | BG/NBD + Gamma-Gamma (พฤติกรรมซื้อ, ให้ p_alive) | penalizer 9 ค่า `logspace(-4,0,9)` |
-| `lgbm_tweedie` | LightGBM objective Tweedie (target มีศูนย์เยอะ) | Optuna 50 trials |
-| `hurdle` | LightGBM(จะซื้อไหม) × LightGBM Gamma(ซื้อเท่าไร) | 30 trials |
-| `xgb_tweedie` | XGBoost Tweedie | เปิดด้วย `ENABLE_XGB_CLV=1`, 30 trials |
+```
+predicted_clv = magnitude_slope × P(รายได้>0) × E[รายได้ | รายได้>0]
+```
 
-### 5.3 BG/NBD + Gamma-Gamma (สูตรพฤติกรรม + ที่มาของ p_alive)
+- **P(รายได้>0):** LightGBM binary classifier
+- **E[รายได้|จ่าย]:** LightGBM quantile regression (log-space) — ให้ทั้ง point และช่วง p10–p90 สำหรับ payer
+- **`magnitude_slope`:** ปรับยอดรวม portfolio บน validation (`total_sum_calibration_slope`) — คง ranking ไว้
+- **ไม่มี Optuna / candidate competition** — โครงสร้าง two-part ตรงกับ target ที่มีศูนย์เยอะ + whale
+
+### 5.3 BG/NBD + Gamma-Gamma (p_alive เท่านั้น — ไม่ใช่ revenue champion)
 → `clv_trainer.py` ~91–108, RFM input ~172–180
 
 อินพุต RFM (คิด ณ cutoff จาก payment ก่อน cutoff):
@@ -393,32 +395,7 @@ Gamma-Gamma จะ fit ต่อเมื่อมีลูกค้าซื้
 
 **p_alive มาจาก BG/NBD เสมอ** ไม่ว่าโมเดลรายได้ผู้ชนะจะเป็นตัวไหน (`p_alive_source = "bgnbd"`)
 
-### 5.4 Hurdle
-→ `clv_trainer.py` ~126–129
-```
-CLV = P(รายได้ > 0)  ×  E[รายได้ | รายได้ > 0]
-```
-
-### 5.5 การปรับสเกล (OLS magnitude calibration)
-→ `clv_trainer.py` ~382–412; ใช้ตอนทำนายที่ `runner.py` ~595–597
-
-fit เส้นตรงบน validation เพื่อลด bias ของขนาด แต่คงลำดับ (ranking) ไว้:
-```
-predicted = max(0, magnitude_slope × raw + magnitude_intercept)
-# slope clip [0.01, 20.0]; default slope=1.0, intercept=0.0 (ถ้า slope<0.01 จะยกเลิก = ใช้ 1.0/0.0)
-```
-
-### 5.6 Hybrid tail blend (แก้ปัญหาทำนายลูกค้ารายใหญ่ต่ำไป)
-→ `prediction/runner.py` `_blend_clv_tail()` ~503–519; ค่าคงที่ ~67–70
-
-เฉพาะลูกค้า **top 10%** (`CLV_TAIL_QUANTILE=0.90`) โดยดูจาก `payment_count_all` หรือ `total_revenue_all`
-และต้อง frequency ≥ `CLV_TAIL_MIN_FREQUENCY=2.0` และประชากร ≥ `CLV_TAIL_MIN_POPULATION=50`:
-```
-blended[tail] = max( tweedie_pred[tail], bg_clv[tail] )
-```
-ใช้กับ `lgbm_tweedie` / `xgb_tweedie` เท่านั้น (ไม่ใช้กับ hurdle)
-
-### 5.7 Value tier & p_alive health cuts
+### 5.4 Value tier & p_alive health cuts
 → ดูหัวข้อ [7.2](#72-customer_value_tier--value-tier) และ [7.4](#74-segment)
 
 ---
@@ -611,6 +588,24 @@ needs_review = ( churn ∈ {high,critical}
 ทุก metric คำนวณจริงใน `apps/ml/src/training/metrics.py` (ใช้ scikit-learn/scipy เป็นแกน)
 **นี่คือส่วนที่ยืนยันว่า "ความแม่นยำไม่ได้เสกมา"** — ทุกตัวมีสูตรตรงไปตรงมา
 
+### 9.0 มาตรฐานการวัด (Industry standard)
+
+ระบบนี้ **ไม่ได้คิด metric เอง** — ใช้แนวทางเดียวกับ churn analytics / CLV literature / forecasting ทั่วไป:
+
+| ขั้นตอน | ที่มา / มาตรฐาน | เราทำอย่างไร |
+|---|---|---|
+| แบ่งข้อมูล | ML textbook — train/val/test holdout | 60/20/20 ต่อ `acc_id` ที่ cutoff หลัก (§8) |
+| Label | backtest / point-in-time evaluation | ผลจริงหลัง cutoff ภายใน horizon จาก payment/usage |
+| Churn metric | sklearn `average_precision_score`; marketing lift charts | PR-AUC + recall/lift@top-k + ECE (§9.1) |
+| CLV metric | Spearman ranking + top-decile capture (CLV papers) | Spearman + composite promote (§9.2) |
+| Credit metric | quantile regression + interval coverage (Hyndman FPP) | coverage p10–p90 + pinball (§9.3) |
+| หลัง deploy | production monitoring / holdout จริง | realized-outcome loop (§9.4) |
+
+**ตัวเลขหลักที่โชว์บนหน้า Model Performance = test holdout** — split ที่โมเดลไม่เคยใช้ตัดสินใจอะไรเลย
+CV / validation ใช้เลือก candidate ตอนเทรนเท่านั้น ไม่ใช่ headline accuracy
+
+**สิ่งที่เป็น design ของ product (ไม่ใช่สูตรสากล):** `clv_composite` รวมหลาย metric เป็นคะแนน promote, promotion gate 2 stage, การจัดหน้า UI
+
 ### 9.1 Churn (binary classification) — `churn_metrics()`
 
 คำนวณบน **test set** โดย:
@@ -751,7 +746,7 @@ metric ตอนเทรน (ข้อ 9.1–9.3) วัดบน **test/backte
 
 - **Lifecycle (Ghost/Churned/Active) = กฎล้วน** จากกิจกรรมก่อน cutoff (ไม่ใช่ ML)
 - **Churn %** = โมเดลผู้ชนะ (CV PR-AUC) → calibrate → clip[0,1]; **risk level** จาก threshold ที่ derive จาก F2-optimal; **เหตุผล** จาก SHAP top-5
-- **CLV** = แข่งกันด้วย validation Spearman; **p_alive** จาก BG/NBD เสมอ
+- **CLV** = two-part revenue forecast → promote ด้วย **`clv_composite` บน test**; **p_alive** จาก BG/NBD เสมอ
 - **Credit** = quantile regression (p50), ช่วงคุมด้วย CQR 80%
 - **Metric ทุกตัว** คำนวณด้วยสูตรมาตรฐานใน `metrics.py` บน test/backtest จริง และต้อง **ชนะ baseline + champion เดิม** ถึงจะขึ้น production — ทั้งหมดตรวจสอบย้อนได้จากโค้ดที่อ้างอิงไว้
 
@@ -780,7 +775,7 @@ metric ตอนเทรน (ข้อ 9.1–9.3) วัดบน **test/backte
 ### 12.3 เหตุผลการเลือกโมเดล (ทำไมตัวนี้)
 
 - **Churn:** LightGBM เป็นตัวเต็ง (tabular ~10⁴ แถว, กิน missing ได้ตรงๆ, เทรนเร็วพอทำ Optuna + backtest หลาย cutoff, มี SHAP); TabICL แข่งใน default set; LR เป็น ML baseline. **ยังไม่ทำ ensemble** — ที่ข้อมูลขนาดนี้กำไร ~1–2% ไม่คุ้มความซับซ้อน (artifact ×2, calibration/SHAP ยากขึ้น)
-- **CLV:** BG/NBD+Gamma-Gamma (ให้ `p_alive` ฟรี, ดีกับ data น้อย) แข่ง LightGBM Tweedie/Hurdle; ตัดสินด้วย **Spearman** (งานจริงคือจัดอันดับมูลค่า ไม่ใช่ทายเป๊ะ)
+- **CLV:** revenue = **two-part** (P จ่าย × มูลค่าถ้าจ่าย) + quantile value; **p_alive** จาก BG/NBD เสมอ; promote ด้วย **`clv_composite`** (Spearman + decile + portfolio bias + coverage + p_pay ECE)
 - **Credit:** LightGBM quantile (p10–p90) + anchor บน carryover (log-ratio) + shrinkage λ + CQR — ออกแบบให้ "ไม่แพ้ baseline เชิงโครงสร้าง" (λ=0 = carryover เป๊ะ)
 
 ### 12.4 Feature tiers (ทำไมใช้แค่ Tier A)

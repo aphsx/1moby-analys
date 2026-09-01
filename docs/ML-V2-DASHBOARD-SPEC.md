@@ -127,7 +127,10 @@ AI explanation (Phase 2): render เฉพาะ `ai_status='completed'`
 
 ต่อโมเดล (churn / clv / credit):
 - Champion version, trained date, dataset size, feature set, cutoff ที่ใช้เทรน
-- ตาราง metric แยก split: validation / test / backtest เฉลี่ย (กัน user เข้าใจผิดว่าตัวเลข validation คือความแม่นจริง)
+- **ตัวเลขหลัก = test holdout** (label ชัดบน UI)
+- **ตาราง metric แยก split:** validation / test / backtest เฉลี่ย (กัน user เข้าใจผิดว่าตัวเลข validation คือความแม่นจริง)
+- **Candidate competition (ย่อได้):** แสดงคู่ CV · test ต่อ candidate — ไม่สับสน CV กับ test
+- **Realized outcomes:** metric จาก prediction run ที่ครบ horizon แล้ว (production_holdout) — ตัวเลขซื่อสัตย์ที่สุดหลัง deploy
 - เทียบ baseline: "โมเดลดีกว่า baseline เท่าไหร่" — จาก `ml_model_evaluations.baseline_name`
 - Churn เพิ่ม: calibration curve (`calibration_json`), confusion matrix ที่ threshold ใช้งาน, ตาราง lift (`lift_table_json`) แปลเป็นภาษาธุรกิจ: "โทรหา top 10% ของคะแนน = เจอคนที่จะ churn จริง X% (lift Yx)"
 - Credit เพิ่ม: interval coverage ("ช่วง p10–p90 ครอบค่าจริง Z%")

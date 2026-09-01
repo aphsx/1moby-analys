@@ -307,11 +307,17 @@ export function pickSecondaryMetrics(
     .map((key) => ({ key, value: merged[key]! }));
 }
 
+export const PRIMARY_METRIC_KEY: Record<string, string> = {
+  churn: "pr_auc",
+  clv: "clv_composite",
+  credit: "coverage_p10_p90",
+};
+
 export const SPLIT_ORDER = ["validation", "test", "backtest_avg"] as const;
 
 export const SPLIT_LABELS: Record<(typeof SPLIT_ORDER)[number], string> = {
   validation: "Validation",
-  test: "Test",
+  test: "Test (holdout)",
   backtest_avg: "Backtest avg",
 };
 

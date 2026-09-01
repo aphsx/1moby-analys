@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, CircleHelp } from "lucide-react";
+import { Activity, ChevronDown, CircleHelp } from "lucide-react";
 import { EmptyState, PageHeader, Skeleton } from "@/components/ui";
 import { fetchModelPerformance, type ModelPerfEntry } from "@/lib/ml-api";
 import { ChurnDiagnostics } from "./churn-diagnostics";
@@ -13,6 +13,8 @@ import {
   pickSecondaryMetrics,
 } from "./metric-info";
 import { BASELINE_HELP, MODEL_TYPE_HELP } from "./model-type-help";
+import { RealizedOutcomesBlock } from "./realized-outcomes-block";
+import { SplitMetricsTable } from "./split-metrics-table";
 
 // This page is READ-ONLY: it shows the metrics of the current production
 // champion per model type. Version management (set production / delete) lives on
@@ -40,9 +42,11 @@ export function ModelPerformanceView() {
 
       <div className="mt-4 space-y-5 px-4 sm:px-6 lg:px-8">
         <p className="max-w-4xl text-[12.5px] leading-6 text-[color:var(--ink-4)]">
-          แสดง metric ของโมเดล production ปัจจุบัน (ดูอย่างเดียว) — กด{" "}
+          แสดง metric ของโมเดล production ปัจจุบัน (ดูอย่างเดียว) — ตัวเลขหลักมาจาก{" "}
+          <strong className="font-semibold text-[color:var(--ink-3)]">test holdout</strong>{" "}
+          (ข้อมูลที่โมเดลไม่เคยเห็นตอนเทรน) · กด{" "}
           <CircleHelp className="inline h-3.5 w-3.5 align-[-2px] text-[color:var(--ink-5)]" />{" "}
-          ข้างชื่อ metric เพื่อดูว่าตัวเลขหมายถึงอะไร · จัดการเวอร์ชันได้ที่หน้า Model Training
+          ข้างชื่อ metric เพื่อดูความหมาย · จัดการเวอร์ชันได้ที่หน้า Model Training
         </p>
 
         {error && <EmptyState icon={Activity} title="โหลด model performance ไม่สำเร็จ" hint={error} />}
@@ -112,8 +116,13 @@ function MetricSummaryCard({ entry }: { entry: ModelPerfEntry }) {
         </span>
       </div>
 
-      <div className="mt-5 flex items-center gap-1 text-[12px] font-semibold text-[color:var(--ink-5)]">
-        <MetricLabel info={primaryInfo} />
+      <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="flex items-center gap-1 text-[12px] font-semibold text-[color:var(--ink-5)]">
+          <MetricLabel info={primaryInfo} />
+        </div>
+        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+          test holdout
+        </span>
       </div>
       <p className="num mt-1 text-[34px] font-semibold leading-none">{primaryValue}</p>
       {primary.baseline !== undefined && primary.baseline > 0 && (
@@ -136,11 +145,16 @@ function MetricSummaryCard({ entry }: { entry: ModelPerfEntry }) {
         </div>
       )}
 
+      {entry.model_type !== "lifecycle" && <SplitMetricsTable entry={entry} />}
+
       <div className="mt-5 space-y-3">
         {metricRows.map(({ key, value }) => {
           const info = metricInfo(key);
           return (
-            <div key={key} className="grid grid-cols-[1fr_auto] items-center gap-4 rounded-xl bg-gray-50 px-3 py-2.5">
+            <div
+              key={key}
+              className="grid grid-cols-[1fr_auto] items-center gap-4 rounded-xl bg-gray-50 px-3 py-2.5"
+            >
               <div className="text-[12px] font-semibold text-[color:var(--ink-2)]">
                 <MetricLabel info={info} />
               </div>
@@ -153,6 +167,8 @@ function MetricSummaryCard({ entry }: { entry: ModelPerfEntry }) {
       {entry.competition && entry.competition.length > 0 && (
         <CandidateCompetition competition={entry.competition} />
       )}
+
+      {entry.model_type !== "lifecycle" && <RealizedOutcomesBlock entry={entry} />}
 
       <div className="mt-4 space-y-1 text-[11.5px] leading-5 text-[color:var(--ink-5)]">
         {entry.version && <p>version: {entry.version}</p>}
@@ -178,42 +194,81 @@ function CandidateCompetition({
 }: {
   competition: NonNullable<ModelPerfEntry["competition"]>;
 }) {
-  const metric = competition[0]?.cv_metric ?? "CV score";
+  const [open, setOpen] = useState(false);
+  const cvMetric = competition[0]?.cv_metric ?? "CV score";
   const champion = competition.find((c) => c.is_champion);
+  const hasTest = competition.some((c) => c.test_score != null);
+
   return (
     <div className="mt-5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-5)]">
-        Candidate competition · {metric}
-      </p>
-      <div className="mt-2 space-y-1">
-        {competition.map((c) => (
-          <div
-            key={c.algorithm}
-            className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl bg-gray-50 px-3 py-2"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-[12px] font-medium text-[color:var(--ink-2)]">{c.algorithm}</span>
-              {c.is_champion && (
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  🏆 Production
-                </span>
-              )}
-              {!c.is_champion && c.gate_passed === false && (
-                <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-[color:var(--ink-5)]">
-                  ไม่ผ่าน gate
-                </span>
-              )}
-            </div>
-            <span className="num text-[13px] font-semibold">
-              {c.cv_score != null ? c.cv_score.toFixed(4) : "—"}
-            </span>
-          </div>
-        ))}
-      </div>
-      {champion?.reason && (
-        <p className="mt-2 text-[11px] leading-5 text-[color:var(--ink-5)]">
-          เหตุผลที่เลือก: {champion.reason}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 text-left"
+        aria-expanded={open}
+      >
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 text-[color:var(--ink-5)] transition-transform ${open ? "rotate-180" : ""}`}
+        />
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ink-5)]">
+          Candidate competition
         </p>
+        {!open && champion && (
+          <span className="truncate text-[11px] font-normal normal-case text-[color:var(--ink-5)]">
+            · {champion.algorithm}
+            {champion.cv_score != null ? ` CV ${champion.cv_score.toFixed(3)}` : ""}
+            {champion.test_score != null ? ` · test ${champion.test_score.toFixed(3)}` : ""}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <p className="mt-1 pl-5 text-[11px] leading-5 text-[color:var(--ink-5)]">
+            CV = เลือก candidate ตอนเทรน · Test = holdout ที่รายงานจริง ({cvMetric})
+          </p>
+          <div className="mt-2 space-y-1 pl-5">
+            {competition.map((c) => (
+              <div
+                key={c.algorithm}
+                className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl bg-gray-50 px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] font-medium text-[color:var(--ink-2)]">
+                    {c.algorithm}
+                  </span>
+                  {c.is_champion && (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Production
+                    </span>
+                  )}
+                  {!c.is_champion && c.gate_passed === false && (
+                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-[color:var(--ink-5)]">
+                      ไม่ผ่าน gate
+                    </span>
+                  )}
+                </div>
+                <div className="num text-right text-[12px] font-semibold leading-5">
+                  {c.cv_score != null && (
+                    <div className="text-[color:var(--ink-4)]">
+                      CV {c.cv_score.toFixed(4)}
+                    </div>
+                  )}
+                  {hasTest && (
+                    <div className={c.is_champion ? "text-emerald-700" : "text-[color:var(--ink-3)]"}>
+                      {c.test_score != null ? `test ${c.test_score.toFixed(4)}` : "test —"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {champion?.reason && (
+            <p className="mt-2 pl-5 text-[11px] leading-5 text-[color:var(--ink-5)]">
+              เหตุผลที่เลือก: {champion.reason}
+            </p>
+          )}
+        </>
       )}
     </div>
   );

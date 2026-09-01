@@ -146,10 +146,10 @@
 - **Calibration** — โมเดล gradient boosting ให้คะแนน "เรียงถูก" แต่ค่าความน่าจะเป็นดิบเพี้ยน ต้องปรับด้วย **Platt scaling** (logistic บนคะแนนดิบ) หรือ **Isotonic regression** ให้ตรงอัตราจริง เพราะ downstream เอาไปคูณเงิน
 - **SHAP** — แยกว่าปัจจัยใดผลักคะแนน churn ของลูกค้าแต่ละรายขึ้น/ลง
 
-### 2.7.2 CLV = โมเดลพฤติกรรมซื้อ + regression
-- **BG/NBD (Beta-Geometric/NBD)** — โมเดลความน่าจะเป็นการซื้อซ้ำจาก RFM (frequency/recency/T) ให้ทั้งจำนวนครั้งซื้อคาดการณ์และ **p_alive**
-- **Gamma-Gamma** — ประเมินมูลค่าเฉลี่ยต่อการซื้อ
-- แข่งกับ **LightGBM Tweedie** (regression ที่ target มีศูนย์เยอะ) และ **Hurdle** (P(ซื้อ)×E[ยอด|ซื้อ]) ตัดสินด้วย **Spearman rank correlation** (งานจริงคือจัดอันดับมูลค่า)
+### 2.7.2 CLV = two-part revenue + BG/NBD p_alive
+- **Two-part model** — `P(รายได้>0) × E[รายได้|จ่าย]` (LightGBM classifier + quantile value) เป็น revenue champion
+- **BG/NBD + Gamma-Gamma** — fit ทุกครั้งเพื่อ **p_alive** และ health cuts (ไม่แข่งเป็น revenue champion)
+- วัดด้วย **`clv_composite`** (Spearman + top-decile + portfolio bias + range coverage + p_pay ECE) เป็นหลัก promote — Spearman เป็นองค์ประกอบ ไม่ใช่ headline อย่างเดียว
 
 ### 2.7.3 Credit = Quantile regression
 - ทำนายเป็น "ช่วง" ไม่ใช่ค่าเดียว: เทรน **LightGBM quantile** ที่ควอนไทล์ p10/p25/p50/p75/p90 (p50=median เป็นค่าหลัก)
@@ -459,18 +459,17 @@ critical = round(high + 0.6 × (1 − high), 2)
 
 **Label:** `future_revenue_6m` = `Σ amount` ของ payment ในช่วง `[cutoff, cutoff+180)` (ศูนย์ได้)
 
-**Candidate + การเลือก (`clv_trainer.py`):** `bgnbd_gamma_gamma`, `lgbm_tweedie`, `hurdle` (+ `xgb_tweedie` opt-in) → เลือกด้วย **validation Spearman** สูงสุด
+**Candidate + การเลือก (`clv_trainer.py`):** revenue champion = **`twopart`** (P จ่าย × มูลค่าถ้าจ่าย) — ไม่มี candidate competition แล้ว; **BG/NBD** fit เพื่อ `p_alive` เท่านั้น; promote ด้วย **`clv_composite`** บน test
 
-**BG/NBD + Gamma-Gamma (และที่มา p_alive):** RFM คิดจาก payment ก่อน cutoff — `frequency`=(จำนวนวันซื้อไม่ซ้ำ)−1, `recency`=(วันซื้อล่าสุด−วันแรก), `T`=(cutoff−วันแรก), `monetary`=เฉลี่ยเงินต่อวันซื้อซ้ำ
+**Two-part CLV:**
 ```
-n_purchases = BG/NBD.expected_purchases(180, freq, recency, T)
-p_alive     = BG/NBD.conditional_probability_alive(freq, recency, T)   # clip[0,1] — ใช้เสมอ
-E[profit|ซื้อ] = Gamma-Gamma.expected_average_profit(freq, monetary)   # ต้องมีลูกค้าซื้อซ้ำ ≥ 50
-predicted_clv = max(0, n_purchases × E[profit|ซื้อ])
+CLV = magnitude_slope × P(รายได้>0) × E[รายได้ | รายได้>0]
 ```
-**Hurdle:** `CLV = P(รายได้>0) × E[รายได้|รายได้>0]`
-**OLS magnitude calibration:** `pred = max(0, slope×raw + intercept)` (slope clip [0.01, 20], default 1.0/0.0)
-**Hybrid tail blend (รายใหญ่):** top 10% (`CLV_TAIL_QUANTILE=0.90`, freq≥2.0, ประชากร≥50) → `blended = max(tweedie, bg_clv)` (ใช้กับ tweedie/xgb ไม่ใช้ hurdle)
+**BG/NBD (p_alive):** RFM คิดจาก payment ก่อน cutoff — `frequency`, `recency`, `T`, `monetary`
+```
+p_alive = BG/NBD.conditional_probability_alive(freq, recency, T)   # clip[0,1] — ใช้เสมอ
+```
+**Portfolio calibration:** `magnitude_slope = total_sum_calibration_slope` บน validation (คง ranking)
 
 ## 4.7 โมเดล Credit Forecast (รายละเอียดเต็ม)
 
@@ -525,13 +524,13 @@ predicted_clv = max(0, n_purchases × E[profit|ซื้อ])
 **Promotion gate (2 stage; ต่อ model):**
 - Stage 1 (ต้องผ่านทุกข้อ): ผ่าน leakage + artifact load; ชนะ baseline บน val/test/**ทุก backtest**; ชนะ champion เดิมเกิน margin (churn/clv 1% rel, credit 0.5%); เสถียร (drop ≤ churn/clv 30%, credit 25%); calibration (churn ECE≤0.10; credit coverage≤0.90 เกิน 0.001)
 - Stage 2: composite = mean(metric test+backtest) − penalty(ECE); credit เพิ่ม MAE ≤ 1.10× baseline
-- เกณฑ์หลัก: churn=`pr_auc`, clv=`spearman`, credit=`coverage_p10_p90`; ถ้าไม่ผ่าน → คง champion เดิม
+- เกณฑ์หลัก: churn=`pr_auc`, clv=`clv_composite`, credit=`coverage_p10_p90`; ถ้าไม่ผ่าน → คง champion เดิม
 
 ## 4.10 Metrics — สูตรทุกตัว (`metrics.py`)
 
 **Churn:** `pr_auc`=average_precision; `roc_auc`; `f1`=2PR/(P+R) ที่ threshold; `precision`=TP/(TP+FP); `recall`=TP/(TP+FN); `recall@k`/`lift@k` (top 5/10/20%); `brier`=MSE ของ prob; `bss`=1−brier/(base·(1−base)); `ece` (10 bins เฉลี่ยถ่วง |จริง−ทำนาย|); `mce` (bin แย่สุด); `log_loss`
 - เลือก threshold: max **Fβ (β=2)** = `(1+β²)PR/(β²P+R)` เน้น recall
-**CLV:** `spearman`; `mae`; `rmse`; `rmsle`=√mean((log1p ŷ−log1p y)²); `smape`; `top_decile_capture`
+**CLV:** `clv_composite` (promote); `spearman`; `mae`; `rmse`; `rmsle`; `smape`; `top_decile_capture`; `p_pay_roc_auc`; `range_coverage`; `revenue_bias_ratio`
 **Credit:** `coverage_p10_p90`; `pinball`; `winkler`; `mae/smape` ต่อ horizon
 **Realized outcome:** ใช้ฟังก์ชัน metric ตัวเดียวกัน จับคู่ label จริงหลังครบ horizon (ต้อง≥20 ราย) → `ml_model_evaluations (production_holdout)`
 
@@ -592,9 +591,9 @@ Postgres bootstrap schema จาก `db/init/001_schema.sql` อัตโนม�
 
 | โมเดล | ผู้ชนะ | เมตริกหลัก | baseline |
 |---|---|---|---|
-| Churn | tabicl | PR-AUC **0.761** | logistic 0.740 |
-| CLV | lgbm_tweedie | Spearman **0.535–0.546** | 0.365 |
-| Credit | LightGBM quantile | coverage p10–p90 **0.864** | — |
+| Churn | tabicl | PR-AUC **0.761** (test) | logistic 0.740 |
+| CLV | twopart | CLV composite **0.730** (test) | carryover ~0.45 |
+| Credit | LightGBM quantile | coverage p10–p90 **0.864** | เป้า 75% |
 
 - **ทำนาย (cutoff 2026-01-01):** `ml_prediction_outputs` = **30,697 แถว**; lifecycle: Ghost 19,273 / Churned 7,174 / Active Paid 2,572 / Active Free 1,678; revenue at risk (expected) ≈ **54.2M฿**, high-risk exposure ≈ 21.1M฿
 
@@ -603,7 +602,7 @@ Postgres bootstrap schema จาก `db/init/001_schema.sql` อัตโนม�
 สมมติลูกค้า Active Paid อายุ 400 วัน (>90 → ไม่ abstain):
 1. **Feature** สร้างจากประวัติก่อน cutoff (payment RFM, usage 90/180 วัน, shares ฯลฯ)
 2. **Churn:** โมเดลผู้ชนะให้ raw=0.62 → calibrator → churn_probability=0.58; threshold high=0.50 → 0.58≥0.50 แต่ <critical(0.80) → **risk=high**; SHAP top-5 เช่น `days_since_last_payment↑`, `usage_change_90d_pct↓`
-3. **CLV:** BG/NBD+Gamma-Gamma/tweedie → predicted_clv_6m=90,000฿; p_alive=0.72
+3. **CLV:** two-part → predicted_clv_6m=90,000฿; p_alive=0.72 (BG/NBD)
 4. **Derived:** revenue_at_risk = 0.58×90,000 = **52,200฿**; value_tier ตาม percentile ของ run; segment = High-Value At-Risk (valuable+at_risk); priority_score = สเกล log1p(52,200) → 0–100
 5. **Credit:** p50_30d=8,000 credits; วันจน top-up ≈ balance/(8000/30); urgency ตามวัน
 

@@ -25,6 +25,7 @@ export type {
   TrainingRunResult,
   SplitMetrics,
   ModelPerfEntry,
+  ModelPerfRealized,
   CandidateResult,
   ModelVersionSummary,
   TrainDataSource,

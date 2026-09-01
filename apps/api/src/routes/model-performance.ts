@@ -19,6 +19,7 @@ import {
   DEFAULT_RISK_THRESHOLDS,
   type CandidateResult,
   type ModelPerfEntry,
+  type ModelPerfRealized,
   type ModelVersionSummary,
   type SplitMetrics,
 } from "../lib/ml-contract";
@@ -60,6 +61,8 @@ interface SelectionEntry {
   candidate?: string;
   cv_pr_auc?: number;
   test_pr_auc?: number;
+  test_clv_composite?: number;
+  test_coverage_p10_p90?: number;
   gate_passed?: boolean;
   reason?: string;
 }
@@ -85,6 +88,16 @@ interface ModelCard {
   candidate_selection?: SelectionEntry[];
 }
 
+/** Test holdout score from the training run's candidate_selection log. */
+function selectionTestScore(entry: SelectionEntry | undefined): number | null {
+  if (!entry) return null;
+  for (const key of ["test_pr_auc", "test_clv_composite", "test_coverage_p10_p90"] as const) {
+    const value = entry[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
 /** Rebuild the candidate competition (ranked, champion-flagged) from a card. */
 function buildCompetition(card: ModelCard): CandidateResult[] | undefined {
   const churn = card.candidate_competition_cv_pr_auc;
@@ -106,7 +119,7 @@ function buildCompetition(card: ModelCard): CandidateResult[] | undefined {
       algorithm,
       cv_score: cvScore,
       cv_metric: cvMetric,
-      test_score: sel?.test_pr_auc ?? null,
+      test_score: selectionTestScore(sel),
       gate_passed: sel?.gate_passed,
       is_champion: isChampion,
       reason: isChampion ? sel?.reason : undefined,
@@ -137,6 +150,49 @@ function averageMetrics(rows: EvaluationRow[]): Record<string, number> {
   const avg: Record<string, number> = {};
   for (const [key, { total, n }] of sums) avg[key] = total / n;
   return avg;
+}
+
+/** Most recent realized (production_holdout) row for a champion version. */
+async function fetchLatestRealized(
+  modelType: ModelType,
+  versionId: string
+): Promise<ModelPerfRealized | null> {
+  const [row] = await db
+    .select({
+      metricsJson: mlModelEvaluations.metricsJson,
+      cutoffDate: mlModelEvaluations.cutoffDate,
+      createdAt: mlModelEvaluations.createdAt,
+      predictionRunId: mlModelEvaluations.predictionRunId,
+      runName: mlPredictionRuns.name,
+    })
+    .from(mlModelEvaluations)
+    .leftJoin(
+      mlPredictionRuns,
+      eq(mlModelEvaluations.predictionRunId, mlPredictionRuns.id)
+    )
+    .where(
+      and(
+        eq(mlModelEvaluations.modelVersionId, versionId),
+        eq(mlModelEvaluations.evaluationType, "production_holdout"),
+        eq(mlModelEvaluations.modelType, modelType)
+      )
+    )
+    .orderBy(desc(mlModelEvaluations.createdAt))
+    .limit(1);
+
+  if (!row) return null;
+
+  const metrics = asMetrics(row.metricsJson);
+  const primaryKey = PRIMARY_METRIC[modelType].key;
+  const primaryValue = metrics[primaryKey];
+  return {
+    primary_value: typeof primaryValue === "number" && Number.isFinite(primaryValue) ? primaryValue : null,
+    metrics,
+    measured_at: row.createdAt.toISOString(),
+    prediction_run_id: row.predictionRunId,
+    prediction_run_name: row.runName,
+    cutoff_date: row.cutoffDate,
+  };
 }
 
 async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<ModelPerfEntry | null> {
@@ -214,6 +270,8 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
 
   const competition = buildCompetition(card);
   if (competition) entry.competition = competition;
+
+  entry.realized = await fetchLatestRealized(modelType, champion.id);
 
   if (modelType === "churn") {
     entry.thresholds = card.thresholds ?? { ...DEFAULT_RISK_THRESHOLDS };

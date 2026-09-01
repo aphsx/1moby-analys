@@ -33,6 +33,16 @@ export interface ModelVersionSummary {
   created_by: string | null;
 }
 
+export interface ModelPerfRealized {
+  /** Primary metric value using the same key as training test holdout. */
+  primary_value: number | null;
+  metrics: Record<string, number>;
+  measured_at: string;
+  prediction_run_id: string | null;
+  prediction_run_name: string | null;
+  cutoff_date: string | null;
+}
+
 export interface ModelPerfEntry {
   model_type: "lifecycle" | "churn" | "clv" | "credit";
   method: string;
@@ -52,5 +62,7 @@ export interface ModelPerfEntry {
   calibration?: { prob_pred: number[]; prob_true: number[]; ece: number };
   confusion?: { tp: number; fp: number; fn: number; tn: number; threshold: number };
   lift_table?: { decile: number; share_of_churners: number; lift: number }[];
+  /** Latest production_holdout evaluation for this champion version, if any. */
+  realized?: ModelPerfRealized | null;
   notes?: string;
 }
