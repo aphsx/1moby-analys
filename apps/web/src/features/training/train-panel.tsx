@@ -41,6 +41,7 @@ export function TrainPanel({
   suggestedCutoff,
   latestDataDate,
   creating,
+  trainingInProgress,
   onTrain,
 }: {
   readySources: TrainDataSource[];
@@ -55,6 +56,7 @@ export function TrainPanel({
   suggestedCutoff: string | null;
   latestDataDate: string | null;
   creating: boolean;
+  trainingInProgress: boolean;
   onTrain: (input: { cutoff_date: string; horizon_days: number }) => void;
 }) {
   // Training cutoff is fully auto-managed: the API picks the latest cutoff that
@@ -76,8 +78,9 @@ export function TrainPanel({
   }, [suggestedCutoff]);
 
   const horizonValid = Number.isInteger(horizonDays) && horizonDays > 0;
+  const trainBusy = creating || trainingInProgress;
   const canTrain =
-    Boolean(selectedSource) && Boolean(cutoffDate) && horizonValid && !creating;
+    Boolean(selectedSource) && Boolean(cutoffDate) && horizonValid && !trainBusy;
   const counts = selectedSource ? getCleanCounts(selectedSource) : null;
 
   return (
@@ -92,8 +95,8 @@ export function TrainPanel({
           onClick={() => onTrain({ cutoff_date: cutoffDate, horizon_days: horizonDays })}
           className={`${PRIMARY_BUTTON_CLS} w-full sm:w-auto sm:min-w-[140px]`}
         >
-          {creating ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
-          {creating ? "กำลังเริ่ม…" : "เทรน"}
+          {trainBusy ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
+          {creating ? "กำลังเริ่ม…" : trainingInProgress ? "กำลังเทรน…" : "เทรน"}
         </button>
       }
     >
@@ -103,7 +106,7 @@ export function TrainPanel({
           <Select
             value={selectedSource?.id ?? ""}
             onChange={onSelect}
-            disabled={creating || readySources.length === 0}
+            disabled={trainBusy || readySources.length === 0}
             size="lg"
             className="min-w-0 flex-1"
             placeholder="ยังไม่มี dataset ที่ ready"
@@ -160,6 +163,10 @@ export function TrainPanel({
           step={importStep}
           phase={importPhase}
         />
+      )}
+
+      {trainingInProgress && !importing && (
+        <ProgressCard training progress={100} step="" phase={null} />
       )}
 
       <div className="mt-4 border-t border-gray-100 pt-4">

@@ -253,7 +253,7 @@ export function TrainingView() {
   };
 
   const handleTrain = async (input: { cutoff_date: string; horizon_days: number }) => {
-    if (!selectedSource) return;
+    if (!selectedSource || hasActiveRun) return;
     setCreating(true);
     setTrainError(null);
     try {
@@ -308,6 +308,7 @@ export function TrainingView() {
           suggestedCutoff={suggestedCutoff}
           latestDataDate={latestDataDate}
           creating={creating}
+          trainingInProgress={hasActiveRun}
           onTrain={handleTrain}
         />
 
