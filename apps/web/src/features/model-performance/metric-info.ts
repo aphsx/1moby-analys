@@ -267,6 +267,13 @@ export const SECONDARY_METRICS: Record<string, string[]> = {
   credit: ["coverage_p10_p90_30d", "coverage_p10_p90_90d", "mae_30d", "mae_90d", "urgent_topup_recall", "urgent_topup_precision"],
 };
 
+/** Subset shown on the Model Performance page (minimal but complete). */
+export const DISPLAY_SECONDARY_METRICS: Record<string, string[]> = {
+  churn: ["recall_at_top10pct", "lift_at_top10pct", "ece"],
+  clv: ["spearman", "top_decile_capture", "p_pay_roc_auc"],
+  credit: ["coverage_p10_p90_30d", "coverage_p10_p90_90d", "mae_30d"],
+};
+
 const BASELINE_NAME_LABELS: Record<string, string> = {
   target_75pct: "เป้า 75%",
 };
@@ -296,8 +303,9 @@ export function pickSecondaryMetrics(
   modelType: string,
   metrics: Record<string, number>,
   componentMetrics?: Record<string, number>,
+  keyList?: string[],
 ): Array<{ key: string; value: number }> {
-  const keys = SECONDARY_METRICS[modelType] ?? [];
+  const keys = keyList ?? SECONDARY_METRICS[modelType] ?? [];
   const merged = { ...metrics, ...componentMetrics };
   return keys
     .filter((key) => {
@@ -316,9 +324,9 @@ export const PRIMARY_METRIC_KEY: Record<string, string> = {
 export const SPLIT_ORDER = ["validation", "test", "backtest_avg"] as const;
 
 export const SPLIT_LABELS: Record<(typeof SPLIT_ORDER)[number], string> = {
-  validation: "Validation",
-  test: "Test (holdout)",
-  backtest_avg: "Backtest avg",
+  validation: "Val",
+  test: "Test",
+  backtest_avg: "BT avg",
 };
 
 export function formatDate(value: string): string {
