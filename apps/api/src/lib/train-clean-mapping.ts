@@ -1,21 +1,8 @@
 /**
- * Excel header → clean column mapping (aligned with apps/ml/src/data_loader.py).
+ * Excel sheet → clean channel/source mapping.
  */
 
-import { PAYMENT_HEADERS, type TrainSheetName } from "./train-excel-contract";
-
-export const USER_PAYLOAD_TO_COLUMN: Record<string, string> = {
-  acc_id: "acc_id",
-  "status (SMS)": "status_sms",
-  "user.credit + user.credit_premium": "credit_sms",
-  credit_email: "credit_email",
-  expire: "expire_sms",
-  expire_email: "expire_email",
-  "status (Email)": "status_email",
-  join_date: "join_date",
-  last_access: "last_access",
-  last_send: "last_send",
-};
+import type { TrainSheetName } from "./train-excel-contract";
 
 export const USAGE_SHEET_CHANNEL: Record<string, { channel: string; usageSource: string }> = {
   "SMS_usage (BC)": { channel: "sms", usageSource: "bc" },
@@ -27,6 +14,3 @@ export const USAGE_SHEET_CHANNEL: Record<string, { channel: string; usageSource:
 };
 
 export const USAGE_SHEET_NAMES = Object.keys(USAGE_SHEET_CHANNEL) as TrainSheetName[];
-
-/** Excel Backend_payment headers — see excel_schema.yaml */
-export const PAYMENT_EXCEL_HEADERS = PAYMENT_HEADERS;

@@ -73,14 +73,16 @@ Cursor skill (`.cursor/skills/ml-contract-review/`) and `docs/ML-CALCULATIONS-TH
 ## Tech Stack
 
 - **Frontend:** Next.js 16 (App Router) + React 18 + TypeScript + Tailwind CSS + Better Auth client.
-  Charts via `recharts`, animation via `gsap`, state via `zustand`, typed API client via `@elysiajs/eden`.
+  Charts via `recharts`, animation via `gsap`, state via `zustand`. API calls go through the hand-written
+  clients in `src/lib/{api,ml-api}.ts` over `fetch`.
 - **API:** Elysia.js on Bun + Better Auth (server) + Drizzle ORM (introspect-only) + ioredis.
 - **ML:** Python 3.11. FastAPI exposes `/health` + internal job triggers only; the actual training and
   prediction run as CLIs (`train_v2.py`, `predict_v2.py`) under `apps/ml/src/{training,prediction}/`.
 - **ML libs:** LightGBM, XGBoost, SHAP, lifetimes (BG-NBD/Gamma-Gamma), scikit-learn, Optuna.
 - **Database:** PostgreSQL 15 (`pgvector/pgvector:pg15` image; the `vector` extension is reserved for
   AI-chat RAG but not yet enabled — see `docs/AI-ASSISTANT.md`).
-- **Queue / progress:** Redis — Arq for job dispatch (Python-native), Redis Streams for progress events.
+- **Progress:** Redis Streams (via `ioredis`, API side only). There is no job queue — Elysia calls the
+  FastAPI internal endpoints synchronously and those spawn the ML CLIs.
 - **Storage:** Local filesystem (`./models` volume) in dev; R2 deferred.
 - **Monorepo:** Turborepo + Bun workspaces.
 
@@ -143,7 +145,7 @@ schema for query building — **never run `drizzle-kit generate` or push schema 
 | Elysia (`api`) | `:3001` | `:3001` | REST + Better Auth + SSE |
 | FastAPI (`ml`) | `:8000` | `:8001` | Internal routes only (`/health`, `/internal/*`) |
 | PostgreSQL (`db`) | `:5432` | `:5433` | Bootstrap from `db/init/001_schema.sql` |
-| Redis | `:6379` | — | Arq queue + progress Streams |
+| Redis | `:6379` | — | Progress Streams (API only; the ml service never connects) |
 
 ## Traffic Flow
 
@@ -153,7 +155,7 @@ Browser → Next.js :3000
 
 Elysia :3001
   → PostgreSQL (Drizzle / pg)
-  → Redis (progress Streams XADD/XREAD; Arq enqueue)
+  → Redis (progress Streams XADD/XREAD)
   → FastAPI :8000/internal/training-runs    (token-gated, spawns python -m src.cli.train)
   → FastAPI :8000/internal/prediction-runs  (token-gated, spawns python -m src.cli.predict)
   → Ollama (AI chat / insights)
@@ -350,7 +352,6 @@ OLLAMA_EMBED_MODEL / AI_RAG_TOP_K                  # RAG (planned)
 ### ml (FastAPI + runners)
 ```
 DATABASE_URL
-REDIS_HOST / REDIS_PORT
 MODEL_DIR
 DATA_DIR
 INTERNAL_SERVICE_TOKEN   # shared with api service
