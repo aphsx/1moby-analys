@@ -1,9 +1,6 @@
 "use client";
 
-/**
- * Prediction runs surface. Real ML v2 routes are the default; set
- * NEXT_PUBLIC_ML_USE_MOCK=1 for deterministic offline demo data.
- */
+/** Prediction runs surface, backed by the ML v2 routes. */
 import { useCallback, useEffect, useState } from "react";
 import { fetchPredictDataSources, type PredictDataSource } from "@/lib/api";
 import { fetchPredictionRuns, type PredictionRun } from "@/lib/ml-api";

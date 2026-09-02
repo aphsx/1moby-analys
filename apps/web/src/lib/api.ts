@@ -7,12 +7,7 @@
  */
 
 import type { TrainDataSource, PredictDataSource } from "@moby/types";
-import {
-  IS_ML_MOCK,
-  isApiError,
-  loadMlMock as mockMl,
-  redirectingFetch as apiFetch,
-} from "./http";
+import { isApiError, redirectingFetch as apiFetch } from "./http";
 export type { TrainDataSource, PredictDataSource };
 
 /** Must stay in sync with apps/api DEFAULT_IMPORT_TIMEOUT_MS (10 minutes). */
@@ -340,7 +335,6 @@ export interface PredictImportDone {
 }
 
 export async function fetchPredictDataSources(): Promise<PredictDataSource[]> {
-  if (IS_ML_MOCK) return (await mockMl()).mockPredictDataSources();
 
   const res = await apiFetch("/api/predict-data-sources");
   const body = await parseJson(res);
@@ -358,9 +352,6 @@ export async function uploadPredictDataFile(
   client_label?: string,
   notes?: string
 ): Promise<PredictImportDone> {
-  if (IS_ML_MOCK) {
-    return (await mockMl()).mockUploadPredictDataFile(file, name, client_label, notes);
-  }
 
   const fd = new FormData();
   fd.append("file", file);
