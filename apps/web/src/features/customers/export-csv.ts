@@ -70,7 +70,7 @@ function buildCsv(rows: PredictionOutput[]): string {
 }
 
 /** Fetch every page matching the filters (cap EXPORT_ROW_CAP), newest sort preserved. */
-export async function fetchAllOutputsForExport(
+async function fetchAllOutputsForExport(
   runId: string,
   baseQuery: Omit<OutputsQuery, "page" | "page_size">,
   onProgress?: (loaded: number, total: number) => void
@@ -100,7 +100,7 @@ export async function fetchAllOutputsForExport(
 }
 
 /** Trigger a browser download of the rows as a UTF-8 (BOM) CSV. */
-export function downloadCsv(rows: PredictionOutput[], filename: string): void {
+function downloadCsv(rows: PredictionOutput[], filename: string): void {
   const bom = "\uFEFF"; // UTF-8 BOM so Excel renders Thai text correctly.
   const blob = new Blob([bom + buildCsv(rows)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);

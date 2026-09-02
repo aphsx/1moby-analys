@@ -21,7 +21,7 @@ const pct1 = (v: number): string => `${(v * 100).toFixed(1)}%`;
 const times = (v: number): string => `${v.toFixed(2)}×`;
 const int = (v: number): string => Math.round(v).toLocaleString();
 
-export const METRIC_INFO: Record<string, MetricInfo> = {
+const METRIC_INFO: Record<string, MetricInfo> = {
   pr_auc: {
     label: "PR-AUC",
     tooltip: "คุณภาพการจับคนที่จะ churn จริงเมื่อ class เอียง — ค่าหลัก",
@@ -261,7 +261,7 @@ const PRIMARY_LABEL_TO_KEY: Record<string, string> = {
   "Rule coverage": "coverage_p10_p90",
 };
 
-export const SECONDARY_METRICS: Record<string, string[]> = {
+const SECONDARY_METRICS: Record<string, string[]> = {
   churn: ["recall_at_top10pct", "lift_at_top10pct", "ece", "f1"],
   clv: ["spearman", "p_pay_roc_auc", "top_decile_capture", "revenue_bias_ratio", "range_coverage", "p_pay_ece"],
   credit: ["coverage_p10_p90_30d", "coverage_p10_p90_90d", "mae_30d", "mae_90d", "urgent_topup_recall", "urgent_topup_precision"],

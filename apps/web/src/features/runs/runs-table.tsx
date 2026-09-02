@@ -20,7 +20,7 @@ import { formatRelative, runStatusLabel, runStatusTone } from "./runs-utils";
 /** Auto-created runs are named "Auto — {source} {YYYY-MM-DD}" by the import API. */
 const AUTO_RUN_PREFIX = "Auto — ";
 
-export function isAutoRun(run: Pick<PredictionRun, "name">): boolean {
+function isAutoRun(run: Pick<PredictionRun, "name">): boolean {
   return run.name.startsWith(AUTO_RUN_PREFIX);
 }
 

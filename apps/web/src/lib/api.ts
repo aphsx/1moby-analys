@@ -57,9 +57,9 @@ export async function deleteTrainDataSource(id: string): Promise<void> {
   }
 }
 
-export type TrainPipelinePhase = "raw" | "clean";
+type TrainPipelinePhase = "raw" | "clean";
 
-export interface TrainImportProgress {
+interface TrainImportProgress {
   progress: number;
   step: string;
   phase?: TrainPipelinePhase;
@@ -67,7 +67,7 @@ export interface TrainImportProgress {
   rows?: number;
 }
 
-export interface TrainImportDone {
+interface TrainImportDone {
   source_id: string;
   import_status: string;
   sheet_manifest: Record<string, number>;
@@ -325,25 +325,6 @@ export function uploadTrainDataFileWithProgress(
   })();
 }
 
-/** JSON import (no progress stream) — prefer uploadTrainDataFileWithProgress in UI. */
-export async function uploadTrainDataFile(
-  file: File,
-  name: string,
-  client_label?: string
-): Promise<TrainImportDone> {
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("name", name);
-  if (client_label) fd.append("client_label", client_label);
-
-  const res = await apiFetch("/api/train-data-sources/import", { method: "POST", body: fd });
-  const body = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(isApiError(body) ? body.message : `Import failed (${res.status})`);
-  }
-  return body as TrainImportDone;
-}
-
 // Predict raw data import
 // predict_data_sources + predict_raw_sheet_* + predict_clean_*.
 
@@ -369,19 +350,6 @@ export async function fetchPredictDataSources(): Promise<PredictDataSource[]> {
     );
   }
   return asArray<PredictDataSource>(body);
-}
-
-export async function fetchPredictDataSource(id: string): Promise<PredictDataSource> {
-  if (IS_ML_MOCK) return (await mockMl()).mockPredictDataSource(id);
-
-  const res = await apiFetch(`/api/predict-data-sources/${id}`);
-  const body = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(
-      isApiError(body) ? body.message : `Failed to load predict data source (${res.status})`
-    );
-  }
-  return body as PredictDataSource;
 }
 
 export async function uploadPredictDataFile(

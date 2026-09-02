@@ -24,7 +24,7 @@ export function ModelPerformanceView() {
 
   return (
     <main className="pb-12">
-      <PageHeader eyebrow="Model accuracy" title="Model Accuracy" />
+      <PageHeader title="Model Accuracy" />
 
       <div className="mt-5 space-y-4 px-4 sm:px-6 lg:px-8">
         <p className="max-w-3xl text-[12.5px] leading-5 text-[color:var(--ink-5)]">

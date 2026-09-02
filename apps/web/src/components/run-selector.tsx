@@ -39,10 +39,6 @@ export function useActiveRun() {
   return { run, runs, runId: run?.id ?? "", setRunId, loading };
 }
 
-export function MockBadge() {
-  return null;
-}
-
 export default function RunSelector() {
   const { run, runs, runId, setRunId, loading } = useActiveRun();
 
