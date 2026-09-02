@@ -10,7 +10,7 @@ interface SessionUser {
  * Derives { userId } on every request by reading the Better Auth session.
  * `userId` is null for unauthenticated requests. Use `requireUser` to enforce.
  */
-export const userPlugin = new Elysia({ name: "user-plugin" }).derive(
+const userPlugin = new Elysia({ name: "user-plugin" }).derive(
   { as: "global" },
   async ({ request }) => {
     const sessionData = await auth.api

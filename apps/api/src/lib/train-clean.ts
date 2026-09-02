@@ -32,7 +32,7 @@ import {
   USAGE_SHEET_NAMES,
 } from "./train-clean-mapping";
 import type { CleanManifest } from "./clean-manifest";
-export type { CleanManifest, CleanSkipped, TrainCleanManifest, TrainCleanSkipped } from "./clean-manifest";
+export type { CleanManifest, CleanSkipped } from "./clean-manifest";
 import { abortTrainDataSource } from "./abort-data-source";
 import type { TrainPipelineProgressEvent } from "./train-pipeline-progress";
 import {

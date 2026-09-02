@@ -18,9 +18,3 @@ export interface CleanManifest {
   skipped: CleanSkipped;
   warnings: string[];
 }
-
-/** @deprecated Use CleanManifest */
-export type TrainCleanManifest = CleanManifest;
-
-/** @deprecated Use CleanSkipped */
-export type TrainCleanSkipped = CleanSkipped;

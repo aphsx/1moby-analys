@@ -21,7 +21,6 @@
  * self-correcting agent regenerate, rather than letting a query through.
  */
 
-import { eq } from "drizzle-orm";
 
 const UUID_LITERAL_RE =
   /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
@@ -43,7 +42,7 @@ export type UserScope = {
   sourceIds: string[];
 };
 
-export type ScopeCheck =
+type ScopeCheck =
   | { ok: true }
   | { ok: false; reason: string };
 
@@ -64,21 +63,6 @@ export async function loadUserScope(_userId: string): Promise<UserScope> {
     db.select({ id: predictDataSources.id }).from(predictDataSources),
   ]);
   return { runIds: runs.map((r) => r.id), sourceIds: sources.map((s) => s.id) };
-}
-
-/** Resolve a run's source id. Org-shared: any existing run resolves. */
-export async function loadRunSourceId(runId: string): Promise<string | null> {
-  const [{ db }, { mlPredictionRuns }] = await Promise.all([
-    import("../../db/client"),
-    import("../../db/schema"),
-  ]);
-
-  const [row] = await db
-    .select({ sourceId: mlPredictionRuns.predictSourceId })
-    .from(mlPredictionRuns)
-    .where(eq(mlPredictionRuns.id, runId))
-    .limit(1);
-  return row?.sourceId ?? null;
 }
 
 function referencesAny(sqlLower: string, tables: string[]): boolean {

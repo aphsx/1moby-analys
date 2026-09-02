@@ -32,7 +32,7 @@ import {
   progressBeforeSheet,
   progressFinalize,
 } from "./train-import-progress";
-import type { TrainCleanManifest } from "./train-clean";
+import type { CleanManifest } from "./train-clean";
 import {
   validateWorkbookSheets as validateWorkbookSheetsCore,
   parseSheetRows as parseSheetRowsCore,
@@ -59,7 +59,7 @@ export interface TrainImportResult {
   import_status: string;
   sheet_manifest: Record<string, number>;
   file_checksum_sha256: string;
-  clean_manifest?: TrainCleanManifest;
+  clean_manifest?: CleanManifest;
 }
 
 function validateWorkbookSheets(sheetNames: string[]): void {

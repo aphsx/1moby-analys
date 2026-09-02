@@ -51,19 +51,19 @@ function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-export function sseThinking(step: string, message: string): string {
+function sseThinking(step: string, message: string): string {
   return sseEvent(SSE_EVENT.THINKING, { step, message });
 }
-export function sseToken(text: string): string {
+function sseToken(text: string): string {
   return sseEvent(SSE_EVENT.TOKEN, { text });
 }
-export function sseEvidence(data: EvidenceEvent): string {
+function sseEvidence(data: EvidenceEvent): string {
   return sseEvent(SSE_EVENT.EVIDENCE, data);
 }
-export function sseTitle(title: string): string {
+function sseTitle(title: string): string {
   return sseEvent(SSE_EVENT.TITLE, { title });
 }
-export function sseDone(message_id: number): string {
+function sseDone(message_id: number): string {
   return sseEvent(SSE_EVENT.DONE, { message_id });
 }
 export function sseError(message: string, code: string = ERROR_CODE.ORCHESTRATOR_ERROR): string {

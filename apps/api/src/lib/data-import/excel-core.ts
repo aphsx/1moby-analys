@@ -14,13 +14,13 @@ export function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-export function trimHeader(value: unknown): string | null {
+function trimHeader(value: unknown): string | null {
   if (value == null) return null;
   const s = String(value).trim();
   return s.length > 0 ? s : null;
 }
 
-export function cellToJson(value: unknown): CellJson {
+function cellToJson(value: unknown): CellJson {
   if (value == null) return null;
   if (value instanceof Date) {
     const serial = (value.getTime() - Date.UTC(1899, 11, 30)) / 86_400_000;
@@ -32,7 +32,7 @@ export function cellToJson(value: unknown): CellJson {
   return String(value);
 }
 
-export function rowIsEmpty(values: unknown[]): boolean {
+function rowIsEmpty(values: unknown[]): boolean {
   for (const v of values) {
     if (v == null) continue;
     if (typeof v === "string" && !v.trim()) continue;
@@ -41,7 +41,7 @@ export function rowIsEmpty(values: unknown[]): boolean {
   return true;
 }
 
-export function buildPayload(headers: (string | null)[], row: unknown[]): Record<string, CellJson> {
+function buildPayload(headers: (string | null)[], row: unknown[]): Record<string, CellJson> {
   const payload: Record<string, CellJson> = {};
   for (let i = 0; i < headers.length; i++) {
     const key = headers[i];
@@ -51,7 +51,7 @@ export function buildPayload(headers: (string | null)[], row: unknown[]): Record
   return payload;
 }
 
-export function validateHeaders(sheetName: string, headers: (string | null)[], required: string[]): void {
+function validateHeaders(sheetName: string, headers: (string | null)[], required: string[]): void {
   const present = new Set(headers.filter((h): h is string => h != null));
   for (const req of required) {
     if (!present.has(req)) {

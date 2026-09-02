@@ -14,7 +14,7 @@ export type SemanticTable = {
   columns: SemanticColumn[];
 };
 
-export const ROLE_RANK: Record<AiUserRole, number> = {
+const ROLE_RANK: Record<AiUserRole, number> = {
   viewer: 1,
   analyst: 2,
   admin: 3,
@@ -23,7 +23,7 @@ export const ROLE_RANK: Record<AiUserRole, number> = {
 export const AI_SQL_DEFAULT_LIMIT = 50;
 export const AI_SQL_MAX_LIMIT = 100;
 
-export const SEMANTIC_TABLES: SemanticTable[] = [
+const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "predict_data_sources",
     description: "Uploaded prediction datasets and import/clean status.",

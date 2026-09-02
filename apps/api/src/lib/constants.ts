@@ -113,6 +113,3 @@ export function importTimeoutMs(): number {
   const parsed = Number(process.env.IMPORT_TIMEOUT_MS);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_IMPORT_TIMEOUT_MS;
 }
-
-/** @deprecated Prefer maxUploadBytes() — kept as the resolved default for route schemas. */
-export const MAX_UPLOAD_BYTES = DEFAULT_MAX_UPLOAD_BYTES;
