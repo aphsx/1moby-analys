@@ -2,38 +2,24 @@
 
 Every doc in this repo and what it answers. Start at the top.
 
-## Start here
+## ส่งอาจารย์ / สอบ
+
+| Doc | What it covers | Language |
+|---|---|---|
+| [`FINAL-REPORT-FULL-TH.docx`](FINAL-REPORT-FULL-TH.docx) | **เล่มรายงานโครงงานฉบับส่ง** (Word) — 5 บท + บทคัดย่อ/Abstract + สารบัญตาราง/ภาพ + คำนิยาม + เอกสารอ้างอิง + ภาคผนวก | TH |
+| [`FINAL-REPORT-FULL-TH.md`](FINAL-REPORT-FULL-TH.md) | ต้นฉบับ Markdown ของเล่มรายงาน (แก้ที่นี่แล้ว regenerate docx ได้) | TH |
+| [`PRESENTATION-SCRIPT-TH.md`](PRESENTATION-SCRIPT-TH.md) | สคริปต์นำเสนอสอบ: ลำดับพูด, ตัวเลขที่ต้องรู้, คำตอบคำถามที่น่าจะถูกถาม | TH |
+| [`generate-report-docx.js`](generate-report-docx.js) | สคริปต์แปลง FINAL-REPORT-FULL-TH.md → .docx (รัน `node docs/generate-report-docx.js` จาก root) | — |
+
+## Engineering references (ถูกโค้ด/agent อ้างถึง — อย่าลบ)
 
 | Doc | What it covers | Language |
 |---|---|---|
 | [`../README.md`](../README.md) | Project intro, stack, how to run, ports, data flow | EN |
 | [`../claude.md`](../claude.md) | **Architecture source of truth** — schema, routes, conventions, what-not-to-change | EN |
-| [`PROJECT-REPORT-TH.md`](PROJECT-REPORT-TH.md) | **รายงานโครงงานฉบับสมบูรณ์ 5 บท** — ที่มา, เทคโนโลยี, ออกแบบ, workflow, ผลการทดสอบ, สรุป | TH |
-| [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) | **Plain-English end-to-end walkthrough** — services, import, features, training/prediction run, output row, web, AI, ops | EN |
-| [`ML-CALCULATIONS-TH.md`](ML-CALCULATIONS-TH.md) | **เอกสาร ML canonical (TH)** — สูตร/metric/threshold/ค่าคงที่ ทุกตัว (อิงบรรทัดโค้ด) + output contract ของ `ml_prediction_outputs` + design contract/policy ของการเทรน | TH |
-| [`MODEL-DEEP-DIVE-EN.md`](MODEL-DEEP-DIVE-EN.md) | Churn + CLV + Credit design rationale & worked example (EN narrative; formulas → `ML-CALCULATIONS-TH.md`) | EN |
-
-## UI spec
-
-| Doc | What it covers | Language |
-|---|---|---|
+| [`ML-CALCULATIONS-TH.md`](ML-CALCULATIONS-TH.md) | **เอกสาร ML canonical (TH)** — สูตร/metric/threshold/ค่าคงที่ ทุกตัว (อิงบรรทัดโค้ด) + output contract ของ `ml_prediction_outputs` (§13) + design contract/policy ของการเทรน (§12) | TH |
 | [`ML-V2-DASHBOARD-SPEC.md`](ML-V2-DASHBOARD-SPEC.md) | Every web page/widget, field-by-field, value provenance | TH |
-
-> เดิมมี `ML-V2-OVERVIEW` / `ML-V2-OUTPUT-CONTRACT` / `ML-V2-TRAINING-PIPELINE` แยกไฟล์ —
-> ตอนนี้ยุบรวมเข้า `ML-CALCULATIONS-TH.md` (output contract = §13, training design/policy = §12) แล้ว
-
-## Research notes
-
-| Doc | What it covers | Language |
-|---|---|---|
-| [`RESEARCH-CLV-CREDIT-ALTERNATIVES-TH.md`](RESEARCH-CLV-CREDIT-ALTERNATIVES-TH.md) | ทางเลือกโมเดล CLV/Credit เทียบกับข้อมูล Moby — recommendation matrix, สิ่งที่ไม่ควรไล่, ลำดับ implement | TH |
-
-## Features & workflow
-
-| Doc | What it covers | Language |
-|---|---|---|
-| [`CUSTOMER-SEGMENTS.md`](CUSTOMER-SEGMENTS.md) | CS/sales segments on top of ML outputs (`segment`, `priority_rank`) | EN |
-| [`AI-ASSISTANT.md`](AI-ASSISTANT.md) | AI chat assistant — architecture, governance, build plan & status | EN |
+| [`AI-ASSISTANT.md`](AI-ASSISTANT.md) | AI chat assistant (Text-to-SQL) — architecture, governance, build plan & status | EN |
 | [`WEB-DEV-WORKFLOW.md`](WEB-DEV-WORKFLOW.md) | How to run / rebuild the `apps/web` frontend during dev | TH |
 
 ## Data preparation (Excel import → clean tables)
@@ -51,6 +37,10 @@ Every doc in this repo and what it answers. Start at the top.
 ## Conventions
 
 - The live database schema is **always** `db/init/001_schema.sql` — there is no migration framework.
-- ML v2 specs + the Thai report/calculations are written in Thai by design; infrastructure/English deep-dive docs are in English.
+- ML v2 specs + the final report are written in Thai by design; infrastructure/English docs are in English.
 - If a doc disagrees with the code, the code wins — fix the doc.
-- `HOW-IT-WORKS.md` + `MODEL-DEEP-DIVE-EN.md` are the current explanation of the running system; the ML-V2 specs are the design contract. If a number drifted, trust `ML-CALCULATIONS-TH.md` and the code.
+- `ML-CALCULATIONS-TH.md` is the canonical ML reference; the final report (`FINAL-REPORT-FULL-TH.*`) is the explanation of the running system for submission.
+
+## Removed docs (2026-09-06)
+
+`PROJECT-REPORT-TH.md`, `MODEL-DEEP-DIVE-EN.md`, `HOW-IT-WORKS.md`, `RESEARCH-CLV-CREDIT-ALTERNATIVES-TH.md`, `CUSTOMER-SEGMENTS.md`, `FINAL-REPORT-5CHAPTER-TH.*`, `generate-report-v1.js` — superseded by the final report above; recoverable from git history.

@@ -532,7 +532,7 @@ def fit_clv_magnitude_calibration(
     *,
     min_slope: float = 0.01,
 ) -> tuple[float, float]:
-    """Affine OLS magnitude calibration on validation (MODEL-DEEP-DIVE §A5).
+    """Affine OLS magnitude calibration on validation (docs/FINAL-REPORT-FULL-TH.md §2.3).
 
     Fitted on validation only; test never sees it. An increasing affine map
     preserves Spearman ranking while correcting systematic scale bias for

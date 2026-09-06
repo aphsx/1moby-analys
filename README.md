@@ -77,9 +77,8 @@ models were permanently cut.
 |---|---|
 | [`claude.md`](claude.md) | Architecture, schema, conventions — the project's source of truth |
 | [`docs/README.md`](docs/README.md) | Index of all docs |
-| [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) | End-to-end walkthrough of the running system |
+| [`docs/FINAL-REPORT-FULL-TH.docx`](docs/FINAL-REPORT-FULL-TH.docx) | **Final project report (Thai, 5 chapters)** — submission copy; `.md` source alongside |
 | [`docs/ML-CALCULATIONS-TH.md`](docs/ML-CALCULATIONS-TH.md) | Canonical ML reference: formulas, metrics, thresholds, output contract, training design/policy (TH) |
-| [`docs/MODEL-DEEP-DIVE-EN.md`](docs/MODEL-DEEP-DIVE-EN.md) | Churn / CLV / credit design rationale + worked example (EN) |
 | [`docs/ML-V2-DASHBOARD-SPEC.md`](docs/ML-V2-DASHBOARD-SPEC.md) | Dashboard/UI spec: every page/widget, field-by-field |
 | [`docs/AI-ASSISTANT.md`](docs/AI-ASSISTANT.md) | AI chat assistant architecture + build plan |
 | [`moby-data-prep/`](moby-data-prep/) | Excel import contract, naming convention, raw/clean schemas |
