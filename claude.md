@@ -89,10 +89,9 @@ Cursor skill (`.cursor/skills/ml-contract-review/`) and `docs/ML-CALCULATIONS-TH
 The documentation map lives in [`docs/README.md`](docs/README.md). Key references:
 
 - `docs/ML-CALCULATIONS-TH.md` — **canonical ML reference (TH)**: every formula, metric, threshold, constant, the `ml_prediction_outputs` output contract, plus training design-contract & policy
-- `docs/HOW-IT-WORKS.md` — plain-English end-to-end system walkthrough
-- `docs/MODEL-DEEP-DIVE-EN.md` — churn / CLV / credit design rationale + worked example (EN)
 - `docs/ML-V2-DASHBOARD-SPEC.md` — what every web page/widget shows, field-by-field
 - `docs/AI-ASSISTANT.md` — AI chat assistant (separate feature)
+- `docs/FINAL-REPORT-FULL-TH.md` — full Thai senior-project report (system explanation, submission copy); supersedes the removed HOW-IT-WORKS / MODEL-DEEP-DIVE / PROJECT-REPORT docs
 - `moby-data-prep/docs/*` — Excel import contract, table naming, raw/clean schemas
 
 When implementing anything ML- or dashboard-related, follow these docs over any legacy code.
@@ -121,7 +120,7 @@ moby-analytics/
 ├── moby-data-prep/    # Excel import contract docs/config + import CLI
 ├── packages/
 │   └── types/         # Shared TypeScript types (@moby/types) — single source for web + api
-├── docs/              # ML-CALCULATIONS-TH.md + HOW-IT-WORKS.md + MODEL-DEEP-DIVE-EN.md + specs (see docs/README.md)
+├── docs/              # final report (TH) + ML-CALCULATIONS-TH.md + specs (see docs/README.md)
 ├── models/            # ML model artifacts (.pkl, metrics.json, model_card)
 ├── data/              # Training Excel files
 ├── docker-compose.yml

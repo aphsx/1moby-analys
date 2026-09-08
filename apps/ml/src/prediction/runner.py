@@ -854,7 +854,7 @@ def _apply_derived(
 
 
 # Prioritization segments — value × health + sales-timing, see
-# docs/CUSTOMER-SEGMENTS.md. Names/order are the single source in src.constants.
+# Segment spec (historical: docs/CUSTOMER-SEGMENTS.md, removed). Names/order are the single source in src/constants.
 
 
 def _apply_segments(frame: pd.DataFrame, p_alive_cuts: tuple[float, float]) -> pd.DataFrame:
