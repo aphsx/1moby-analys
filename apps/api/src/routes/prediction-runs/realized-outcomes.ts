@@ -5,6 +5,7 @@
  * rows into ml_model_evaluations linked to the run via prediction_run_id.
  * This route only reads what the ML side persisted — no metric math here.
  */
+import { EVALUATION_TYPE } from "@moby/types";
 import Elysia, { t } from "elysia";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "../../db/client";
@@ -15,9 +16,6 @@ import type {
   RealizedOutcomesResponse,
 } from "@moby/types";
 import { fetchRun, requireRunFound } from "../../lib/ml/prediction-runs";
-
-/** Must match PRODUCTION_HOLDOUT_EVALUATION_TYPE in apps/ml/src/outcomes/runner.py. */
-const PRODUCTION_HOLDOUT_EVALUATION_TYPE = "production_holdout";
 
 export const realizedOutcomesRoutes = new Elysia()
   .use(requireUser)
@@ -48,7 +46,7 @@ export const realizedOutcomesRoutes = new Elysia()
         .where(
           and(
             eq(mlModelEvaluations.predictionRunId, run!.id),
-            eq(mlModelEvaluations.evaluationType, PRODUCTION_HOLDOUT_EVALUATION_TYPE)
+            eq(mlModelEvaluations.evaluationType, EVALUATION_TYPE.PRODUCTION_HOLDOUT)
           )
         )
         .orderBy(asc(mlModelEvaluations.modelType));
@@ -57,7 +55,7 @@ export const realizedOutcomesRoutes = new Elysia()
         model_type: row.modelType as RealizedOutcome["model_type"],
         model_version_id: row.modelVersionId,
         model_version: row.modelVersion ?? null,
-        evaluation_type: PRODUCTION_HOLDOUT_EVALUATION_TYPE,
+        evaluation_type: EVALUATION_TYPE.PRODUCTION_HOLDOUT,
         cutoff_date: row.cutoffDate,
         horizon_days: row.horizonDays,
         metrics: (row.metricsJson as Record<string, number> | null) ?? {},

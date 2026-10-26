@@ -8,6 +8,7 @@
  * ml_model_evaluations (evaluation_type='production_holdout'). Per-run
  * evidence (including failures) lands in ml_data_validation_reports.
  */
+import { RUN_STATUS } from "@moby/types";
 import Elysia, { t } from "elysia";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
@@ -15,7 +16,6 @@ import { mlPredictionRuns } from "../db/schema";
 import { requireUser } from "../lib/http/auth-middleware";
 import { denyNotFound } from "../lib/http/access-control";
 import { triggerMlJob } from "../lib/ml/ml-internal";
-import { RUN_STATUS } from "../lib/constants";
 import type { OutcomeBackfillResponse } from "@moby/types";
 
 export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })

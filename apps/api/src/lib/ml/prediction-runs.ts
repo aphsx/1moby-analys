@@ -2,18 +2,7 @@
  * Shared helpers for prediction-runs sub-routes.
  * Not a route file — imported by runs.ts, outputs.ts, summary.ts, customer-360.ts.
  */
-import { eq, type SQL } from "drizzle-orm";
-import { db } from "../../db/client";
 import {
-  mlPredictionOutputs,
-  mlPredictionRuns,
-  predictDataSources,
-  user,
-} from "../../db/schema";
-import { requireFoundForRead } from "../http/access-control";
-import {
-  EMPTY_MODEL_VERSIONS,
-  num,
   type ChurnFactor,
   type LifecycleStage,
   type ModelEligibility,
@@ -24,7 +13,17 @@ import {
   type RunStatus,
   type UrgencyLevel,
   type ValueTier,
-} from "../ml-contract";
+} from "@moby/types";
+import { eq, type SQL } from "drizzle-orm";
+import { db } from "../../db/client";
+import {
+  mlPredictionOutputs,
+  mlPredictionRuns,
+  predictDataSources,
+  user,
+} from "../../db/schema";
+import { requireFoundForRead } from "../http/access-control";
+import { EMPTY_MODEL_VERSIONS, num } from "../ml-contract";
 import { UUID_RE } from "../constants";
 
 // ── Run select + row mapping ───────────────────────────────────

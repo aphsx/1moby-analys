@@ -6,8 +6,7 @@
  * training) and persists realized metrics as ml_model_evaluations rows with
  * evaluation_type='production_holdout' linked to the run.
  */
-/** The three served ML models (lifecycle is rule-based and has no outcome). */
-export type RealizedModelType = "churn" | "clv" | "credit";
+import type { ModelType } from "./enums";
 
 /** Calibration curve stored alongside realized churn metrics. */
 export interface RealizedCalibration {
@@ -40,7 +39,7 @@ export interface RealizedOutcomeContext {
 
 /** One model's realized (production_holdout) evaluation for a prediction run. */
 export interface RealizedOutcome {
-  model_type: RealizedModelType;
+  model_type: ModelType;
   model_version_id: string;
   /** Version string of the served model (null if the version row was deleted). */
   model_version: string | null;

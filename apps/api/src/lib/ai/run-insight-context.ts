@@ -5,8 +5,8 @@
  * Uses fetchRunAggregates (apps/api/src/lib/ml/run-aggregates.ts) so the
  * insight service and the summary route never drift on aggregation logic.
  */
+import { type RiskLevel, type UrgencyLevel, type ValueTier } from "@moby/types";
 import { fetchRunAggregates } from "../ml/run-aggregates";
-import type { RiskLevel, UrgencyLevel, ValueTier } from "../ml-contract";
 
 export type RunInsightCohort = {
   value_tier: ValueTier;

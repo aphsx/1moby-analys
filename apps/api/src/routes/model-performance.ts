@@ -3,6 +3,18 @@
  * Champion (alias='production') per model type + holdout/backtest evaluations
  * and baselines from ml_model_evaluations. Contract: apps/web/src/lib/ml-api.ts.
  */
+import {
+  type CandidateResult,
+  EVALUATION_TYPE,
+  MODEL_ALIAS,
+  MODEL_TYPES,
+  MODEL_VERSION_STATUS,
+  type ModelPerfEntry,
+  type ModelPerfRealized,
+  type ModelType,
+  type ModelVersionSummary,
+  type SplitMetrics,
+} from "@moby/types";
 import Elysia from "elysia";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client";
@@ -15,18 +27,9 @@ import {
 } from "../db/schema";
 import { requireUser } from "../lib/http/auth-middleware";
 import { requireFoundForRead } from "../lib/http/access-control";
-import {
-  DEFAULT_RISK_THRESHOLDS,
-  type CandidateResult,
-  type ModelPerfEntry,
-  type ModelPerfRealized,
-  type ModelVersionSummary,
-  type SplitMetrics,
-} from "../lib/ml-contract";
+import { DEFAULT_RISK_THRESHOLDS } from "../lib/ml-contract";
 import { triggerMlJob } from "../lib/ml/ml-internal";
 
-const MODEL_TYPES = ["churn", "clv", "credit"] as const;
-type ModelType = (typeof MODEL_TYPES)[number];
 
 // Primary headline metric per model type, read from a version's test metrics.
 const PRIMARY_METRIC: Record<ModelType, { key: string; name: string }> = {
@@ -173,7 +176,7 @@ async function fetchLatestRealized(
     .where(
       and(
         eq(mlModelEvaluations.modelVersionId, versionId),
-        eq(mlModelEvaluations.evaluationType, "production_holdout"),
+        eq(mlModelEvaluations.evaluationType, EVALUATION_TYPE.PRODUCTION_HOLDOUT),
         eq(mlModelEvaluations.modelType, modelType)
       )
     )
@@ -205,7 +208,7 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
     })
     .from(mlModelAliases)
     .innerJoin(mlModelVersions, eq(mlModelAliases.modelVersionId, mlModelVersions.id))
-    .where(and(eq(mlModelAliases.alias, "production"), eq(mlModelAliases.modelType, modelType)))
+    .where(and(eq(mlModelAliases.alias, MODEL_ALIAS.PRODUCTION), eq(mlModelAliases.modelType, modelType)))
     .limit(1);
   if (!champion) return null;
 
@@ -216,10 +219,10 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
     .where(eq(mlModelEvaluations.modelVersionId, champion.id));
 
   const holdout = evaluations.filter(
-    (row) => row.baselineName === null && row.evaluationType === "holdout"
+    (row) => row.baselineName === null && row.evaluationType === EVALUATION_TYPE.HOLDOUT
   );
   const backtests = evaluations.filter(
-    (row) => row.baselineName === null && row.evaluationType === "backtest"
+    (row) => row.baselineName === null && row.evaluationType === EVALUATION_TYPE.BACKTEST
   );
 
   const splits: SplitMetrics[] = [];
@@ -385,7 +388,7 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
         mlModelAliases,
         and(
           eq(mlModelAliases.modelType, params.modelType),
-          eq(mlModelAliases.alias, "production")
+          eq(mlModelAliases.alias, MODEL_ALIAS.PRODUCTION)
         )
       )
       .where(eq(mlModelVersions.modelType, params.modelType))
@@ -446,7 +449,7 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
     const denied = requireFoundForRead(version, set, "Model version not found");
     if (denied) return denied;
 
-    if (version!.isActive || version!.status === "production" || version!.isProductionAlias) {
+    if (version!.isActive || version!.status === MODEL_VERSION_STATUS.PRODUCTION || version!.isProductionAlias) {
       set.status = 409;
       return {
         message:

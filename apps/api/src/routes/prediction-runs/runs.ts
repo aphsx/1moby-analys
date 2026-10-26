@@ -1,3 +1,4 @@
+import { IMPORT_STATUS, MODEL_TYPES, RUN_STATUS } from "@moby/types";
 import Elysia, { t } from "elysia";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../../db/client";
@@ -6,7 +7,7 @@ import { requireUser } from "../../lib/http/auth-middleware";
 import { triggerMlJob } from "../../lib/ml/ml-internal";
 import { denyNotFound, requireFoundForRead } from "../../lib/http/access-control";
 import { getPredictCutoffSuggestion } from "../../lib/data-import/clean-cutoff";
-import { DATE_RE, RUN_STATUS, UUID_RE } from "../../lib/constants";
+import { DATE_RE, UUID_RE } from "../../lib/constants";
 import { fetchRun, mapRun, requireRunFound, runSelect } from "../../lib/ml/prediction-runs";
 
 export const runsRoutes = new Elysia()
@@ -34,7 +35,7 @@ export const runsRoutes = new Elysia()
         .where(eq(predictDataSources.id, body.predict_source_id))
         .limit(1);
       if (!source) return denyNotFound(set, "Predict data source not found");
-      if (source.importStatus !== "ready") {
+      if (source.importStatus !== IMPORT_STATUS.READY) {
         set.status = 400;
         return { message: "Predict data source must be ready before prediction" };
       }
@@ -48,7 +49,7 @@ export const runsRoutes = new Elysia()
       // Optional per-run model overrides. Only provided, valid-UUID entries are
       // stored; missing model types fall back to the production champion.
       const overrides: Record<string, string> = {};
-      for (const modelType of ["churn", "clv", "credit"] as const) {
+      for (const modelType of MODEL_TYPES) {
         const versionId = body.model_overrides?.[modelType];
         if (versionId) {
           if (!UUID_RE.test(versionId)) {

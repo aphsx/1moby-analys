@@ -8,11 +8,11 @@
  * longer than STALE_RUN_TIMEOUT_MINUTES (env, default 120) as 'failed', and
  * delete Data Sources stuck in importing/cleaning past the import timeout.
  */
+import { RUN_STATUS } from "@moby/types";
 import { and, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionRuns, mlTrainingRuns } from "../../db/schema";
 import { releaseStalePredict, releaseStaleTrainImports } from "../data-import/abort-data-source";
-import { RUN_STATUS } from "../constants";
 import { positiveNumberEnv } from "../env";
 
 export const STALE_RUN_REAPER_INTERVAL_MS = 5 * 60 * 1000;

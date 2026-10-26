@@ -1,7 +1,7 @@
+import type { CustomerAiExplanationResult, PredictionOutput } from "@moby/types";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
-import type { PredictionOutput } from "../ml-contract";
 import { buildCustomerAiContext } from "./customer-ai-context";
 import { generateCustomerAiExplanation } from "./customer-explanation";
 
@@ -10,14 +10,6 @@ type RunRow = {
   name: string;
   cutoffDate: string;
   predictSourceId: string;
-};
-
-export type CustomerAiExplanationResponse = {
-  acc_id: number;
-  ai_status: PredictionOutput["ai_status"];
-  ai_explanation: string | null;
-  ai_model: string;
-  ai_generated_at: string;
 };
 
 type ServiceError = {
@@ -33,7 +25,7 @@ export async function createCustomerAiExplanation(
   accId: number,
   output: PredictionOutput,
   force: boolean
-): Promise<CustomerAiExplanationResponse | ServiceError> {
+): Promise<CustomerAiExplanationResult | ServiceError> {
   if (output.ai_status === "completed" && output.ai_explanation && !force) {
     return {
       status: 409,

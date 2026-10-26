@@ -14,6 +14,7 @@
  * One summary per run, cached in ml_prediction_runs.cohort_insight_json and
  * regenerated on demand. ~1 LLM call per run, not per customer — cheap at scale.
  */
+import type { RunInsight } from "@moby/types";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionRuns } from "../../db/schema";
@@ -21,14 +22,6 @@ import { buildRunInsightSignals, type RunInsightSignals } from "./run-insight-co
 import { complete, type ChatMessage } from "./llm-client";
 import { getLLMConfig, isLLMConfigured } from "./llm-config";
 import { renderGuardrails } from "./safety";
-
-export type RunInsight = {
-  run_id: string;
-  ai_status: "not_requested" | "completed" | "failed";
-  ai_summary: string | null;
-  ai_model: string | null;
-  ai_generated_at: string | null;
-};
 
 type InsightCache =
   | { status: "completed"; summary: string; model: string; generated_at: string }

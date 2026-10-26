@@ -5,10 +5,10 @@
  * counts and distributions. Keeping one implementation here prevents the
  * two consumers from drifting independently.
  */
+import { type RiskLevel, type UrgencyLevel, type ValueTier } from "@moby/types";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
-import type { RiskLevel, UrgencyLevel, ValueTier } from "../ml-contract";
 
 export type RunAggregates = {
   total_customers: number;

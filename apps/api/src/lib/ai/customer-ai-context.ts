@@ -1,4 +1,4 @@
-import type { PredictionOutput } from "../ml-contract";
+import { type PredictionOutput } from "@moby/types";
 import {
   loadCustomerPayments,
   loadCustomerProfile,

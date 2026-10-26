@@ -1,3 +1,11 @@
+import {
+  type LifecycleStage,
+  MODEL_ALIAS,
+  type RunStatus,
+  type RunSummary,
+  TOP_PRIORITY_LIMIT,
+  type ValueTier,
+} from "@moby/types";
 import Elysia, { t } from "elysia";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client";
@@ -9,11 +17,6 @@ import {
   EMPTY_MODEL_VERSIONS,
   monthKeysBeforeCutoff,
   num,
-  TOP_PRIORITY_LIMIT,
-  type LifecycleStage,
-  type RunStatus,
-  type RunSummary,
-  type ValueTier,
 } from "../../lib/ml-contract";
 import { fetchRunAggregates } from "../../lib/ml/run-aggregates";
 import { runSelect, type RunRow } from "../../lib/ml/prediction-runs";
@@ -23,7 +26,7 @@ async function churnThresholds(): Promise<{ medium: number; high: number; critic
     .select({ modelCardJson: mlModelVersions.modelCardJson })
     .from(mlModelAliases)
     .innerJoin(mlModelVersions, eq(mlModelAliases.modelVersionId, mlModelVersions.id))
-    .where(and(eq(mlModelAliases.alias, "production"), eq(mlModelAliases.modelType, "churn")))
+    .where(and(eq(mlModelAliases.alias, MODEL_ALIAS.PRODUCTION), eq(mlModelAliases.modelType, "churn")))
     .limit(1);
   const card = rows[0]?.modelCardJson as {
     thresholds?: { medium?: number; high?: number; critical?: number };

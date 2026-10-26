@@ -1,6 +1,7 @@
 /**
  * Roll back a failed import — delete catalog row (CASCADE raw + clean).
  */
+import { IMPORT_STATUS } from "@moby/types";
 import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 import { db } from "../../db/client";
 import { predictDataSources, trainDataSources } from "../../db/schema";
@@ -26,7 +27,7 @@ export async function releaseStaleTrainImports(): Promise<number> {
     .delete(trainDataSources)
     .where(
       and(
-        inArray(trainDataSources.importStatus, ["importing", "cleaning"]),
+        inArray(trainDataSources.importStatus, [IMPORT_STATUS.IMPORTING, IMPORT_STATUS.CLEANING]),
         isNull(trainDataSources.cleanedAt),
         lt(trainDataSources.createdAt, staleImportCutoff())
       )
@@ -41,7 +42,7 @@ export async function releaseStalePredict(): Promise<number> {
     .delete(predictDataSources)
     .where(
       and(
-        inArray(predictDataSources.importStatus, ["importing", "cleaning"]),
+        inArray(predictDataSources.importStatus, [IMPORT_STATUS.IMPORTING, IMPORT_STATUS.CLEANING]),
         isNull(predictDataSources.cleanedAt),
         lt(predictDataSources.createdAt, staleImportCutoff())
       )

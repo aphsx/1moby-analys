@@ -1,8 +1,8 @@
 """Canonical enum-like string constants shared across the ML pipeline.
 
-These values are part of the cross-service contract: the API (TypeScript) reads
-the exact same strings the ML writer produces (see apps/api/src/lib/constants.ts,
-which must stay in sync). Centralizing them here removes the scattered string
+These values are part of the cross-service contract: the API and web (TypeScript)
+read the exact same strings the ML writer produces (packages/types/src/enums.ts must
+stay in sync; scripts/verify_constants_sync.py checks it). Centralizing them here removes the scattered string
 literals (CLAUDE.md code style: magic strings -> constants) so a typo cannot
 silently drift between the writer and the reader.
 """
@@ -10,6 +10,37 @@ silently drift between the writer and the reader.
 from __future__ import annotations
 
 from typing import Final
+
+
+class ModelType:
+    CHURN: Final = "churn"
+    CLV: Final = "clv"
+    CREDIT: Final = "credit"
+
+
+class ImportStatus:
+    PENDING: Final = "pending"
+    IMPORTING: Final = "importing"
+    CLEANING: Final = "cleaning"
+    READY: Final = "ready"
+    FAILED: Final = "failed"
+
+
+class ModelVersionStatus:
+    CANDIDATE: Final = "candidate"
+    PRODUCTION: Final = "production"
+    ARCHIVED: Final = "archived"
+
+
+class ModelAlias:
+    PRODUCTION: Final = "production"
+
+
+class EvaluationType:
+    HOLDOUT: Final = "holdout"
+    BACKTEST: Final = "backtest"
+    BASELINE: Final = "baseline"
+    PRODUCTION_HOLDOUT: Final = "production_holdout"
 
 
 class RunStatus:

@@ -4,6 +4,7 @@
  * Org-shared model: reads are org-wide; any authenticated user can import and
  * delete a source.
  */
+import { IMPORT_STATUS } from "@moby/types";
 import Elysia, { t } from "elysia";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
@@ -143,7 +144,7 @@ const trainImportRoutes = new Elysia()
           imported_by: userId!,
         });
 
-        return { source_id: sourceId, import_status: "importing" };
+        return { source_id: sourceId, import_status: IMPORT_STATUS.IMPORTING };
       } catch (e) {
         if (sourceId) await abortTrainDataSource(sourceId);
         const err = e as Error;
@@ -209,7 +210,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
 
       // DB terminal state wins over Redis progress. Progress events are published
       // fire-and-forget and can arrive after the final "done" stream entry.
-      if (row.importStatus === "ready") {
+      if (row.importStatus === IMPORT_STATUS.READY) {
         return {
           status: "ready" as const,
           progress: 100,
@@ -217,7 +218,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
           phase: "clean" as const,
           result: {
             source_id: sourceId,
-            import_status: "ready",
+            import_status: IMPORT_STATUS.READY,
             sheet_manifest: (row.sheetManifest ?? {}) as Record<string, number>,
             clean_manifest: row.cleanManifest ?? undefined,
           },

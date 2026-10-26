@@ -2,6 +2,7 @@
  * Train clean — ETL from train_raw_sheet_* → train_clean_* for model training.
  * Parse + lineage only; ML rules (period, labels) stay in Python.
  */
+import { IMPORT_STATUS } from "@moby/types";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import {
@@ -91,7 +92,7 @@ export async function cleanTrainFromRaw(
 
   await db
     .update(trainDataSources)
-    .set({ importStatus: "cleaning", errorMessage: null })
+    .set({ importStatus: IMPORT_STATUS.CLEANING, errorMessage: null })
     .where(eq(trainDataSources.id, sourceId));
 
   emit?.(progressCleanStart());
@@ -208,7 +209,7 @@ export async function cleanTrainFromRaw(
   await db
     .update(trainDataSources)
     .set({
-      importStatus: "ready",
+      importStatus: IMPORT_STATUS.READY,
       cleanManifest: manifest,
       cleanedAt: new Date(),
       errorMessage: null,

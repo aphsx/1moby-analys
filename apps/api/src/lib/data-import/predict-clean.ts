@@ -2,6 +2,7 @@
  * Predict clean — ETL from predict_raw_sheet_* → predict_clean_* per upload/run.
  * Same parse + lineage rules as train clean; ML semantics stay in Python.
  */
+import { IMPORT_STATUS } from "@moby/types";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import {
@@ -79,7 +80,7 @@ export async function cleanPredictFromRaw(sourceId: string): Promise<CleanManife
 
   await db
     .update(predictDataSources)
-    .set({ importStatus: "cleaning", errorMessage: null })
+    .set({ importStatus: IMPORT_STATUS.CLEANING, errorMessage: null })
     .where(eq(predictDataSources.id, sourceId));
 
   const skipped = emptySkippedCounts();
@@ -188,7 +189,7 @@ export async function cleanPredictFromRaw(sourceId: string): Promise<CleanManife
   await db
     .update(predictDataSources)
     .set({
-      importStatus: "ready",
+      importStatus: IMPORT_STATUS.READY,
       cleanManifest: manifest,
       cleanedAt: new Date(),
       errorMessage: null,

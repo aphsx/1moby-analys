@@ -3,6 +3,7 @@
  * and Redis progress streaming. Extracted from routes/train-data-sources.ts so the route
  * file stays thin (HTTP concerns only).
  */
+import { IMPORT_STATUS } from "@moby/types";
 import { importTrainExcel, type TrainImportResult } from "../train-import";
 import type { TrainImportProgressEvent } from "./import-progress";
 import { abortTrainDataSource } from "../abort-data-source";
@@ -82,7 +83,7 @@ export async function runTrainImportPipeline(
 
     return {
       ...rawResult,
-      import_status: "ready",
+      import_status: IMPORT_STATUS.READY,
       clean_manifest: cleanManifest,
     };
   });

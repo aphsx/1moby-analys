@@ -4,6 +4,7 @@
  * Org-shared model: reads and import are available to any authenticated user.
  * A successful import auto-triggers a prediction run (opt out with auto_run=false).
  */
+import { IMPORT_STATUS } from "@moby/types";
 import Elysia, { t } from "elysia";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
@@ -127,7 +128,7 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
           const cleanManifest = await cleanPredictFromRaw(sourceId);
           const result: PredictImportResult = {
             ...rawResult,
-            import_status: "ready",
+            import_status: IMPORT_STATUS.READY,
             clean_manifest: cleanManifest,
           };
 

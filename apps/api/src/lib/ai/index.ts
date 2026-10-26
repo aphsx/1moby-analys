@@ -14,15 +14,8 @@
 export { orchestrate, sseError, generateConversationTitle } from "./orchestrator";
 
 // Customer insight
-export {
-  createCustomerAiExplanation,
-  type CustomerAiExplanationResponse,
-} from "./customer-ai-service";
-export {
-  createRunInsight,
-  getRunInsight,
-  type RunInsight,
-} from "./run-insight";
+export { createCustomerAiExplanation } from "./customer-ai-service";
+export { createRunInsight, getRunInsight } from "./run-insight";
 export {
   loadCustomerPayments,
   loadCustomerUsageMonthly,

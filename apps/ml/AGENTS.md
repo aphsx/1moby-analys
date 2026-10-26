@@ -23,7 +23,7 @@ python scripts/verify_feature_builder.py       # model-specific feature contract
 python scripts/verify_preprocessing.py         # fit-on-train-only preprocessing artifact
 python scripts/verify_promotion_policy.py      # champion promotion policy (no DB needed)
 python scripts/verify_realized_outcomes.py     # outcome backfill (src/outcomes/)
-python scripts/verify_constants_sync.py        # src/constants.py ↔ apps/api/src/lib/constants.ts enum strings
+python scripts/verify_constants_sync.py        # src/constants.py ↔ packages/types/src/enums.ts enum strings
 python scripts/verify_model_versioning.py      # version numbers / artifact folders never reused (no DB needed)
 python scripts/profile_training_dataset.py     # dataset profiling / label viability
 ```

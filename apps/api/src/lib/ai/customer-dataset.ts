@@ -1,6 +1,7 @@
+import { type MonthlyUsagePoint, type PaymentEvent } from "@moby/types";
 import { sql } from "drizzle-orm";
 import { db } from "../../db/client";
-import { monthKeysBeforeCutoff, type MonthlyUsagePoint, type PaymentEvent } from "../ml-contract";
+import { monthKeysBeforeCutoff } from "../ml-contract";
 
 export type PredictRunRef = {
   predictSourceId: string;

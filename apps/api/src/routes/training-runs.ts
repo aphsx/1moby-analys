@@ -7,6 +7,14 @@
  * (blocked while still referenced by a prediction run; production champions
  * owned by the run are auto-repointed or cleared when safe to delete).
  */
+import {
+  IMPORT_STATUS,
+  MODEL_VERSION_STATUS,
+  RUN_STATUS,
+  type RunStatus,
+  type TrainingRun,
+  type TrainingRunResult,
+} from "@moby/types";
 import Elysia, { t } from "elysia";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
@@ -21,12 +29,7 @@ import { requireUser } from "../lib/http/auth-middleware";
 import { denyNotFound, requireFoundForRead } from "../lib/http/access-control";
 import { callMlInternalJson, triggerMlJob } from "../lib/ml/ml-internal";
 import { getTrainCutoffSuggestion } from "../lib/data-import/clean-cutoff";
-import {
-  type RunStatus,
-  type TrainingRun,
-  type TrainingRunResult,
-} from "../lib/ml-contract";
-import { DATE_RE, RUN_STATUS, UUID_RE } from "../lib/constants";
+import { DATE_RE, UUID_RE } from "../lib/constants";
 const DEFAULT_HORIZON_DAYS = 180;
 const ACTIVE_WINDOW_DAYS = 180;
 
@@ -111,7 +114,7 @@ const trainingWriteRoutes = new Elysia()
         .where(eq(trainDataSources.id, body.train_source_id))
         .limit(1);
       if (!source) return denyNotFound(set, "Train data source not found");
-      if (source.importStatus !== "ready") {
+      if (source.importStatus !== IMPORT_STATUS.READY) {
         set.status = 400;
         return { message: "Train data source must be ready before training" };
       }
@@ -309,7 +312,7 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
           };
         }
 
-        const production = versions.filter((v) => v.isActive || v.status === "production");
+        const production = versions.filter((v) => v.isActive || v.status === MODEL_VERSION_STATUS.PRODUCTION);
         if (production.length > 0) {
           try {
             const repoint = await callMlInternalJson<{

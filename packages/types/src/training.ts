@@ -1,7 +1,7 @@
-import type { RunStatus } from "./enums";
+import type { ModelType, RunStatus } from "./enums";
 
 export interface TrainingRunResult {
-  model_type: "churn" | "clv" | "credit";
+  model_type: ModelType;
   primary_metric_name: string;
   primary_metric_value: number;
   baseline_name: string;

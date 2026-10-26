@@ -25,7 +25,8 @@ import { complete, type ChatMessage } from "./llm-client";
 import { getLLMConfig, isLLMConfigured } from "./llm-config";
 import { renderGuardrails } from "./safety";
 
-export type CustomerAiExplanationResult = {
+/** The LLM's raw answer; customer-ai-service turns it into a CustomerAiExplanationResult. */
+export type GeneratedExplanation = {
   explanation: string;
   model: string;
 };
@@ -157,7 +158,7 @@ Churn factors: ${formatChurnFactors(ml_output.churn_factors)}
 
 export async function generateCustomerAiExplanation(
   context: CustomerAiContext
-): Promise<CustomerAiExplanationResult> {
+): Promise<GeneratedExplanation> {
   if (!isLLMConfigured()) {
     throw new Error("กรุณาตั้งค่า LLM_API_KEY (หรือ OLLAMA_API_KEY) ใน .env ก่อนใช้ Gen AI");
   }

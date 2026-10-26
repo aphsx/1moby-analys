@@ -1,6 +1,7 @@
 /**
  * Redis Stream progress for async train import (polled via GET /import/progress).
  */
+import { IMPORT_STATUS } from "@moby/types";
 import type { TrainImportResult } from "../train-import";
 import type { TrainPipelineProgressEvent } from "./pipeline-progress";
 import { getRedis } from "./redis";
@@ -92,7 +93,7 @@ export async function readLatestTrainImportStreamEntry(
     const payloadRaw = fieldMap.get("payload");
     const result = payloadRaw
       ? (JSON.parse(payloadRaw) as TrainImportResult)
-      : ({ source_id: sourceId, import_status: "ready", sheet_manifest: {} } as TrainImportResult);
+      : ({ source_id: sourceId, import_status: IMPORT_STATUS.READY, sheet_manifest: {} } as TrainImportResult);
     return { kind: "done", result };
   }
 

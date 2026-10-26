@@ -2,6 +2,7 @@
  * Predict raw import — faithful row_payload per sheet into predict_* tables.
  * Each upload is a new snapshot (no merge with prior sources). No checksum dedupe.
  */
+import { IMPORT_STATUS } from "@moby/types";
 import { createHash } from "node:crypto";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { eq } from "drizzle-orm";
@@ -96,7 +97,7 @@ export async function importPredictExcel(params: {
       originalFilename: params.filename,
       fileChecksumSha256: checksum,
       fileSizeBytes: params.buffer.length,
-      importStatus: "importing",
+      importStatus: IMPORT_STATUS.IMPORTING,
       importedBy: params.imported_by,
       notes: params.notes ?? null,
     })
@@ -134,7 +135,7 @@ export async function importPredictExcel(params: {
       await db
         .update(predictDataSources)
         .set({
-          importStatus: "ready",
+          importStatus: IMPORT_STATUS.READY,
           importedAt: new Date(),
           sheetManifest: manifest,
         })
@@ -143,7 +144,7 @@ export async function importPredictExcel(params: {
 
     return {
       source_id: sourceId,
-      import_status: params.deferReadyCatalog ? "importing" : "ready",
+      import_status: params.deferReadyCatalog ? IMPORT_STATUS.IMPORTING : IMPORT_STATUS.READY,
       sheet_manifest: manifest,
       file_checksum_sha256: checksum,
     };
