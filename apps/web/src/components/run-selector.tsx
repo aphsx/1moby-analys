@@ -3,12 +3,13 @@
  * Run selector (spec §2.0) — binds /, /customers, /customers/[id] to one
  * completed prediction run. Defaults to the latest completed run.
  */
+import { type PredictionRun } from "@moby/types";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Calendar } from "lucide-react";
 import { Select } from "@/components/select";
 import { useRunStore } from "@/stores/run-store";
-import { fetchPredictionRuns, type PredictionRun } from "@/lib/ml-api";
+import { fetchPredictionRuns } from "@/lib/ml-api";
 
 export function useActiveRun() {
   const { runId, setRunId } = useRunStore();

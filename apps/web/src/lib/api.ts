@@ -1,344 +1,152 @@
 /**
  * API client for the Data Source routes (train + predict import, list, delete).
- * ML run routes live in ml-api.ts; chat lives in stores/chat-store.ts.
+ * ML run routes live in ml-api.ts; chat lives in ai-chat-api.ts.
  */
 
-import type { TrainDataSource, PredictDataSource } from "@moby/types";
-import { isApiError, redirectingFetch as apiFetch } from "./http";
-export type { TrainDataSource, PredictDataSource };
+import type {
+  DataSourceImportResult,
+  ImportProgressEvent,
+  PredictDataSource,
+  TrainDataSource,
+  TrainImportStatus,
+} from "@moby/types";
+import { ApiError, importTimeoutError, redirectToLogin, requestJson, toApiError } from "./http";
 
 /** Must stay in sync with apps/api DEFAULT_IMPORT_TIMEOUT_MS (10 minutes). */
 export const IMPORT_TIMEOUT_MS = 10 * 60 * 1000;
+const TRAIN_IMPORT_POLL_MS = 400;
 
-// Helpers
+/** Progress shown while a train import runs; `phase` is absent during the upload itself. */
+export type TrainImportProgress = Omit<ImportProgressEvent, "phase"> & { phase?: ImportProgressEvent["phase"] };
 
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
-
-async function parseJson(res: Response): Promise<unknown> {
-  const text = await res.text();
-  if (!text) return null;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new Error("API returned invalid JSON");
-  }
-}
-
-// Train Data Sources
+// ── Train Data Sources ───────────────────────────────────────────────────────
 
 export async function fetchTrainDataSources(): Promise<TrainDataSource[]> {
-  const res = await apiFetch("/api/train-data-sources");
-  const body = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(
-      isApiError(body) ? body.message : `Failed to load train data sources (${res.status})`
-    );
-  }
-  return asArray<TrainDataSource>(body);
+  return requestJson("/api/train-data-sources");
 }
 
 export async function deleteTrainDataSource(id: string): Promise<void> {
-  const res = await apiFetch(`/api/train-data-sources/${id}`, { method: "DELETE" });
-  const body = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(isApiError(body) ? body.message : `Failed to delete dataset (${res.status})`);
-  }
+  await requestJson(`/api/train-data-sources/${id}`, { method: "DELETE" });
 }
 
-export type TrainPipelinePhase = "raw" | "clean";
-
-export interface TrainImportProgress {
-  progress: number;
-  step: string;
-  phase?: TrainPipelinePhase;
-  sheet?: string;
-  rows?: number;
-}
-
-export interface TrainImportDone {
-  source_id: string;
-  import_status: string;
-  sheet_manifest: Record<string, number>;
-  file_checksum_sha256?: string;
-  clean_manifest?: TrainCleanManifest;
-}
-
-interface TrainImportProgressPoll {
-  status: "importing" | "ready" | "failed" | "not_found";
-  progress: number;
-  step: string;
-  phase?: TrainPipelinePhase;
-  sheet?: string;
-  rows?: number;
-  message?: string;
-  code?: string;
-  source_id?: string;
-  result?: TrainImportDone;
-}
-
-export interface TrainCleanSkipped {
-  customers_no_acc_id: number;
-  payments_no_acc_id: number;
-  payments_no_date: number;
-  usage_no_acc_id: number;
-}
-
-export interface TrainCleanManifest {
-  raw: Record<string, number>;
-  clean: {
-    customers: number;
-    payments: number;
-    usage: number;
-  };
-  skipped: TrainCleanSkipped;
-  warnings: string[];
-}
-
-/** Monotonic pipeline progress (server may burst many SSE events in one frame). */
-function createTrainImportProgressSink(
-  onProgress: (event: TrainImportProgress) => void
-): (event: TrainImportProgress) => void {
+/** Never let the bar move backwards (several polls can land in one frame). */
+function monotonic(onProgress: (event: TrainImportProgress) => void) {
   let last = 0;
-  return (event) => {
-    const progress = Math.max(last, event.progress);
-    last = progress;
-    onProgress({ ...event, progress });
+  return (event: TrainImportProgress) => {
+    last = Math.max(last, event.progress);
+    onProgress({ ...event, progress: last });
   };
 }
 
+/** XHR rather than fetch, because only XHR reports upload progress. */
 function postTrainImportAsync(
   fd: FormData,
-  onUploadBytes?: (loaded: number, total: number) => void,
-  onServerProcessing?: () => void
+  onUploadBytes: (loaded: number, total: number) => void,
+  onServerProcessing: () => void
 ): Promise<{ source_id: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/train-data-sources/import/async");
     xhr.withCredentials = true;
     xhr.timeout = IMPORT_TIMEOUT_MS;
-
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onUploadBytes) {
-        onUploadBytes(e.loaded, e.total);
-      }
+      if (e.lengthComputable) onUploadBytes(e.loaded, e.total);
     };
-
-    xhr.upload.onload = () => {
-      onServerProcessing?.();
-    };
-
+    xhr.upload.onload = onServerProcessing;
     xhr.onload = () => {
-      let body: unknown;
+      if (xhr.status === 401) {
+        try {
+          redirectToLogin();
+        } catch (e) {
+          reject(e);
+        }
+        return;
+      }
+      let body: unknown = null;
       try {
         body = xhr.responseText ? JSON.parse(xhr.responseText) : null;
       } catch {
-        reject(new Error(`Import failed (${xhr.status})`));
+        reject(new ApiError(`Import failed (${xhr.status})`, xhr.status));
         return;
       }
-
-      if (xhr.status === 401 && typeof window !== "undefined") {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-        reject(new Error("Unauthorized"));
-        return;
-      }
-
       if (xhr.status < 200 || xhr.status >= 300) {
-        const err = new Error(
-          isApiError(body) ? body.message : `Import failed (${xhr.status})`
-        ) as Error & { code?: string; source_id?: string };
-        if (typeof body === "object" && body !== null) {
-          const b = body as Record<string, unknown>;
-          if (typeof b.code === "string") err.code = b.code;
-          if (typeof b.source_id === "string") err.source_id = b.source_id;
-        }
-        reject(err);
+        reject(toApiError(body, xhr.status));
         return;
       }
-
-      const sourceId = (body as { source_id?: string }).source_id;
-      if (!sourceId) {
-        reject(new Error("Import did not return source_id"));
-        return;
-      }
-      resolve({ source_id: sourceId });
+      const sourceId = (body as { source_id?: string } | null)?.source_id;
+      if (sourceId) resolve({ source_id: sourceId });
+      else reject(new ApiError("Import did not return source_id", xhr.status));
     };
-
-    xhr.onerror = () => reject(new Error("Upload failed"));
-    xhr.ontimeout = () => {
-      const err = new Error("นำเข้าข้อมูลหมดเวลา กรุณาลองใหม่อีกครั้ง") as Error & {
-        code: string;
-      };
-      err.code = "IMPORT_TIMEOUT";
-      reject(err);
-    };
+    xhr.onerror = () => reject(new ApiError("Upload failed", 0));
+    xhr.ontimeout = () => reject(importTimeoutError());
     xhr.send(fd);
   });
 }
 
-const TRAIN_IMPORT_POLL_MS = 400;
-
-async function pollTrainImportProgress(sourceId: string): Promise<TrainImportProgressPoll> {
-  const res = await apiFetch(`/api/train-data-sources/${sourceId}/import/progress`);
-  const body = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(
-      isApiError(body) ? body.message : `Progress poll failed (${res.status})`
-    );
-  }
-  return body as TrainImportProgressPoll;
-}
-
-function waitForTrainImportDone(
+/** Poll the import's progress until it is ready, failed, or out of time. */
+async function waitForTrainImport(
   sourceId: string,
   emit: (event: TrainImportProgress) => void
-): Promise<TrainImportDone> {
-  return new Promise((resolve, reject) => {
-    let stopped = false;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const deadline = Date.now() + IMPORT_TIMEOUT_MS;
-
-    const stop = () => {
-      stopped = true;
-      if (timer) clearInterval(timer);
-      timer = null;
-    };
-
-    const tick = async () => {
-      if (stopped) return;
-      if (Date.now() > deadline) {
-        stop();
-        const err = new Error("นำเข้าข้อมูลหมดเวลา กรุณาลองใหม่อีกครั้ง") as Error & {
-          code: string;
-        };
-        err.code = "IMPORT_TIMEOUT";
-        reject(err);
-        return;
+): Promise<DataSourceImportResult> {
+  const deadline = Date.now() + IMPORT_TIMEOUT_MS;
+  for (;;) {
+    if (Date.now() > deadline) throw importTimeoutError();
+    const snap = await requestJson<TrainImportStatus>(`/api/train-data-sources/${sourceId}/import/progress`).catch(
+      (e: unknown) => {
+        // 404 carries a status body too: the import was rolled back or never existed.
+        if (e instanceof ApiError && e.status === 404) throw new ApiError("Import source not found", 404);
+        throw e;
       }
-      try {
-        const snap = await pollTrainImportProgress(sourceId);
-
-        if (snap.status === "not_found") {
-          stop();
-          reject(new Error("Import source not found"));
-          return;
-        }
-
-        if (snap.status === "failed") {
-          stop();
-          const err = new Error(snap.message ?? "Import failed") as Error & {
-            code?: string;
-            source_id?: string;
-          };
-          if (snap.code) err.code = snap.code;
-          else if ((snap.message ?? "").toLowerCase().includes("timed out")) {
-            err.code = "IMPORT_TIMEOUT";
-          }
-          if (snap.source_id) err.source_id = snap.source_id;
-          reject(err);
-          return;
-        }
-
-        if (snap.status === "importing") {
-          emit({
-            progress: snap.progress,
-            step: snap.step,
-            phase: snap.phase,
-            sheet: snap.sheet,
-            rows: snap.rows,
-          });
-          return;
-        }
-
-        if (snap.status === "ready") {
-          stop();
-          emit({
-            progress: 100,
-            step: snap.step || "Ready for model training",
-            phase: "clean",
-          });
-          resolve(
-            snap.result ?? {
-              source_id: sourceId,
-              import_status: "ready",
-              sheet_manifest: {},
-            }
-          );
-        }
-      } catch (e) {
-        stop();
-        reject(e);
-      }
-    };
-
-    timer = setInterval(() => void tick(), TRAIN_IMPORT_POLL_MS);
-    void tick();
-  });
+    );
+    if (snap.status === "failed") {
+      const timedOut = !snap.code && (snap.message ?? "").toLowerCase().includes("timed out");
+      throw new ApiError(snap.message ?? "Import failed", 400, snap.code ?? (timedOut ? "IMPORT_TIMEOUT" : undefined));
+    }
+    if (snap.status === "ready") {
+      emit({ progress: 100, step: snap.step || "Ready for model training", phase: "clean" });
+      return snap.result ?? { source_id: sourceId, import_status: "ready", sheet_manifest: {}, file_checksum_sha256: "" };
+    }
+    emit({ progress: snap.progress, step: snap.step, phase: snap.phase, sheet: snap.sheet, rows: snap.rows });
+    await new Promise((r) => setTimeout(r, TRAIN_IMPORT_POLL_MS));
+  }
 }
 
-/** Import with progress: XHR upload + poll Redis (avoids browser SSE batching 4%→100%). */
-export function uploadTrainDataFileWithProgress(
+/** Upload a workbook as a Train Data Source and follow Import + Clean to the end. */
+export async function uploadTrainDataFileWithProgress(
   file: File,
   name: string,
   onProgress: (event: TrainImportProgress) => void,
   client_label?: string
-): Promise<TrainImportDone> {
+): Promise<DataSourceImportResult> {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("name", name);
   if (client_label) fd.append("client_label", client_label);
 
-  const emit = createTrainImportProgressSink(onProgress);
-
-  return (async () => {
-    const { source_id: sourceId } = await postTrainImportAsync(
-      fd,
-      (loaded, total) => {
-        const uploadPct = total > 0 ? Math.round((loaded / total) * 4) : 0;
-        emit({
-          progress: Math.min(4, Math.max(1, uploadPct)),
-          step: `กำลังอัปโหลดไฟล์… ${Math.round((loaded / total) * 100)}%`,
-          phase: "raw",
-        });
-      },
-      () => {
-        emit({
-          progress: 4,
-          step: "กำลังตรวจสอบไฟล์บนเซิร์ฟ…",
-          phase: "raw",
-        });
-      }
-    );
-
-    return waitForTrainImportDone(sourceId, emit);
-  })();
+  const emit = monotonic(onProgress);
+  const { source_id: sourceId } = await postTrainImportAsync(
+    fd,
+    (loaded, total) =>
+      emit({
+        progress: Math.min(4, Math.max(1, total > 0 ? Math.round((loaded / total) * 4) : 0)),
+        step: `กำลังอัปโหลดไฟล์… ${Math.round((loaded / total) * 100)}%`,
+        phase: "raw",
+      }),
+    () => emit({ progress: 4, step: "กำลังตรวจสอบไฟล์บนเซิร์ฟ…", phase: "raw" })
+  );
+  return waitForTrainImport(sourceId, emit);
 }
 
-// Predict raw data import
-// predict_data_sources + predict_raw_sheet_* + predict_clean_*.
+// ── Predict Data Sources ─────────────────────────────────────────────────────
 
-export interface PredictImportDone {
-  source_id: string;
-  import_status: string;
-  sheet_manifest: Record<string, number>;
-  file_checksum_sha256: string;
-  clean_manifest?: TrainCleanManifest;
+export interface PredictImportDone extends DataSourceImportResult {
   /** Set when the import auto-created + triggered a prediction run (default on;
    *  opt out with auto_run=false). Null when auto-run failed or was skipped. */
   auto_prediction_run_id?: string | null;
 }
 
 export async function fetchPredictDataSources(): Promise<PredictDataSource[]> {
-
-  const res = await apiFetch("/api/predict-data-sources");
-  const body = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(
-      isApiError(body) ? body.message : `Failed to load predict data sources (${res.status})`
-    );
-  }
-  return asArray<PredictDataSource>(body);
+  return requestJson("/api/predict-data-sources");
 }
 
 export async function uploadPredictDataFile(
@@ -347,37 +155,22 @@ export async function uploadPredictDataFile(
   client_label?: string,
   notes?: string
 ): Promise<PredictImportDone> {
-
   const fd = new FormData();
   fd.append("file", file);
   if (name) fd.append("name", name);
   if (client_label) fd.append("client_label", client_label);
   if (notes) fd.append("notes", notes);
 
-  let res: Response;
   try {
-    res = await apiFetch("/api/predict-data-sources/import", {
+    return await requestJson("/api/predict-data-sources/import", {
       method: "POST",
       body: fd,
       signal: AbortSignal.timeout(IMPORT_TIMEOUT_MS),
     });
   } catch (e) {
     if (typeof DOMException !== "undefined" && e instanceof DOMException && e.name === "TimeoutError") {
-      const err = new Error("นำเข้าข้อมูลหมดเวลา กรุณาลองใหม่อีกครั้ง") as Error & { code: string };
-      err.code = "IMPORT_TIMEOUT";
-      throw err;
+      throw importTimeoutError();
     }
     throw e;
   }
-  const body = await parseJson(res);
-  if (!res.ok) {
-    const err = new Error(
-      isApiError(body) ? body.message : `Import failed (${res.status})`
-    ) as Error & { code?: string };
-    if (typeof body === "object" && body !== null && typeof (body as { code?: unknown }).code === "string") {
-      err.code = (body as { code: string }).code;
-    }
-    throw err;
-  }
-  return body as PredictImportDone;
 }

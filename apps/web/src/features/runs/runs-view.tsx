@@ -1,9 +1,10 @@
 "use client";
 
 /** Prediction runs surface, backed by the ML v2 routes. */
+import { type PredictDataSource, type PredictionRun } from "@moby/types";
 import { useCallback, useEffect, useState } from "react";
-import { fetchPredictDataSources, type PredictDataSource } from "@/lib/api";
-import { fetchPredictionRuns, type PredictionRun } from "@/lib/ml-api";
+import { fetchPredictDataSources } from "@/lib/api";
+import { fetchPredictionRuns } from "@/lib/ml-api";
 import { isActiveRunStatus, RUN_POLL_MS } from "@/lib/run-status";
 import { getDisplayError } from "@/lib/ui-error";
 import { CreateRunPanel } from "./create-run-panel";

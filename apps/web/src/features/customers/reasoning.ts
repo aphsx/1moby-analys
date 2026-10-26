@@ -1,3 +1,4 @@
+import { type ChurnFactor } from "@moby/types";
 /**
  * Single ordered behaviour layer for a customer.
  *
@@ -10,7 +11,6 @@
  * number (priority_score). Any human-readable narrative comes from the AI
  * overview, grounded in the numeric model outputs and SHAP factors.
  */
-import type { ChurnFactor } from "@/lib/ml-api";
 
 export type ReasonAiFields = {
   ai_status: "not_requested" | "pending" | "completed" | "failed";

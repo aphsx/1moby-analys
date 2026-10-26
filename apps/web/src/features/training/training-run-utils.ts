@@ -1,4 +1,4 @@
-import type { TrainingRunResult } from "@/lib/ml-api";
+import { type TrainingRunResult } from "@moby/types";
 
 // Run status tone/label live in the shared module (single source for runs + training).
 export { runStatusTone, runStatusLabel } from "@/lib/run-status";

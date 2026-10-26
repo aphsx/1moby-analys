@@ -1,9 +1,9 @@
+import { type PredictDataSource } from "@moby/types";
 /**
  * Local helpers for the Prediction Runs page (spec §2.5 + §5).
  * Display-only mapping/formatting — no business logic.
  */
 
-import type { PredictDataSource } from "@/lib/api";
 
 // Run status tone/label live in the shared module (single source for runs + training).
 export { runStatusTone, runStatusLabel } from "@/lib/run-status";

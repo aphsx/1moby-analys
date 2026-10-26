@@ -1,9 +1,9 @@
+import { type RunSummary } from "@moby/types";
 /**
  * Dashboard view-model types + adapter from the ML v2 RunSummary contract.
  * The card components render this shape;
  * the adapter is the only place that maps contract → view-model.
  */
-import type { RunSummary } from "@/lib/ml-api";
 
 export type MonthlyRevenuePoint = {
   month: string; // YYYY-MM

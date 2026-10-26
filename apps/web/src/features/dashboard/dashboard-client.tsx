@@ -4,12 +4,13 @@
  * run selector → fetchRunSummary → DashboardView. Owns loading/empty/error
  * states per spec §5 — never falls back to fake numbers silently.
  */
+import { type RunSummary } from "@moby/types";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Database } from "lucide-react";
 import { useActiveRun } from "@/components/run-selector";
 import { EmptyState, Skeleton } from "@/components/ui";
-import { fetchRunSummary, type RunSummary } from "@/lib/ml-api";
+import { fetchRunSummary } from "@/lib/ml-api";
 import { DashboardView } from "./dashboard-view";
 
 export function DashboardClient() {

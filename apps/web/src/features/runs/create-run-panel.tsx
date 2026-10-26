@@ -8,6 +8,7 @@
  * separate data-sources section anymore.
  */
 
+import { type ModelVersionSummary, type PredictDataSource } from "@moby/types";
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -22,13 +23,8 @@ import {
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { Select } from "@/components/select";
 import { SectionCard } from "@/components/ui";
-import { uploadPredictDataFile, type PredictDataSource } from "@/lib/api";
-import {
-  createPredictionRun,
-  fetchModelVersions,
-  fetchPredictSuggestedCutoff,
-  type ModelVersionSummary,
-} from "@/lib/ml-api";
+import { uploadPredictDataFile } from "@/lib/api";
+import { createPredictionRun, fetchModelVersions, fetchPredictSuggestedCutoff } from "@/lib/ml-api";
 import { getDisplayError, getImportErrorMessage } from "@/lib/ui-error";
 import {
   defaultRunName,

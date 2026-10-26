@@ -1,11 +1,11 @@
 "use client";
 
+import { type ChurnFactor, type PaymentEvent, type ProfileSnapshot } from "@moby/types";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { AiBadge } from "@/components/ai-badge";
 import { formatCurrency } from "@/lib/format";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
-import type { ChurnFactor, PaymentEvent, ProfileSnapshot } from "@/lib/ml-api";
 import { CustomerPaymentChart } from "./customer-payment-chart";
 import { CustomerProfilePanel } from "./customer-profile-panel";
 import {

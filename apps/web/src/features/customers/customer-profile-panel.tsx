@@ -1,7 +1,7 @@
 "use client";
 
+import { type ProfileSnapshot } from "@moby/types";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
-import type { ProfileSnapshot } from "@/lib/ml-api";
 
 function formatDate(value: string | null): string {
   if (!value) return "—";

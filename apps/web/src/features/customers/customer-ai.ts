@@ -1,4 +1,4 @@
-import type { PredictionOutput } from "@/lib/ml-api";
+import { type PredictionOutput } from "@moby/types";
 
 type AiFields = Pick<PredictionOutput, "ai_status" | "ai_explanation">;
 

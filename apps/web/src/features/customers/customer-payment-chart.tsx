@@ -1,5 +1,6 @@
 "use client";
 
+import { type PaymentEvent } from "@moby/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
@@ -12,7 +13,6 @@ import {
 } from "recharts";
 import { formatMonth } from "@/lib/format";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
-import type { PaymentEvent } from "@/lib/ml-api";
 
 const DEFAULT_VISIBLE = 12;
 const MIN_VISIBLE = 1;

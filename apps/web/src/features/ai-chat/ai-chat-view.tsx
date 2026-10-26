@@ -1,5 +1,6 @@
 "use client";
 
+import { type PredictionRun } from "@moby/types";
 import {
   useState, useRef, useEffect, useCallback, useMemo,
   type ChangeEvent, type KeyboardEvent,
@@ -12,7 +13,7 @@ import {
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { TypingDots } from "@/components/chat/typing-dots";
 import { Select } from "@/components/select";
-import { fetchPredictionRuns, type PredictionRun } from "@/lib/ml-api";
+import { fetchPredictionRuns } from "@/lib/ml-api";
 import { formatTime } from "@/lib/format";
 import { useChatStore, type ChatEvidence, type Conversation } from "@/stores/chat-store";
 

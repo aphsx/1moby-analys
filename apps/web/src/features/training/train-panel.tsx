@@ -7,6 +7,7 @@
  * the dataset picker — there is no separate dataset table anymore.
  */
 
+import { type TrainDataSource } from "@moby/types";
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -20,7 +21,6 @@ import {
 } from "lucide-react";
 import { SectionCard } from "@/components/ui";
 import { Select } from "@/components/select";
-import type { TrainDataSource } from "@/lib/api";
 import { ProgressCard } from "./progress-card";
 import { formatFileSize, getCleanCounts, PRIMARY_BUTTON_CLS } from "./training-utils";
 import { DEFAULT_HORIZON_DAYS } from "./training-run-utils";

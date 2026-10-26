@@ -4,11 +4,12 @@
  * Self-contained: fetches the cached summary, lets the user generate/regenerate.
  * Descriptive only — it never prescribes actions (the human decides).
  */
+import { type RunInsight } from "@moby/types";
 import { useEffect, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { AiBadge } from "@/components/ai-badge";
 import { MarkdownLite } from "@/components/chat/markdown-lite";
-import { fetchRunInsight, generateRunInsight, type RunInsight } from "@/lib/ml-api";
+import { fetchRunInsight, generateRunInsight } from "@/lib/ml-api";
 import { TEXT_SAFE } from "./palette";
 
 export function RunInsightCard({ runId }: { runId: string }) {

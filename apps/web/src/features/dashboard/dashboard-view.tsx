@@ -1,5 +1,6 @@
 "use client";
 
+import { type RunSummary } from "@moby/types";
 import {
   CalendarClock,
   CreditCard,
@@ -9,7 +10,6 @@ import {
   Users,
 } from "lucide-react";
 import { formatCredits, formatCurrency, formatNumber } from "@/lib/format";
-import type { RunSummary } from "@/lib/ml-api";
 import { CreditUrgencyCard } from "./credit-urgency-card";
 import { LifecycleMixCard } from "./lifecycle-mix-card";
 import { MetricCard } from "./metric-card";

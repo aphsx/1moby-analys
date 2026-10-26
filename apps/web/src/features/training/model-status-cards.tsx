@@ -7,6 +7,7 @@
  * Full metric breakdowns still live on the read-only /model-performance page.
  */
 
+import { type ModelVersionSummary, type TrainingRun, type TrainingRunResult } from "@moby/types";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -21,14 +22,7 @@ import {
 } from "lucide-react";
 import { SectionCard, StatusPill } from "@/components/ui";
 import { StatusDialog } from "@/components/status-dialog";
-import {
-  activateModelVersion,
-  deleteModelVersion,
-  fetchModelVersions,
-  type ModelVersionSummary,
-  type TrainingRun,
-  type TrainingRunResult,
-} from "@/lib/ml-api";
+import { activateModelVersion, deleteModelVersion, fetchModelVersions } from "@/lib/ml-api";
 import { MODEL_TYPE_LABELS, beatsBaseline, formatMetric } from "./training-run-utils";
 
 const MODEL_TYPES = ["churn", "clv", "credit"] as const;

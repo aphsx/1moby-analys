@@ -1,5 +1,6 @@
 "use client";
 
+import { type OutputsQuery, type PredictionOutput } from "@moby/types";
 import { useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -15,7 +16,6 @@ import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { StatusDialog } from "@/components/status-dialog";
 import { Skeleton } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
-import type { OutputsQuery, PredictionOutput } from "@/lib/ml-api";
 import { CREDIT_PALETTE } from "@/features/dashboard/palette";
 import { shouldConfirmAiOverwrite } from "./customer-ai";
 import { EXPORT_ROW_CAP, exportOutputsCsv } from "./export-csv";

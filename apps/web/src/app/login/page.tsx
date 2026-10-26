@@ -2,7 +2,8 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { signIn, sanitizeRedirectParam } from "@/lib/auth";
+import { signIn } from "@/lib/auth/client";
+import { sanitizeRedirectParam } from "@/lib/auth/redirect";
 import { LoginBackground } from "@/components/login-background";
 import { INTRO_ASSETS, MOBY_BRAND } from "@/lib/login-brand-colors";
 

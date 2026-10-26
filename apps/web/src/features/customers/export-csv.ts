@@ -5,7 +5,8 @@
  * correctly in Excel.
  */
 
-import { fetchRunOutputs, type OutputsQuery, type PredictionOutput } from "@/lib/ml-api";
+import { type OutputsQuery, type PredictionOutput } from "@moby/types";
+import { fetchRunOutputs } from "@/lib/ml-api";
 
 /** Server-enforced max page size for /prediction-runs/:id/outputs. */
 const EXPORT_PAGE_SIZE = 200;

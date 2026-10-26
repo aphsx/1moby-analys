@@ -5,6 +5,7 @@
  * Polling while in_progress lives in RunsView.
  */
 
+import { type PredictionRun } from "@moby/types";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ChevronRight, ListChecks, RefreshCw, Trash2 } from "lucide-react";
@@ -12,7 +13,7 @@ import { StatusDialog } from "@/components/status-dialog";
 import {
   EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill,
 } from "@/components/ui";
-import { deletePredictionRun, retryPredictionRun, type PredictionRun } from "@/lib/ml-api";
+import { deletePredictionRun, retryPredictionRun } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { useRunStore } from "@/stores/run-store";
 import { formatRelative, runStatusLabel, runStatusTone } from "./runs-utils";

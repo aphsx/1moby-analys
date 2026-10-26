@@ -8,6 +8,7 @@
  * (create/poll/suggested cutoff).
  */
 
+import { type RunStatus, type TrainDataSource, type TrainingRun } from "@moby/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { StatusDialog } from "@/components/status-dialog";
@@ -16,15 +17,8 @@ import {
   deleteTrainDataSource,
   fetchTrainDataSources,
   uploadTrainDataFileWithProgress,
-  type TrainDataSource,
 } from "@/lib/api";
-import {
-  createTrainingRun,
-  fetchTrainingRuns,
-  fetchTrainSuggestedCutoff,
-  type RunStatus,
-  type TrainingRun,
-} from "@/lib/ml-api";
+import { createTrainingRun, fetchTrainingRuns, fetchTrainSuggestedCutoff } from "@/lib/ml-api";
 import { isActiveRunStatus, RUN_POLL_MS } from "@/lib/run-status";
 import { getDisplayError, getImportErrorMessage } from "@/lib/ui-error";
 import { ModelStatusCards } from "./model-status-cards";

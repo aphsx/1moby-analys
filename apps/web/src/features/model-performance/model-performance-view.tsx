@@ -1,9 +1,10 @@
 "use client";
 
+import { type ModelPerfEntry } from "@moby/types";
 import { useCallback, useEffect, useState } from "react";
 import { Activity, CircleHelp } from "lucide-react";
 import { EmptyState, PageHeader, Skeleton } from "@/components/ui";
-import { fetchModelPerformance, type ModelPerfEntry } from "@/lib/ml-api";
+import { fetchModelPerformance } from "@/lib/ml-api";
 import { ModelPerformanceCard } from "./model-performance-card";
 
 export function ModelPerformanceView() {

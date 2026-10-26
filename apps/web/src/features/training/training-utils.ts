@@ -1,4 +1,4 @@
-import type { TrainDataSource } from "@/lib/api";
+import { type TrainDataSource } from "@moby/types";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
 
 export const IMPORT_PROGRESS_BG = `linear-gradient(90deg, ${MOBY_BRAND.blueLight} 0%, ${MOBY_BRAND.blue} 100%)`;

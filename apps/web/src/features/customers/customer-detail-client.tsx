@@ -4,13 +4,13 @@
  * run selector → fetchRunOutput + fetchCustomerUsageMonthly →
  * CustomerDetailView. No mock fallback — empty state links to /runs.
  */
+import { type PaymentEvent } from "@moby/types";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Database } from "lucide-react";
 import { useActiveRun } from "@/components/run-selector";
 import { EmptyState, Skeleton } from "@/components/ui";
 import { fetchCustomerPayments, fetchCustomerUsageMonthly, fetchRunOutput } from "@/lib/ml-api";
-import type { PaymentEvent } from "@/lib/ml-api";
 import {
   CustomerDetailView,
   type CustomerDetail,
