@@ -4,7 +4,7 @@ Internal analytics platform for **1Moby**, a B2B SaaS messaging company (SMS/Ema
 It ingests a fixed-schema Excel export, then predicts customer **churn**, segments customers by
 **CLV / value tier**, and forecasts **credit consumption** — for ~10–50 internal users.
 
-> **New here?** Start with [`CLAUDE.md`](CLAUDE.md) for the architecture and [`GLOSSARY.md`](GLOSSARY.md)
+> **New here?** Start with [`AGENTS.md`](AGENTS.md) for the architecture and [`GLOSSARY.md`](GLOSSARY.md)
 > for the domain terms. The docs are being rewritten after the refactor in
 > [`docs/REFACTOR-PLAN.md`](docs/REFACTOR-PLAN.md); old docs live on the `academic` branch.
 
@@ -74,7 +74,7 @@ models were permanently cut.
 
 | Doc | Purpose |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Architecture, schema, conventions — the project's source of truth |
+| [`AGENTS.md`](AGENTS.md) | Architecture, schema, conventions — the project's source of truth |
 | [`GLOSSARY.md`](GLOSSARY.md) | Domain terms and the words to avoid |
 | [`docs/adr/`](docs/adr/) | Architecture decision records |
 | [`docs/REFACTOR-PLAN.md`](docs/REFACTOR-PLAN.md) | Production-readiness refactor in progress |
