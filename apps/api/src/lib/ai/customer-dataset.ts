@@ -1,6 +1,7 @@
 import { type MonthlyUsagePoint, type PaymentEvent } from "@moby/types";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client";
+import { predictCleanCustomers } from "../../db/schema";
 import { monthKeysBeforeCutoff } from "../ml-contract";
 
 export type PredictRunRef = {
@@ -30,45 +31,23 @@ export async function loadCustomerProfile(
   sourceId: string,
   accId: number
 ): Promise<CustomerProfile | null> {
-  const rows = await db.execute<{
-    status_sms: string | null;
-    status_email: string | null;
-    credit_sms: number | null;
-    credit_email: number | null;
-    expire_sms: string | null;
-    expire_email: string | null;
-    join_date: string | null;
-    last_access: Date | null;
-    last_send: Date | null;
-  }>(sql`
-    SELECT status_sms,
-           status_email,
-           COALESCE(credit_sms, 0)::float8 AS credit_sms,
-           COALESCE(credit_email, 0)::float8 AS credit_email,
-           expire_sms::text AS expire_sms,
-           expire_email::text AS expire_email,
-           join_date::text AS join_date,
-           last_access,
-           last_send
-    FROM predict_clean_customers
-    WHERE source_id = ${sourceId}
-      AND acc_id = ${accId}
-    LIMIT 1
-  `);
-
-  const row = rows[0];
+  const [row] = await db
+    .select()
+    .from(predictCleanCustomers)
+    .where(and(eq(predictCleanCustomers.sourceId, sourceId), eq(predictCleanCustomers.accId, accId)))
+    .limit(1);
   if (!row) return null;
 
   return {
-    status_sms: row.status_sms,
-    status_email: row.status_email,
-    credit_sms: row.credit_sms ?? 0,
-    credit_email: row.credit_email ?? 0,
-    expire_sms: row.expire_sms,
-    expire_email: row.expire_email,
-    join_date: row.join_date,
-    last_access: toIsoDate(row.last_access),
-    last_send: toIsoDate(row.last_send),
+    status_sms: row.statusSms,
+    status_email: row.statusEmail,
+    credit_sms: Number(row.creditSms ?? 0),
+    credit_email: Number(row.creditEmail ?? 0),
+    expire_sms: row.expireSms,
+    expire_email: row.expireEmail,
+    join_date: row.joinDate,
+    last_access: toIsoDate(row.lastAccess),
+    last_send: toIsoDate(row.lastSend),
   };
 }
 
