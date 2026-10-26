@@ -16,6 +16,7 @@ import { StatusDialog } from "@/components/status-dialog";
 import { Skeleton } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
 import type { OutputsQuery, PredictionOutput } from "@/lib/ml-api";
+import { CREDIT_PALETTE } from "@/features/dashboard/palette";
 import { shouldConfirmAiOverwrite } from "./customer-ai";
 import { EXPORT_ROW_CAP, exportOutputsCsv } from "./export-csv";
 import { GenAiButton } from "./gen-ai-button";
@@ -152,11 +153,12 @@ export function toOutputsQuery(
   };
 }
 
+// Same colours as the dashboard's credit urgency card.
 const URGENCY_COLORS: Record<string, string> = {
-  critical: "#fc4c02",
-  warning: "#ffa400",
-  monitor: "#9ca3af",
-  stable: "#006bff",
+  critical: CREDIT_PALETTE.Critical,
+  warning: CREDIT_PALETTE.Warning,
+  monitor: CREDIT_PALETTE.Monitor,
+  stable: CREDIT_PALETTE.Stable,
 };
 
 interface CustomersViewProps {
