@@ -380,8 +380,9 @@ def delete_model_version(
         version string, or model_overrides_json by version id) blocks delete
         until those prediction runs are removed.
 
-    Removes the on-disk artifact directory, then deletes the
-    `ml_model_versions` row. FK cascades clean up `ml_model_evaluations` and
+    Checks and deletes the `ml_model_versions` row in one transaction (the row is
+    locked, so a concurrent promotion can't slip in between), then removes the
+    on-disk artifact directory once the delete has committed. FK cascades clean up `ml_model_evaluations` and
     `ml_model_aliases`; `ml_model_activation_history` rows are kept with their
     version references set to NULL (audit trail survives).
     """
@@ -390,7 +391,7 @@ def delete_model_version(
 
     from src.training.artifacts import models_dir
 
-    with create_engine(database_url()).connect() as conn:
+    with create_engine(database_url()).begin() as conn:
         row = conn.execute(
             text(
                 """
@@ -404,6 +405,7 @@ def delete_model_version(
                        ) AS is_production_alias
                 FROM ml_model_versions v
                 WHERE v.id = CAST(:version_id AS UUID) AND v.model_type = :model_type
+                FOR UPDATE OF v
                 """
             ),
             {"version_id": model_version_id, "model_type": model_type, "alias": PRODUCTION_ALIAS},
@@ -436,28 +438,17 @@ def delete_model_version(
             },
         ).mappings().all()
 
-    if referencing:
-        names = ", ".join(
-            (r["name"] or r["id"][:8]) for r in referencing
-        )
-        more = "…" if len(referencing) == 5 else ""
-        raise ValueError(
-            f"Cannot delete {model_type} version {row['version']} — "
-            f"still used by prediction run(s): {names}{more}. "
-            "Delete those prediction results first."
-        )
+        if referencing:
+            names = ", ".join(
+                (r["name"] or r["id"][:8]) for r in referencing
+            )
+            more = "…" if len(referencing) == 5 else ""
+            raise ValueError(
+                f"Cannot delete {model_type} version {row['version']} — "
+                f"still used by prediction run(s): {names}{more}. "
+                "Delete those prediction results first."
+            )
 
-    artifact_path = row["artifact_path"]
-    artifact_removed = False
-    if artifact_path:
-        target = Path(artifact_path)
-        if not target.is_absolute():
-            target = models_dir() / target
-        if target.exists():
-            shutil.rmtree(target, ignore_errors=True)
-            artifact_removed = True
-
-    with create_engine(database_url()).begin() as conn:
         # Audit the deletion BEFORE removing the row. The version id is kept in
         # `reason` text (not the FK columns, which ON DELETE SET NULL would clear)
         # so the trail survives the row deletion.
@@ -474,7 +465,7 @@ def delete_model_version(
                 "model_type": model_type,
                 "reason": (
                     f"Deleted {model_type} version {row['version']} "
-                    f"(id={model_version_id}, artifact_removed={artifact_removed})"
+                    f"(id={model_version_id}, artifact_path={row['artifact_path']})"
                 ),
                 "created_by": created_by,
             },
@@ -554,6 +545,16 @@ def delete_model_version(
                     },
                 )
                 auto_promoted = True
+
+    # Only now that the row is gone: a failed delete never leaves a row pointing at nothing.
+    artifact_removed = False
+    if row["artifact_path"]:
+        target = Path(row["artifact_path"])
+        if not target.is_absolute():
+            target = models_dir() / target
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+            artifact_removed = True
 
     return {
         "model_type": model_type,
