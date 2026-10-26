@@ -67,7 +67,7 @@ export async function createAutoPredictionRun(
       try {
         await db
           .update(mlPredictionRuns)
-          .set({ status: RUN_STATUS.FAILED, errorMessage: message })
+          .set({ status: RUN_STATUS.FAILED, errorMessage: message, finishedAt: new Date() })
           .where(eq(mlPredictionRuns.id, runId));
       } catch (updateError) {
         console.error(`[auto-run] Failed to mark run ${runId} failed:`, updateError);

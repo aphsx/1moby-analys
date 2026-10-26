@@ -80,7 +80,7 @@ export const runsRoutes = new Elysia()
       } catch (e) {
         await db
           .update(mlPredictionRuns)
-          .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message })
+          .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message, finishedAt: new Date() })
           .where(eq(mlPredictionRuns.id, inserted.id));
       }
 
@@ -143,7 +143,7 @@ export const runsRoutes = new Elysia()
       } catch (e) {
         await db
           .update(mlPredictionRuns)
-          .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message })
+          .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message, finishedAt: new Date() })
           .where(eq(mlPredictionRuns.id, run!.id));
       }
 

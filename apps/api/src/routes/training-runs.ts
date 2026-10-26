@@ -198,7 +198,7 @@ const trainingWriteRoutes = new Elysia()
       } catch (e) {
         await db
           .update(mlTrainingRuns)
-          .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message })
+          .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message, finishedAt: new Date() })
           .where(eq(mlTrainingRuns.id, inserted.id));
       }
 
