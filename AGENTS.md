@@ -62,8 +62,10 @@ ML service commands (CLIs, uvicorn) live in `apps/ml/AGENTS.md`.
 
 ### Tests / verification
 
-There are **no tests** yet (plan steps 0.5–0.6 add them). CI runs `typecheck`, `build`, a Python
-compile check, and the two database-free contract scripts. ML correctness is checked by the
+`bun run test` runs the `*.test.ts` files next to the API code (`bun test`): small, pure-logic checks
+for the SQL guard, the AI scope check and the Excel cell parsers. Add one beside any new parser,
+guard or money path. CI runs `typecheck`, `test`, `build`, a Python compile check, and the two
+database-free contract scripts. ML correctness is checked by the
 `apps/ml/scripts/verify_*.py` "contract" scripts — see `apps/ml/AGENTS.md` for which to run.
 
 ## Documentation
