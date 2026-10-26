@@ -8,6 +8,7 @@ schema shape in both flows.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -55,10 +56,15 @@ PREDICT_TABLES = CleanTableSet(
 
 
 def database_url() -> str:
+    """DATABASE_URL with the driver named explicitly.
+
+    SQLAlchemy 2.1 maps a bare postgresql:// URL to psycopg 3, but the image ships psycopg2,
+    and postgres:// (what Railway issues) is not accepted at all.
+    """
     url = os.getenv("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL environment variable is required.")
-    return url
+    return re.sub(r"^postgres(?:ql)?://", "postgresql+psycopg2://", url)
 
 
 def load_train_clean(source_id: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:

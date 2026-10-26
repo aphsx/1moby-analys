@@ -1,0 +1,27 @@
+# Direct dependencies of the ML service. Edit this file, then regenerate the pinned
+# requirements.txt (see apps/ml/AGENTS.md → "Dependencies"); the image installs that one.
+
+# Models and explanations. Upgrading these changes model output (e.g. optuna 4.9 -> 5.0
+# re-tunes the credit models): re-record the golden baseline in the same PR.
+lightgbm>=4.0
+xgboost>=2.0
+scikit-learn>=1.3
+lifetimes>=0.11
+shap>=0.44
+optuna>=3.0
+# TabICLv2 tabular foundation model, a churn candidate and the current churn Champion.
+# Pulls in PyTorch; the Dockerfile installs the CPU build of torch first.
+tabicl>=0.1
+
+# Data
+pandas>=2.0
+numpy>=1.24
+scipy>=1.11
+dill>=0.3
+
+# Service and database
+fastapi>=0.104
+uvicorn>=0.24
+sqlalchemy[asyncio]>=2.0
+psycopg2-binary>=2.9
+asyncpg>=0.29

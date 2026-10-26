@@ -51,7 +51,7 @@ jobs:
           cache: pip
           cache-dependency-path: apps/ml/requirements.txt
       # CPU-only torch first, same as apps/ml/Dockerfile (tabicl pulls torch).
-      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu  # keep in sync with apps/ml/Dockerfile
       - run: pip install -r requirements.txt
       - run: python -m compileall -q src api scripts
       # The contract scripts that need no database.

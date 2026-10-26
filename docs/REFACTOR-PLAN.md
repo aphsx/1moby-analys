@@ -249,7 +249,7 @@ See [ADR 0001](adr/0001-plain-sql-migrations.md).
 
 ## Phase 3: Dependencies and infra hygiene
 
-- [ ] **3.1 Pin and prune Python dependencies (tabicl stays)** `[structure]`
+- [x] **3.1 Pin and prune Python dependencies (tabicl stays)** `[structure]`
   - **tabicl is kept.** The decision was to drop it unless it had been winning on real data, and it
     has: the current churn Champion (`churn-2026.09.0`) is a tabicl model. Removing the package would
     also make that Champion impossible to load. `docs/ml.md` (7.3) records why it stays. The golden run
@@ -687,6 +687,8 @@ on the new components.
   - set the required env vars
   - deploy with the manual `workflow_dispatch`
   - back up Postgres together with the models volume, because Model Version rows point at those files
+  - give `ml` internet access or a persistent `HF_HOME` volume: loading a tabicl Champion downloads
+    its TabICL checkpoint from Hugging Face on first use
 - [ ] **7.2 `AGENTS.md`** gets trimmed to architecture, conventions and commands. Anything a reader
   can learn from the code faster than from prose goes.
 - [ ] **7.3 `docs/ml.md`** is the English ML reference: each Model Type's formulas, thresholds and

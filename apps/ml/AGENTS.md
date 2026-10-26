@@ -42,6 +42,19 @@ python3 apps/ml/scripts/golden_run.py compare apps/ml/golden/before.csv apps/ml/
 
 A change that is meant to alter model output records a new baseline and says so in its PR.
 
+## Dependencies
+
+`requirements.in` lists the direct dependencies (edit this one); `requirements.txt` is the pinned
+set the image installs. After changing `requirements.in`, build an image that installs it, then:
+
+```bash
+docker run --rm -v "$PWD/apps/ml":/app -w /app --entrypoint python demo-predict-ml \
+  scripts/pin_requirements.py requirements.in > apps/ml/requirements.txt
+```
+
+torch is pinned separately (`TORCH_VERSION` in the Dockerfile and in CI) because the CPU build
+comes from PyTorch's own index.
+
 ## Python style
 
 - Type hints on every function signature.

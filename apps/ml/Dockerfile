@@ -10,8 +10,11 @@ RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/li
 # CUDA -> MPS -> CPU at runtime; on a GPU host rebuild with TORCH_VARIANT=cuda.
 # Kept before requirements.txt so this large layer stays cached.
 ARG TORCH_VARIANT=cpu
+ARG TORCH_VERSION=2.13.0
 RUN if [ "$TORCH_VARIANT" = "cpu" ]; then \
-      pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu ; \
+      pip install --no-cache-dir "torch==${TORCH_VERSION}" --index-url https://download.pytorch.org/whl/cpu ; \
+    else \
+      pip install --no-cache-dir "torch==${TORCH_VERSION}" ; \
     fi
 
 COPY requirements.txt .
