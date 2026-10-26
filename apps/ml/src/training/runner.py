@@ -8,10 +8,8 @@ promotion gate → artifacts + registry + production alias.
 
 from __future__ import annotations
 
-import io
 import json
 import logging
-from contextlib import redirect_stdout
 from typing import Any, Callable
 
 import numpy as np
@@ -147,10 +145,8 @@ def _activity_range(payments: pd.DataFrame, usage: pd.DataFrame) -> tuple[pd.Tim
 def run_training(training_run_id: str) -> None:
     """Execute one full training run; never leaves the row `in_progress`."""
 
-    log_buffer = io.StringIO()
     try:
-        with redirect_stdout(log_buffer):
-            _run_training_inner(training_run_id, log_buffer)
+        _run_training_inner(training_run_id)
     except Exception as exc:  # noqa: BLE001 - §2: every failure ends at status=failed.
         logger.exception("training run %s failed", training_run_id)
         update_training_run(
@@ -163,7 +159,7 @@ def run_training(training_run_id: str) -> None:
         raise
 
 
-def _run_training_inner(training_run_id: str, log_buffer: io.StringIO) -> None:
+def _run_training_inner(training_run_id: str) -> None:
     run = load_training_run(training_run_id)
     source_id = run["source_id"]
     cutoff = pd.Timestamp(run["cutoff_date"])
