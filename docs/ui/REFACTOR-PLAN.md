@@ -14,7 +14,7 @@
 - [x] เฟส 3 — รายชื่อลูกค้า
 - [x] เฟส 4 — หน้าลูกค้า
 - [x] เฟส 5 — หน้าที่เหลือ
-- [ ] เฟส 6 — เก็บงาน
+- [x] เฟส 6 — เก็บงาน
 
 ---
 
@@ -131,6 +131,11 @@
 ลบ alias token เดิม, ลบ `palette.ts` gradients และรวม `lib/login-brand-colors.ts` เข้า token, ลบ primitives เก่าที่ไม่มีใครใช้, ตรวจมือถือ 390px ทุกหน้า, ตรวจ contrast ธีมมืด
 
 **Done เมื่อ:** `git grep "\[color:var(--"` ว่าง (ใช้ชื่อ token ของ Tailwind แทน), ชื่อหน้าตรงกันทั้ง sidebar, หัวหน้า และ tab ของเบราว์เซอร์ (`lib/nav.ts`, metadata ใน `app/*/page.tsx`)
+
+ที่ทำจริง (2026-10-26): ลบ alias token เดิมและ class `.type-*` / `.surface-elev` / `.surface-soft` แล้ว (คง `.surface` ไว้เป็นหน้าตาของ Panel), `palette.ts` ลบไปตั้งแต่เฟส 3, primitive ทุกตัวใน `components/ui.tsx` ยังมีคนใช้ ตรวจที่ 390px ทุกหน้า (ไม่มีแนวนอนล้น) และตรวจธีมมืดบนหน้าภาพรวมและหน้าลูกค้า ยังเหลือ:
+- `lib/login-brand-colors.ts` ใช้เฉพาะหน้า login และ splash ซึ่งอยู่นอกขอบเขตแผนนี้ จึงยังไม่รวมเข้า token
+- ยังไม่มีปุ่มสลับธีม (เฟส 1 ข้อ 4 เป็นทางเลือก) token ธีมมืดพร้อมแล้ว ใส่ `data-theme="dark"` บน `<html>` ก็ใช้ได้
+- `SectionCard` ยังใช้ในหน้ารอบทำนาย/เทรนโมเดล (หน้าตาตาม token แล้ว) เปลี่ยนเป็น `Panel` เมื่อจะ redesign หน้าเหล่านั้น
 
 ---
 

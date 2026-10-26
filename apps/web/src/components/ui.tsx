@@ -65,13 +65,13 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={`surface-elev overflow-hidden ${className}`}>
+    <section className={`surface overflow-hidden ${className}`}>
       {(title || right || eyebrow) && (
         <header className="border-b border-rule px-5 py-4 sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              {eyebrow ? <p className="type-label">{eyebrow}</p> : null}
-              {title ? <h2 className="type-section-title mt-1 text-[20px]">{title}</h2> : null}
+              {eyebrow ? <p className="text-small text-muted">{eyebrow}</p> : null}
+              {title ? <h2 className="font-semibold text-text mt-1 text-[20px]">{title}</h2> : null}
               {hint ? <p className="mt-1 max-w-2xl text-small text-muted">{hint}</p> : null}
             </div>
             {right ? <div className="flex w-full shrink-0 flex-wrap items-center gap-2 lg:w-auto">{right}</div> : null}

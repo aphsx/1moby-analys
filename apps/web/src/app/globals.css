@@ -49,23 +49,6 @@
   --sidebar-w: 232px; --rail-w: 384px;
   --shadow-float: 0 8px 24px rgba(0, 0, 0, .16); /* menus, tooltips, dialogs only */
   --shadow-card: none;
-
-  /* Legacy names, aliased to the new tokens until every page is migrated (UI plan phase 6 deletes them). */
-  --moby-50: var(--accent-soft); --moby-100: var(--accent-soft); --moby-200: var(--accent-track);
-  --moby-500: var(--accent); --moby-600: var(--accent); --moby-700: var(--accent);
-  --moby-800: var(--accent-ink); --moby-900: var(--accent-ink);
-  --bg: var(--ground); --surface-2: var(--raised);
-  --line: var(--border); --line-2: var(--rule);
-  --ink-1: var(--text); --ink-2: var(--text); --ink-3: var(--text);
-  --ink-4: var(--muted); --ink-5: var(--faint); --ink-6: var(--control);
-  --ok: var(--positive); --ok-bg: var(--pill-positive-bg);
-  --warn: var(--warning); --warn-bg: var(--pill-warning-bg);
-  --danger: var(--negative); --danger-bg: var(--pill-negative-bg);
-  --info: var(--accent); --info-bg: var(--accent-soft);
-  --c-paid: var(--accent); --c-free: var(--warning); --c-churn: var(--negative); --c-ghost: var(--faint);
-  --r-sm: var(--radius-control); --r-md: var(--radius-card); --r-lg: var(--radius-card); --r-xl: var(--radius-card);
-  --shadow-1: var(--shadow-card); --shadow-2: var(--shadow-card); --shadow-3: var(--shadow-float);
-  --font-display: var(--font); --font-body: var(--font); --font-ui: var(--font); --font-num: var(--font);
 }
 
 /* Dark = Theme C · Data terminal */
@@ -103,19 +86,12 @@ a {
 
 .num { font-variant-numeric: tabular-nums; }
 
-/* Legacy type helpers, restyled to the new rules (no uppercase, no letter-spacing on Thai). */
-.type-display { color: var(--text); font-weight: 600; }
-.type-section-title { color: var(--text); font-weight: 600; }
-.type-label { color: var(--muted); font-size: var(--fs-small); }
-.type-meta { color: var(--muted); }
-.type-muted { color: var(--faint); }
-
-/* Legacy surfaces → Panel look (DESIGN.md §6.4) */
-.surface, .surface-elev {
+/* Panel look (DESIGN.md §6.4): surface, 1px border, radius 8, no shadow (dark theme lifts with --shadow-card) */
+.surface {
   border: 1px solid var(--border); border-radius: var(--radius-card);
   background: var(--surface); box-shadow: var(--shadow-card);
 }
-.surface-soft { border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--raised); }
+:root[data-theme="dark"] .surface { border-color: transparent; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 

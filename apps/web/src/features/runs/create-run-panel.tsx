@@ -158,7 +158,7 @@ export function CreateRunPanel({
     >
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div>
-          <span className="type-label">แหล่งข้อมูล</span>
+          <span className="text-small text-muted">แหล่งข้อมูล</span>
           <div className="mt-1.5 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
             <Select
               value={sourceId}
@@ -193,7 +193,7 @@ export function CreateRunPanel({
         </div>
 
         <label className="block">
-          <span className="type-label">ชื่อรอบทำนาย</span>
+          <span className="text-small text-muted">ชื่อรอบทำนาย</span>
           <input
             value={name}
             onChange={(e) => {
@@ -233,7 +233,7 @@ export function CreateRunPanel({
         {showAdvanced && (
           <div className="mt-3 space-y-4">
             <div>
-              <span className="type-label">เลือกโมเดลต่อ run</span>
+              <span className="text-small text-muted">เลือกโมเดลต่อ run</span>
               <p className="mt-1 mb-2 text-micro leading-5 text-muted">
                 ปล่อยเป็น &quot;Production (ปัจจุบัน)&quot; เพื่อใช้ champion — หรือเลือกเวอร์ชันเจาะจงสำหรับ run นี้
               </p>
@@ -318,7 +318,7 @@ function InlineImportForm({
   return (
     <div className="mt-4 rounded-card border border-border bg-surface p-4 shadow-[var(--shadow-1)]">
       <div className="flex items-center justify-between">
-        <span className="type-label">นำเข้า predict data ใหม่ (.xlsx 8 sheets)</span>
+        <span className="text-small text-muted">นำเข้า predict data ใหม่ (.xlsx 8 sheets)</span>
         <button
           type="button"
           onClick={onClose}
@@ -331,7 +331,7 @@ function InlineImportForm({
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto] sm:items-end">
         <div>
-          <span className="type-label">ไฟล์ Excel</span>
+          <span className="text-small text-muted">ไฟล์ Excel</span>
           <div className="mt-1.5 flex items-center gap-2">
             <button
               type="button"
@@ -359,7 +359,7 @@ function InlineImportForm({
         </div>
 
         <label className="block">
-          <span className="type-label">ชื่อ</span>
+          <span className="text-small text-muted">ชื่อ</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -370,7 +370,7 @@ function InlineImportForm({
         </label>
 
         <label className="block">
-          <span className="type-label">Client label</span>
+          <span className="text-small text-muted">Client label</span>
           <input
             value={clientLabel}
             onChange={(e) => setClientLabel(e.target.value)}

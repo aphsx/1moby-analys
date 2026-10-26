@@ -103,7 +103,7 @@ export function TrainPanel({
       }
     >
       <div>
-        <span className="type-label">ชุดข้อมูล</span>
+        <span className="text-small text-muted">ชุดข้อมูล</span>
         <div className="mt-1.5 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           <Select
             value={selectedSource?.id ?? ""}
@@ -187,7 +187,7 @@ export function TrainPanel({
         {showAdvanced && (
           <div className="mt-3">
             <label className="block">
-              <span className="type-label">Horizon (days)</span>
+              <span className="text-small text-muted">Horizon (days)</span>
               <input
                 type="number"
                 min={1}
@@ -228,7 +228,7 @@ function UploadForm({
   return (
     <div className="mt-3 rounded-card border border-border bg-surface p-4 shadow-[var(--shadow-1)]">
       <div className="flex items-center justify-between">
-        <span className="type-label">นำเข้า dataset ใหม่ (.xlsx 8 sheets)</span>
+        <span className="text-small text-muted">นำเข้า dataset ใหม่ (.xlsx 8 sheets)</span>
         <button
           type="button"
           onClick={onClose}
