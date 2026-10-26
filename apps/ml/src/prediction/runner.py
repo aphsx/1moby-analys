@@ -335,9 +335,12 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
     ]
 
     progress("churn explanations (SHAP)", 45)
-    frame["churn_factors"] = _churn_shap_factors(
+    churn_factors, shap_error = _churn_shap_factors(
         churn_bundle, churn_features, frame, churn_mask
     )
+    frame["churn_factors"] = churn_factors
+    # Shown on the run so a completed run with empty churn factors isn't a silent mystery.
+    warnings = [f"Churn explanations unavailable: {shap_error}"] if shap_error else []
 
     # ── CLV + p_alive ─────────────────────────────────────────────
     progress("clv model", 55)
@@ -390,7 +393,7 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
         error_message=None,
         total_customers=int(len(frame)),
         model_versions=model_versions,
-        progress={"step": "completed", "pct": 100},
+        progress={"step": "completed", "pct": 100, "warnings": warnings},
         mark_finished=True,
     )
     logger.info(
@@ -429,12 +432,12 @@ def _churn_shap_factors(
     features_raw: pd.DataFrame,
     frame: pd.DataFrame,
     churn_mask: np.ndarray,
-) -> list[list[dict[str, Any]] | None]:
-    """Top-5 SHAP factors per eligible customer (§3.4)."""
+) -> tuple[list[list[dict[str, Any]] | None], str | None]:
+    """Top-5 SHAP factors per eligible customer (§3.4), plus the error if SHAP failed."""
 
     factors: list[list[dict[str, Any]] | None] = [None] * len(frame)
     if not churn_mask.any():
-        return factors
+        return factors, None
     try:
         x = transform_features(features_raw[churn_mask], churn_bundle["preprocessor"])
         model = churn_bundle["model"]
@@ -464,10 +467,10 @@ def _churn_shap_factors(
                 "per-customer churn_factors will be null (see model_card feature_importance)",
                 type(model).__name__,
             )
-            return factors
+            return factors, None
     except Exception as exc:  # noqa: BLE001 - explainability failure must not block the run.
         logger.warning("SHAP factors unavailable: %s", exc)
-        return factors
+        return factors, f"{type(exc).__name__}: {exc}"
 
     feature_names = list(x.columns)
     raw_values = features_raw[churn_mask].reset_index(drop=True)
@@ -484,7 +487,7 @@ def _churn_shap_factors(
             }
             for j in top
         ]
-    return factors
+    return factors, None
 
 
 def _blend_clv_tail(

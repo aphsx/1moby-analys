@@ -81,6 +81,7 @@ export function mapRun(row: RunRow): PredictionRun {
       row.status === "in_progress"
         ? ((row.progressJson as { step: string; pct: number } | null) ?? null)
         : null,
+    warnings: (row.progressJson as { warnings?: string[] } | null)?.warnings ?? [],
   };
 }
 

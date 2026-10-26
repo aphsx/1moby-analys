@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, ListChecks, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronRight, ListChecks, RefreshCw, Trash2 } from "lucide-react";
 import { StatusDialog } from "@/components/status-dialog";
 import {
   EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill,
@@ -197,6 +197,15 @@ function RunRow({
                 title={run.error_message}
               >
                 {run.error_message}
+              </span>
+            )}
+            {run.status === "completed" && run.warnings.length > 0 && (
+              <span
+                className="flex max-w-[220px] items-center gap-1 truncate text-[11px] text-amber-700"
+                title={run.warnings.join("\n")}
+              >
+                <AlertTriangle size={11} className="shrink-0" />
+                {run.warnings[0]}
               </span>
             )}
           </div>
