@@ -349,9 +349,8 @@ export default function AIChatWidget() {
             </button>
           </div>
 
-          {/* Disclaimer */}
+          {/* Link to the full-page assistant */}
           <p className="text-[9.5px] text-[color:var(--ink-6)] text-center pb-2 px-4 leading-tight">
-            Chat API connected · no mock prediction data ·{" "}
             <Link
               href="/ai-chat"
               className="text-[color:var(--moby-500)] hover:underline"
