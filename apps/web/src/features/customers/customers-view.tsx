@@ -93,13 +93,11 @@ export interface CustomerPreset {
   sort: CustomerSort | null;
 }
 
-// Server filters are single-value (eq), so "เสี่ยงสูง" pins churn_risk_level to
-// "high" and surfaces critical rows via the revenue_at_risk sort.
 export const CUSTOMER_PRESETS: CustomerPreset[] = [
   {
     key: "high_value_high_risk",
     label: "มูลค่าสูง + เสี่ยงสูง",
-    filters: { ...EMPTY_FILTERS, customer_value_tier: "high", churn_risk_level: "high" },
+    filters: { ...EMPTY_FILTERS, customer_value_tier: "high", churn_risk_level: "high,critical" },
     sort: { key: "revenue_at_risk", direction: "desc" },
   },
   {

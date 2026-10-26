@@ -1,5 +1,5 @@
 import Elysia, { t } from "elysia";
-import { asc, eq, and, sql, type SQL } from "drizzle-orm";
+import { asc, eq, and, inArray, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
@@ -24,7 +24,10 @@ function outputFilters(runId: string, q: OutputsQueryParams): SQL | undefined {
   const conds: SQL[] = [eq(o.predictionRunId, runId)];
   if (q.search) conds.push(sql`${o.accId}::text LIKE ${`%${q.search}%`}`);
   if (q.lifecycle_stage) conds.push(eq(o.lifecycleStage, q.lifecycle_stage));
-  if (q.churn_risk_level) conds.push(eq(o.churnRiskLevel, q.churn_risk_level));
+  if (q.churn_risk_level) {
+    // "high,critical" filters on several levels at once (the high-value at-risk preset needs both)
+    conds.push(inArray(o.churnRiskLevel, q.churn_risk_level.split(",").filter(Boolean)));
+  }
   if (q.customer_value_tier) conds.push(eq(o.customerValueTier, q.customer_value_tier));
   if (q.credit_urgency_level) conds.push(eq(o.creditUrgencyLevel, q.credit_urgency_level));
   if (q.ever_paid === "true" || q.ever_paid === "false") {

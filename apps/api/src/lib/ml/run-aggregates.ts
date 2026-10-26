@@ -30,6 +30,12 @@ export type RunAggregates = {
   }[];
 };
 
+/**
+ * Revenue at risk is counted for Active Paid customers only (the churn-eligible stage). Both the
+ * total and the value × risk matrix use this one filter, so the matrix cells sum to the total.
+ */
+const AT_RISK_SCOPE = sql`${mlPredictionOutputs.lifecycleStage} = 'Active Paid'`;
+
 export async function fetchRunAggregates(runId: string): Promise<RunAggregates> {
   const o = mlPredictionOutputs;
   const inRun = eq(o.predictionRunId, runId);
@@ -60,7 +66,7 @@ export async function fetchRunAggregates(runId: string): Promise<RunAggregates> 
         .select({
           total: sql<number>`COUNT(*)::int`,
           eligibleCount: sql<number>`COUNT(*) FILTER (WHERE ${o.churnProbability} IS NOT NULL)::int`,
-          expectedAtRisk: sql<number>`COALESCE(SUM(${o.revenueAtRisk}) FILTER (WHERE ${o.lifecycleStage} = 'Active Paid'), 0)::float8`,
+          expectedAtRisk: sql<number>`COALESCE(SUM(${o.revenueAtRisk}) FILTER (WHERE ${AT_RISK_SCOPE}), 0)::float8`,
           highRiskExposure: sql<number>`COALESCE(SUM(${o.predictedClv6m}) FILTER (WHERE ${o.churnRiskLevel} IN ('high', 'critical')), 0)::float8`,
           demand30d: sql<number>`COALESCE(SUM(${o.predictedCreditUsage30d}) FILTER (WHERE ${o.lifecycleStage} LIKE 'Active%'), 0)::float8`,
           topupDue7d: sql<number>`COUNT(*) FILTER (WHERE ${o.estimatedDaysUntilTopup} <= 7)::int`,
@@ -79,6 +85,7 @@ export async function fetchRunAggregates(runId: string): Promise<RunAggregates> 
         .where(
           and(
             inRun,
+            AT_RISK_SCOPE,
             sql`${o.customerValueTier} IS NOT NULL`,
             sql`${o.churnRiskLevel} IS NOT NULL`
           )

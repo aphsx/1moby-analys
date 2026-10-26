@@ -1,13 +1,15 @@
 import {
+  type ChurnFactor,
   type LifecycleStage,
   MODEL_ALIAS,
+  type RiskLevel,
   type RunStatus,
   type RunSummary,
   TOP_PRIORITY_LIMIT,
   type ValueTier,
 } from "@moby/types";
 import Elysia, { t } from "elysia";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlModelAliases, mlModelVersions, mlPredictionOutputs } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
@@ -47,12 +49,12 @@ async function monthlyActual(
            COUNT(*)::int AS n_payments
     FROM predict_clean_payments
     WHERE source_id = ${predictSourceId}
-      AND payment_date >= date_trunc('month', ${cutoffDate}::date) - INTERVAL '12 months'
+      AND payment_date >= date_trunc('month', ${cutoffDate}::date) - INTERVAL '24 months'
       AND payment_date < date_trunc('month', ${cutoffDate}::date)
     GROUP BY 1
   `);
   const byMonth = new Map(rows.map((r) => [r.month, r]));
-  return monthKeysBeforeCutoff(cutoffDate).map((month) => ({
+  return monthKeysBeforeCutoff(cutoffDate, 24).map((month) => ({
     month,
     amount: byMonth.get(month)?.amount ?? 0,
     n_payments: byMonth.get(month)?.n_payments ?? 0,
@@ -70,12 +72,19 @@ async function buildSummary(run: RunRow): Promise<RunSummary> {
         accId: o.accId,
         lifecycleStage: o.lifecycleStage,
         churnProbability: o.churnProbability,
+        churnRiskLevel: o.churnRiskLevel,
+        customerValueTier: o.customerValueTier,
         predictedClv6m: o.predictedClv6m,
+        revenueAtRisk: o.revenueAtRisk,
+        estimatedDaysUntilTopup: o.estimatedDaysUntilTopup,
         priorityScore: o.priorityScore,
+        churnFactorsJson: o.churnFactorsJson,
       })
       .from(o)
-      .where(inRun)
-      .orderBy(sql`${o.priorityScore} DESC NULLS LAST`, asc(o.accId))
+      .where(
+        and(inRun, eq(o.customerValueTier, "high"), inArray(o.churnRiskLevel, ["high", "critical"]))
+      )
+      .orderBy(sql`${o.revenueAtRisk} DESC NULLS LAST`, asc(o.accId))
       .limit(TOP_PRIORITY_LIMIT),
     monthlyActual(run.predictSourceId, run.cutoffDate),
     churnThresholds(),
@@ -102,7 +111,9 @@ async function buildSummary(run: RunRow): Promise<RunSummary> {
       risk_level: row.risk_level,
       count: row.count,
       clv_sum: row.clv_sum,
+      revenue_at_risk: row.revenue_at_risk,
     })),
+    usage_trend: agg.usage_trend,
     credit: {
       demand_30d: agg.credit_demand_30d,
       by_urgency: agg.credit_by_urgency,
@@ -112,8 +123,13 @@ async function buildSummary(run: RunRow): Promise<RunSummary> {
       acc_id: row.accId,
       lifecycle_stage: (row.lifecycleStage ?? "Ghost") as LifecycleStage,
       churn_probability: num(row.churnProbability),
+      churn_risk_level: (row.churnRiskLevel as RiskLevel | null) ?? null,
+      customer_value_tier: (row.customerValueTier as ValueTier | null) ?? null,
       predicted_clv_6m: num(row.predictedClv6m),
+      revenue_at_risk: num(row.revenueAtRisk),
+      estimated_days_until_topup: row.estimatedDaysUntilTopup,
       priority_score: num(row.priorityScore) ?? 0,
+      top_factor: (row.churnFactorsJson as ChurnFactor[] | null)?.[0] ?? null,
     })),
     model_versions:
       (run.modelVersionsJson as RunSummary["model_versions"] | null) ?? EMPTY_MODEL_VERSIONS,
