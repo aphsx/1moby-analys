@@ -1,27 +1,19 @@
 import { IMPORT_STATUS, MODEL_TYPES, RUN_STATUS } from "@moby/types";
 import Elysia, { t } from "elysia";
-import { desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionRuns, predictDataSources, user } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
 import { badRequest, notFound } from "../../lib/http/errors";
-import { triggerMlJob } from "../../lib/ml/ml-internal";
+import { triggerRunOrFail } from "../../lib/ml/ml-internal";
 import { getPredictCutoffSuggestion } from "../../lib/data-import/clean-cutoff";
 import { DATE_RE, UUID_RE } from "../../lib/constants";
-import { fetchRun, mapRun, requireRun, runSelect } from "../../lib/ml/prediction-runs";
+import { listRuns, mapRun, requireRun } from "../../lib/ml/prediction-runs";
 
 export const runsRoutes = new Elysia()
   .use(requireUser)
   // Org-wide: every authenticated user sees all runs.
-  .get("/", async () => {
-    const rows = await db
-      .select(runSelect)
-      .from(mlPredictionRuns)
-      .leftJoin(predictDataSources, eq(mlPredictionRuns.predictSourceId, predictDataSources.id))
-      .leftJoin(user, eq(mlPredictionRuns.createdBy, user.id))
-      .orderBy(desc(mlPredictionRuns.createdAt));
-    return rows.map(mapRun);
-  })
+  .get("/", async () => (await listRuns()).map(mapRun))
   .post(
     "/",
     async ({ body, userId }) => {
@@ -68,14 +60,9 @@ export const runsRoutes = new Elysia()
         })
         .returning({ id: mlPredictionRuns.id });
 
-      try {
-        await triggerMlJob("/internal/prediction-runs", { prediction_run_id: inserted.id });
-      } catch (e) {
-        await db
-          .update(mlPredictionRuns)
-          .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message, finishedAt: new Date() })
-          .where(eq(mlPredictionRuns.id, inserted.id));
-      }
+      await triggerRunOrFail(mlPredictionRuns, inserted.id, "/internal/prediction-runs", {
+        prediction_run_id: inserted.id,
+      });
 
       return mapRun(await requireRun(inserted.id));
     },
@@ -125,17 +112,10 @@ export const runsRoutes = new Elysia()
         })
         .where(eq(mlPredictionRuns.id, run.id));
 
-      try {
-        await triggerMlJob("/internal/prediction-runs", { prediction_run_id: run.id });
-      } catch (e) {
-        await db
-          .update(mlPredictionRuns)
-          .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message, finishedAt: new Date() })
-          .where(eq(mlPredictionRuns.id, run.id));
-      }
-
-      const fresh = await fetchRun(run.id);
-      return mapRun(fresh!);
+      await triggerRunOrFail(mlPredictionRuns, run.id, "/internal/prediction-runs", {
+        prediction_run_id: run.id,
+      });
+      return mapRun(await requireRun(run.id));
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )

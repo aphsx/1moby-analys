@@ -29,6 +29,7 @@ import { requireUser } from "../lib/http/auth-middleware";
 import { badRequest, conflict, HttpError, notFound } from "../lib/http/errors";
 import { DEFAULT_RISK_THRESHOLDS } from "../lib/ml-contract";
 import { mlErrorToHttp, triggerMlJob } from "../lib/ml/ml-internal";
+import { assertNotUsedByPredictions, predictionRunsUsingVersion } from "../lib/ml/model-registry";
 
 
 // Primary headline metric per model type, read from a version's test metrics.
@@ -298,53 +299,6 @@ interface VersionCard {
   algorithm?: string;
 }
 
-/** Prediction runs that served this version (by version string or override id). */
-async function findReferencingPredictionRuns(
-  modelType: ModelType,
-  version: string,
-  versionId: string
-): Promise<{ id: string; name: string }[]> {
-  return db
-    .select({ id: mlPredictionRuns.id, name: mlPredictionRuns.name })
-    .from(mlPredictionRuns)
-    .where(
-      sql`(
-        ${mlPredictionRuns.modelVersionsJson} ->> ${modelType} = ${version}
-        OR ${mlPredictionRuns.modelOverridesJson} ->> ${modelType} = ${versionId}
-      )`
-    )
-    .orderBy(desc(mlPredictionRuns.createdAt))
-    .limit(5);
-}
-
-const modelActivateRoutes = new Elysia()
-  .use(requireUser)
-  // Manually pin a version to production. Reuses the ML service's promotion
-  // transaction (action='manual_override') so the registry stays consistent.
-  .post("/:modelType/activate", async ({ params, body, userId }) => {
-    if (!isModelType(params.modelType)) {
-      throw badRequest("Unknown model type");
-    }
-    const { modelVersionId, reason } = (body ?? {}) as {
-      modelVersionId?: string;
-      reason?: string;
-    };
-    if (!modelVersionId) {
-      throw badRequest("modelVersionId is required");
-    }
-    try {
-      await triggerMlJob("/internal/model-activate", {
-        model_type: params.modelType,
-        model_version_id: modelVersionId,
-        reason,
-        created_by: userId ?? null,
-      });
-    } catch (error) {
-      throw new HttpError(502, error instanceof Error ? error.message : "Activation failed");
-    }
-    return { ok: true };
-  });
-
 export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" })
   .use(requireUser)
   .get("/", async (): Promise<ModelPerfEntry[]> => {
@@ -446,19 +400,11 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
       );
     }
 
-    const refs = await findReferencingPredictionRuns(
-      params.modelType,
-      version.version,
-      version.id
+    assertNotUsedByPredictions(
+      await predictionRunsUsingVersion(params.modelType, version.version, version.id),
+      "เวอร์ชันนี้",
+      "MODEL_IN_USE_BY_PREDICTIONS"
     );
-    if (refs.length > 0) {
-      const names = refs.map((r) => r.name || r.id.slice(0, 8)).join(", ");
-      const more = refs.length === 5 ? "…" : "";
-      throw conflict(
-        `ยังมี prediction run ที่ใช้เวอร์ชันนี้: ${names}${more} — ลบผล prediction เหล่านั้นก่อน`,
-        "MODEL_IN_USE_BY_PREDICTIONS"
-      );
-    }
 
     try {
       await triggerMlJob("/internal/model-delete", {
@@ -471,4 +417,28 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
     }
     return { deleted: true };
   })
-  .use(modelActivateRoutes);
+  // Manually pin a version to production. Reuses the ML service's promotion
+  // transaction (action='manual_override') so the registry stays consistent.
+  .post("/:modelType/activate", async ({ params, body, userId }) => {
+    if (!isModelType(params.modelType)) {
+      throw badRequest("Unknown model type");
+    }
+    const { modelVersionId, reason } = (body ?? {}) as {
+      modelVersionId?: string;
+      reason?: string;
+    };
+    if (!modelVersionId) {
+      throw badRequest("modelVersionId is required");
+    }
+    try {
+      await triggerMlJob("/internal/model-activate", {
+        model_type: params.modelType,
+        model_version_id: modelVersionId,
+        reason,
+        created_by: userId ?? null,
+      });
+    } catch (error) {
+      throw new HttpError(502, error instanceof Error ? error.message : "Activation failed");
+    }
+    return { ok: true };
+  });

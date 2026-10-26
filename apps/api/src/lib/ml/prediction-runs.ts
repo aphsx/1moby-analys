@@ -14,7 +14,7 @@ import {
   type UrgencyLevel,
   type ValueTier,
 } from "@moby/types";
-import { eq, type SQL } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import {
   mlPredictionOutputs,
@@ -24,7 +24,6 @@ import {
 } from "../../db/schema";
 import { notFound } from "../http/errors";
 import { EMPTY_MODEL_VERSIONS, num } from "../ml-contract";
-import { UUID_RE } from "../constants";
 
 // ── Run select + row mapping ───────────────────────────────────
 
@@ -43,24 +42,18 @@ export const runSelect = {
   finishedAt: mlPredictionRuns.finishedAt,
   errorMessage: mlPredictionRuns.errorMessage,
   progressJson: mlPredictionRuns.progressJson,
+  modelVersionsJson: mlPredictionRuns.modelVersionsJson,
 };
 
-export interface RunRow {
-  id: string;
-  name: string;
-  status: string;
-  predictSourceId: string;
-  predictSourceName: string | null;
-  cutoffDate: string;
-  totalCustomers: number | null;
-  createdBy: string | null;
-  creatorName: string | null;
-  creatorEmail: string | null;
-  createdAt: Date;
-  finishedAt: Date | null;
-  errorMessage: string | null;
-  progressJson: unknown;
+function selectRuns() {
+  return db
+    .select(runSelect)
+    .from(mlPredictionRuns)
+    .leftJoin(predictDataSources, eq(mlPredictionRuns.predictSourceId, predictDataSources.id))
+    .leftJoin(user, eq(mlPredictionRuns.createdBy, user.id));
 }
+
+export type RunRow = Awaited<ReturnType<typeof selectRuns>>[number];
 
 export function mapRun(row: RunRow): PredictionRun {
   return {
@@ -85,15 +78,13 @@ export function mapRun(row: RunRow): PredictionRun {
 }
 
 export async function fetchRun(id: string): Promise<RunRow | null> {
-  if (!UUID_RE.test(id)) return null;
-  const rows = await db
-    .select(runSelect)
-    .from(mlPredictionRuns)
-    .leftJoin(predictDataSources, eq(mlPredictionRuns.predictSourceId, predictDataSources.id))
-    .leftJoin(user, eq(mlPredictionRuns.createdBy, user.id))
-    .where(eq(mlPredictionRuns.id, id))
-    .limit(1);
-  return rows[0] ?? null;
+  const [row] = await selectRuns().where(eq(mlPredictionRuns.id, id)).limit(1);
+  return row ?? null;
+}
+
+/** Every Prediction Run, newest first (runs are visible org-wide). */
+export async function listRuns(): Promise<RunRow[]> {
+  return selectRuns().orderBy(desc(mlPredictionRuns.createdAt));
 }
 
 /** fetchRun, or a 404 when the run doesn't exist (runs are readable org-wide). */
@@ -101,6 +92,19 @@ export async function requireRun(id: string): Promise<RunRow> {
   const run = await fetchRun(id);
   if (!run) throw notFound("Prediction run not found");
   return run;
+}
+
+/** One customer's Prediction Output in a run, or a 404 (also for a non-integer acc_id). */
+export async function requireOutput(runId: string, accIdParam: string) {
+  const accId = Number(accIdParam);
+  if (!Number.isInteger(accId)) throw notFound("Prediction output not found");
+  const [row] = await db
+    .select()
+    .from(mlPredictionOutputs)
+    .where(and(eq(mlPredictionOutputs.predictionRunId, runId), eq(mlPredictionOutputs.accId, accId)))
+    .limit(1);
+  if (!row) throw notFound("Prediction output not found");
+  return row;
 }
 
 // ── Output row mapping ─────────────────────────────────────────

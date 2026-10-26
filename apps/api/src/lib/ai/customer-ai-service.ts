@@ -3,21 +3,17 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { conflict, HttpError } from "../http/errors";
 import { mlPredictionOutputs } from "../../db/schema";
+import type { RunRow } from "../ml/prediction-runs";
 import { buildCustomerAiContext } from "./customer-ai-context";
 import { generateCustomerAiExplanation } from "./customer-explanation";
 
-type RunRow = {
-  id: string;
-  name: string;
-  cutoffDate: string;
-  predictSourceId: string;
-};
+type RunRef = Pick<RunRow, "id" | "name" | "cutoffDate" | "predictSourceId">;
 
 const outputWhere = (runId: string, accId: number) =>
   and(eq(mlPredictionOutputs.predictionRunId, runId), eq(mlPredictionOutputs.accId, accId));
 
 export async function createCustomerAiExplanation(
-  run: RunRow,
+  run: RunRef,
   accId: number,
   output: PredictionOutput,
   force: boolean

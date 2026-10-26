@@ -12,7 +12,7 @@ import { trainDataSources, user } from "../db/schema";
 import { requireUser } from "../lib/http/auth-middleware";
 import { badRequest, HttpError, notFound } from "../lib/http/errors";
 import { maxUploadBytes } from "../lib/constants";
-import { getTrainCutoffSuggestion } from "../lib/data-import/clean-cutoff";
+import { DEFAULT_HORIZON_DAYS, getTrainCutoffSuggestion } from "../lib/data-import/clean-cutoff";
 import { prepareTrainDataSource } from "../lib/data-import/train-import";
 import { abortTrainDataSource } from "../lib/data-import/abort-data-source";
 import {
@@ -304,10 +304,9 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
         throw notFound("Train data source not found");
       }
 
-      const HORIZON_DAYS = 180;
       const { cutoff_date, latest_data_date } = await getTrainCutoffSuggestion(
         params.id,
-        HORIZON_DAYS
+        DEFAULT_HORIZON_DAYS
       );
       if (!cutoff_date || !latest_data_date) {
         throw badRequest("No clean activity data for this source yet");
@@ -315,7 +314,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
       return {
         suggested_cutoff: cutoff_date,
         latest_data_date: latest_data_date,
-        horizon_days: HORIZON_DAYS,
+        horizon_days: DEFAULT_HORIZON_DAYS,
       };
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }

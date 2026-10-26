@@ -8,6 +8,10 @@
  * default 30s) — a hung ML service must surface as a thrown error so callers
  * can mark the run 'failed' instead of leaving it stuck.
  */
+import { RUN_STATUS } from "@moby/types";
+import { eq } from "drizzle-orm";
+import { db } from "../../db/client";
+import { mlPredictionRuns, mlTrainingRuns } from "../../db/schema";
 import { positiveNumberEnv } from "../env";
 import { HttpError } from "../http/errors";
 
@@ -68,6 +72,26 @@ export function mlErrorToHttp(error: unknown, fallback: string): HttpError {
   return new HttpError(upstream === 400 ? 409 : 502, error instanceof Error ? error.message : fallback);
 }
 
+/**
+ * Start a run's ML job. If the trigger itself fails the job never started, so the run is
+ * marked failed right away instead of waiting for the stale-run reaper.
+ */
+export async function triggerRunOrFail(
+  table: typeof mlPredictionRuns | typeof mlTrainingRuns,
+  runId: string,
+  path: string,
+  payload: object
+): Promise<void> {
+  try {
+    await triggerMlJob(path, payload);
+  } catch (e) {
+    await db
+      .update(table)
+      .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message, finishedAt: new Date() })
+      .where(eq(table.id, runId));
+  }
+}
+
 export async function triggerMlJob(path: string, payload: object): Promise<void> {
   const res = await postMlInternal(path, payload);
   if (!res.ok) {
@@ -76,7 +100,7 @@ export async function triggerMlJob(path: string, payload: object): Promise<void>
   }
 }
 
-/** Synchronous ML internal routes that return a JSON body (activate, delete, repoint). */
+/** Like triggerMlJob, for internal routes whose JSON answer the caller needs (e.g. repoint). */
 export async function callMlInternalJson<T>(path: string, payload: object): Promise<T> {
   const res = await postMlInternal(path, payload);
   if (!res.ok) {

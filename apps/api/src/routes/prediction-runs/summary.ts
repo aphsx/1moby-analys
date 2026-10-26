@@ -9,9 +9,8 @@ import {
 import Elysia, { t } from "elysia";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client";
-import { mlModelAliases, mlModelVersions, mlPredictionOutputs, mlPredictionRuns, predictDataSources, user } from "../../db/schema";
+import { mlModelAliases, mlModelVersions, mlPredictionOutputs } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
-import { notFound } from "../../lib/http/errors";
 import {
   DEFAULT_RISK_THRESHOLDS,
   EMPTY_MODEL_VERSIONS,
@@ -19,7 +18,7 @@ import {
   num,
 } from "../../lib/ml-contract";
 import { fetchRunAggregates } from "../../lib/ml/run-aggregates";
-import { type RunRow, runSelect } from "../../lib/ml/prediction-runs";
+import { requireRun, type RunRow } from "../../lib/ml/prediction-runs";
 
 async function churnThresholds(): Promise<{ medium: number; high: number; critical: number }> {
   const rows = await db
@@ -60,7 +59,7 @@ async function monthlyActual(
   }));
 }
 
-async function buildSummary(run: RunRow & { modelVersionsJson: unknown }): Promise<RunSummary> {
+async function buildSummary(run: RunRow): Promise<RunSummary> {
   const o = mlPredictionOutputs;
   const inRun = eq(o.predictionRunId, run.id);
 
@@ -126,18 +125,7 @@ export const summaryRoutes = new Elysia()
   .get(
     "/:id/summary",
     async ({ params }) => {
-      const [row] = await db
-        .select({
-          ...runSelect,
-          modelVersionsJson: mlPredictionRuns.modelVersionsJson,
-        })
-        .from(mlPredictionRuns)
-        .leftJoin(predictDataSources, eq(mlPredictionRuns.predictSourceId, predictDataSources.id))
-        .leftJoin(user, eq(mlPredictionRuns.createdBy, user.id))
-        .where(eq(mlPredictionRuns.id, params.id))
-        .limit(1);
-      if (!row) throw notFound("Prediction run not found");
-      return buildSummary(row);
+      return buildSummary(await requireRun(params.id));
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   );

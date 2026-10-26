@@ -3,10 +3,10 @@ import { asc, eq, and, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
-import { notFound } from "../../lib/http/errors";
 import {
   mapOutput,
   type OutputsQueryParams,
+  requireOutput,
   requireRun,
   SORT_COLUMNS,
 } from "../../lib/ml/prediction-runs";
@@ -84,23 +84,8 @@ export const outputsRoutes = new Elysia()
   .get(
     "/:id/outputs/:acc_id",
     async ({ params }) => {
-      const accId = Number(params.acc_id);
-      if (!Number.isInteger(accId)) {
-        throw notFound("Prediction output not found");
-      }
-      const run = await requireRun(params.id);
-      const [row] = await db
-        .select()
-        .from(mlPredictionOutputs)
-        .where(
-          and(
-            eq(mlPredictionOutputs.predictionRunId, params.id),
-            eq(mlPredictionOutputs.accId, accId)
-          )
-        )
-        .limit(1);
-      if (!row) throw notFound("Prediction output not found");
-      return mapOutput(row);
+      await requireRun(params.id);
+      return mapOutput(await requireOutput(params.id, params.acc_id));
     },
     { params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }) }
   );

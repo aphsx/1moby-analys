@@ -1,7 +1,5 @@
 import Elysia, { t } from "elysia";
-import { and, eq } from "drizzle-orm";
 import { db } from "../../db/client";
-import { mlPredictionOutputs } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
 import { notFound } from "../../lib/http/errors";
 import {
@@ -9,7 +7,7 @@ import {
   loadCustomerPayments,
   loadCustomerUsageMonthly,
 } from "../../lib/ai";
-import { mapOutput, requireRun } from "../../lib/ml/prediction-runs";
+import { mapOutput, requireOutput, requireRun } from "../../lib/ml/prediction-runs";
 
 export const customer360Routes = new Elysia()
   .use(requireUser)
@@ -36,28 +34,12 @@ export const customer360Routes = new Elysia()
   .post(
     "/:id/outputs/:acc_id/ai-explanation",
     async ({ params, body }) => {
-      const accId = Number(params.acc_id);
-      if (!Number.isInteger(accId)) {
-        throw notFound("Prediction output not found");
-      }
-
       const run = await requireRun(params.id);
-
-      const [row] = await db
-        .select()
-        .from(mlPredictionOutputs)
-        .where(
-          and(
-            eq(mlPredictionOutputs.predictionRunId, params.id),
-            eq(mlPredictionOutputs.accId, accId)
-          )
-        )
-        .limit(1);
-      if (!row) throw notFound("Prediction output not found");
+      const row = await requireOutput(params.id, params.acc_id);
 
       const result = await createCustomerAiExplanation(
         run,
-        accId,
+        row.accId,
         mapOutput(row),
         body.force ?? false
       );

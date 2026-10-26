@@ -27,6 +27,41 @@ export type CutoffSuggestion = {
 
 const EMPTY: CutoffSuggestion = { cutoff_date: null, latest_data_date: null };
 
+/** Default label Horizon for training (days); matches the ML runner's horizon_days. */
+export const DEFAULT_HORIZON_DAYS = 180;
+/** History a training cutoff needs before it: the Lifecycle Stage active window (days). */
+const ACTIVE_WINDOW_DAYS = 180;
+
+/**
+ * Training Gate 3: the source has activity older than `cutoff - ACTIVE_WINDOW_DAYS`
+ * and activity reaching `cutoff + horizonDays`, so features and labels are fully observed.
+ */
+export async function trainCutoffPassesGate3(
+  sourceId: string,
+  cutoffDate: string,
+  horizonDays: number
+): Promise<boolean> {
+  const [row] = await db.execute<{ history_ok: boolean | null; label_ok: boolean | null }>(sql`
+    WITH activity AS (
+      SELECT MIN(activity_date)::date AS min_activity,
+             MAX(activity_date)::date AS max_activity
+      FROM (
+        SELECT payment_date::date AS activity_date
+        FROM train_clean_payments
+        WHERE source_id = ${sourceId} AND payment_date IS NOT NULL
+        UNION ALL
+        SELECT make_date(year, month, 1)::date AS activity_date
+        FROM train_clean_usage
+        WHERE source_id = ${sourceId} AND year IS NOT NULL AND month IS NOT NULL
+      ) a
+    )
+    SELECT min_activity < (${cutoffDate}::date - ${ACTIVE_WINDOW_DAYS}::int) AS history_ok,
+           max_activity >= (${cutoffDate}::date + ${horizonDays}::int) AS label_ok
+    FROM activity
+  `);
+  return Boolean(row?.history_ok && row.label_ok);
+}
+
 /** Suggested training cutoff: month-aligned `latest_activity - horizonDays`. */
 export async function getTrainCutoffSuggestion(
   sourceId: string,
