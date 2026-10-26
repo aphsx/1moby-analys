@@ -32,13 +32,13 @@ infra (2026-10-23), then a decision session with the project owner.
 
 ## Phase 0: Baseline and safety net
 
-- [ ] **0.1 Commit the current dead-code cleanup** `[structure]`
+- [x] **0.1 Commit the current dead-code cleanup** `[structure]`
   The working tree already deletes `apps/web/src/mocks/ml.ts`, `lib/auth-client.ts`,
   `apps/ml/api/models.py`, `quick-prompts-aside.tsx`, `model-type-help.ts`, `apps/web/bun.lock`, and
   others (about 1,570 lines). Commit it as the baseline.
   *Done when:* `bun run build` passes and `git status` is clean.
 
-- [ ] **0.2 Archive academic material and the old docs** `[structure]`
+- [x] **0.2 Archive academic material and the old docs** `[structure]`
   1. Create the `academic` branch from main at 0.1 and push it. It keeps everything below.
   2. On main, `git rm`:
      - `DIAGRAMS.docx`, `docx/`, `docs/*.docx`, `docs/generate-report-docx.js`
@@ -56,7 +56,7 @@ infra (2026-10-23), then a decision session with the project owner.
   *Done when:* `git grep -E "Data_example|ML-CALCULATIONS|FINAL-REPORT|moby-data-prep|excel_schema"`
   returns nothing.
 
-- [ ] **0.3 Make `AGENTS.md` the single source of agent instructions** `[structure]`
+- [x] **0.3 Make `AGENTS.md` the single source of agent instructions** `[structure]`
   - Move the current `CLAUDE.md` content into `AGENTS.md`, replacing the untracked `AGENTS.md`, which
     is an older diverged fork. `CLAUDE.md` becomes the single line `@AGENTS.md`.
   - Do the same for `apps/ml/CLAUDE.md` → `apps/ml/AGENTS.md`.
@@ -67,7 +67,7 @@ infra (2026-10-23), then a decision session with the project owner.
     - Replace "There are no tests" with the 0.4–0.6 commands.
     - Point to `GLOSSARY.md` and `docs/adr/`.
 
-- [ ] **0.4 Make CI check everything, and deploy only on demand** `[behaviour]`
+- [x] **0.4 Make CI check everything, and deploy only on demand** `[behaviour]`
   `.github/workflows/ci.yml:36` runs only `bun run build`, and `ml` deploys on every push.
   - Add `bun run typecheck` and `bun test`.
   - Add a Python job:
@@ -79,7 +79,7 @@ infra (2026-10-23), then a decision session with the project owner.
 
   *Done when:* a push to main runs all checks and deploys nothing.
 
-- [ ] **0.5 Unit tests for the risky pure logic in the API** `[structure]`
+- [x] **0.5 Unit tests for the risky pure logic in the API** `[structure]`
   Plain `bun test` files next to the code, a handful of cases each, focused on what must be rejected:
   - `lib/ai/sql-guard.ts`: rejects writes, multiple statements, disallowed tables
   - `lib/ai/scope.ts`: injects the org-wide id allowlist
@@ -123,7 +123,7 @@ Data-loss and corruption bugs come first.
   - In the API, reject `POST /training-runs` with 409 while another Training Run is `pending` or
     `in_progress` (`apps/api/src/routes/training-runs.ts:185`).
 
-- [ ] **1.2 Retried runs get killed by the reaper** `[behaviour]`
+- [x] **1.2 Retried runs get killed by the reaper** `[behaviour]`
   - `apps/api/src/routes/prediction-runs/runs.ts:128-131` resets `status` but not `startedAt`.
   - The runner keeps the old value (`apps/ml/src/prediction/runner.py:1363`,
     `COALESCE(started_at, NOW())`).
@@ -151,34 +151,34 @@ Data-loss and corruption bugs come first.
   `docker compose logs ml` shows nothing. Fix: drop the `redirect_stdout` and the unused `log_buffer`
   parameter (`:166`). Phase 6.4 then turns the prints into logger calls.
 
-- [ ] **1.7 AI chat ignores runs created by colleagues** `[behaviour]`
+- [x] **1.7 AI chat ignores runs created by colleagues** `[behaviour]`
   `apps/api/src/lib/ai/orchestrator.ts:98` filters the bound run by `createdBy = userId`, although
   access is org-wide. A chat bound to a colleague's run silently falls back to global scope.
   Fix: drop the `createdBy` condition.
 
-- [ ] **1.8 The AI SQL agent is given the wrong status values** `[behaviour]`
+- [x] **1.8 The AI SQL agent is given the wrong status values** `[behaviour]`
   `apps/api/src/lib/ai/semantic-layer.ts:36` and `:94` describe statuses as
   `pending, ready, failed` and `pending, running, done, failed`. Fix: use the real values,
   `importing / cleaning / ready / failed` and `pending / in_progress / completed / failed`.
 
-- [ ] **1.9 Credit Urgency colours are swapped between pages** `[behaviour]`
+- [x] **1.9 Credit Urgency colours are swapped between pages** `[behaviour]`
   `apps/web/src/features/customers/customers-view.tsx:155-160` has monitor gray / stable blue, while
   `features/dashboard/palette.ts:22-27` has Monitor blue / Stable gray. Fix: the customers page uses
   `CREDIT_PALETTE` from `palette.ts`.
 
-- [ ] **1.10 The Customer 360 back link drops filters** `[behaviour]`
+- [x] **1.10 The Customer 360 back link drops filters** `[behaviour]`
   `apps/web/src/app/customers/[id]/page.tsx:14-20` keeps only 5 query keys and drops
   `credit_urgency_level`, sort and page. So going back from the low-credit preset resets the list.
   Fix: keep every customer-list query key.
 
 ### Small behaviour fixes
 
-- [ ] **1.11 "Active run" means `pending` or `in_progress` everywhere** `[behaviour]`
+- [x] **1.11 "Active run" means `pending` or `in_progress` everywhere** `[behaviour]`
   The Runs page polls only `in_progress` (`apps/web/src/features/runs/runs-view.tsx:42`); Training
   also counts `pending` (`features/training/training-view.tsx:37`). Each has its own 3000 ms constant.
   Fix: one `isActiveRunStatus` and one poll interval in `lib/run-status.ts`.
 
-- [ ] **1.12 Set `finished_at` when triggering a run fails** `[behaviour]`
+- [x] **1.12 Set `finished_at` when triggering a run fails** `[behaviour]`
   Add `finishedAt: new Date()` to the four failure updates:
   - `routes/prediction-runs/runs.ts:78-85` and `:133-140`
   - `routes/training-runs.ts:196-203`
@@ -191,18 +191,18 @@ Data-loss and corruption bugs come first.
   failure. Fix: append a warning to the run's `progress_json.warnings`, and show it on the run in the
   Runs page.
 
-- [ ] **1.14 Move stuck-import cleanup out of read endpoints** `[behaviour]`
+- [x] **1.14 Move stuck-import cleanup out of read endpoints** `[behaviour]`
   - `lib/abort-data-source.ts` runs from inside the GET list handlers (`routes/train-data.ts:171`,
     `routes/predict-data.ts:51`).
   - It deletes row by row (`:37-39`, `:57-59`).
 
   Fix: move it into `lib/run-reaper.ts`, which already runs every 5 minutes, as one `DELETE … RETURNING`.
 
-- [ ] **1.15 Remove the fake UI** `[behaviour]`
+- [x] **1.15 Remove the fake UI** `[behaviour]`
   - The disabled email/password form in `apps/web/src/app/login/page.tsx:56-96` (sign-in is Google only).
   - The "Chat API connected · no mock prediction data" text in `components/ai-chat-widget.tsx:354`.
 
-- [ ] **1.16 A malformed id returns 422, not 500** `[behaviour]`
+- [x] **1.16 A malformed id returns 422, not 500** `[behaviour]`
   Replace the 17 hand-written `UUID_RE.test` checks with `t.String({ format: "uuid" })` in route
   `params`. That also covers routes that skip the check today (`routes/train-data.ts:286`, `:337`,
   `routes/predict-data.ts:59`).
@@ -258,14 +258,15 @@ See [ADR 0001](adr/0001-plain-sql-migrations.md).
     with `pip freeze` from a working image.
   - Record a new golden baseline, because the churn Champion may change.
 
-- [ ] **3.2 docker-compose and image cleanup** `[structure]`
+- [x] **3.2 docker-compose and image cleanup** `[structure]`
   - In `docker-compose.yml`:
     - Remove the api `./models` mount (it was for `/model-metrics`, which is gone; the API never
       reads `MODEL_DIR`).
     - Remove the ml `./data:/data` mount and ml's `depends_on: redis`.
     - Fix the pgvector comment that cites a nonexistent `ai_knowledge_chunks`.
   - Add `apps/ml/.dockerignore`, and remove `apps/web/bun.lock` from the root `.dockerignore`.
-  - Run the ml container as a non-root user.
+  - ~~Run the ml container as a non-root user.~~ Deferred to the deploy checklist (7.1): a non-root user
+    can't write to a root-owned `./models` or Railway volume without a `chown` step.
   - Remove the unused `MODEL_DIR` from `apps/ml/entrypoint.sh:4`.
 
 - [ ] **3.3 Sync `.env.example` with the code** `[structure]`
@@ -275,7 +276,7 @@ See [ADR 0001](adr/0001-plain-sql-migrations.md).
   - Remove the ones nothing reads: `AI_RAG_TOP_K`, `DATA_DIR`, `DOCKER_BUILD`, `TRAIN_CUTOFF_DATE`,
     and, after 3.1 and 4.7, `TABICL_*`, `TORCH_VARIANT` and `AI_CHAT_DEFAULT_ROLE`.
 
-- [ ] **3.4 Package metadata** `[structure]`
+- [x] **3.4 Package metadata** `[structure]`
   - Root `package.json`: set `packageManager` to `bun@1.4.0`, to match CI and the Dockerfiles.
   - Rename `apps/web` from `moby-dashboard` to `@moby/web`, rename the `moby-dashboard#build` key in
     `turbo.json` to match, and drop its pointless `dist/**` output.
@@ -388,7 +389,9 @@ lib/
     (`ai/customer-ai-service.ts:15`) into `@moby/types`. Rename the different shape that reuses the
     name in `ai/customer-explanation.ts:28`.
   - Add `MODEL_TYPES` to `@moby/types`. The union is written 5 times: `model-performance.ts:28`,
-    `runs.ts:55`, and three times inside packages/types. The web copies are handled in 5.7.
+    `runs.ts:55`, and three times inside packages/types. The web copies are handled in 5.11.
+  - Repoint `apps/ml/scripts/verify_constants_sync.py` from `apps/api/src/lib/constants.ts` to
+    `packages/types/src/enums.ts` in the same PR, or the CI check breaks.
   - New constants:
     - `IMPORT_STATUS`, replacing 25 literals
     - `MODEL_ALIAS.PRODUCTION`: `model-performance.ts:208`, `:388`, `:434`; `summary.ts:27`;
@@ -431,6 +434,9 @@ lib/
 
 ## Phase 5: Web (`apps/web`)
 
+shadcn/ui replaces the home-made components early (5.2–5.4), so the later splits are written once,
+on the new components.
+
 - [ ] **5.1 Delete dead code first** `[structure]`
   Grep-confirm each one.
   - In `components/ui.tsx`:
@@ -448,7 +454,46 @@ lib/
     - `training-view.tsx:3-8`, `api.ts:1-7` and `:33-34`, `nav.ts:42`, `run-store.ts:9`
     - six `eslint-disable` comments (there is no ESLint config)
 
-- [ ] **5.2 One HTTP client** `[structure]`
+- [ ] **5.2 Upgrade to Tailwind v4** `[structure]`
+  - Run the official codemod (`npx @tailwindcss/upgrade`). It moves `tailwind.config` into CSS
+    (`@theme` in `src/app/globals.css`) and renames changed utilities.
+  - Keep the existing 1Moby colour variables as they are; 5.4 maps them onto shadcn's names.
+
+  *Done when:* `bun run build` passes and before/after screenshots of every page match.
+
+- [ ] **5.3 React 19 and `shadcn init`** `[structure]`
+  - Upgrade `react`, `react-dom` and `@types/react*` to 19; the current shadcn components expect it.
+  - Run `shadcn init`. It adds `components.json`, `lib/utils.ts` (`cn()` = `clsx` + `tailwind-merge`),
+    `class-variance-authority`, and the theme variables in `globals.css`.
+  - Point shadcn's theme variables at the existing brand colours so nothing changes colour:
+    `--primary` = Moby blue, `--destructive` = `--danger`, `--muted-foreground` = the `--ink-*` text
+    grey, and so on. Fold `lib/login-brand-colors.ts` and `dashboard/palette.ts` into those variables,
+    and keep the chart-only hex values in one `lib/brand.ts`.
+
+  *Done when:* the app builds and looks the same, and no component uses shadcn yet.
+
+- [ ] **5.4 Swap the home-made primitives for shadcn, one PR each** `[behaviour]`
+  Each PR adds one shadcn component, replaces every use of the old one, deletes the old one, and is
+  reviewed with before/after screenshots. Expect small spacing and focus-ring changes.
+  1. `Button`, replacing the duplicated class strings (`create-run-panel.tsx:160`, `:395`;
+     `PRIMARY_BUTTON_CLS` in `training-utils.ts:6`)
+  2. `Card` for `SectionCard`
+  3. `Badge` for `StatusPill`
+  4. `Select` for the 324-line `components/select.tsx`
+  5. `Dialog` / `AlertDialog` for `components/status-dialog.tsx`
+  6. `Alert` for the error banners and `Skeleton` for loading
+  7. `Input` / `Textarea` for the form fields and the chat box
+
+  While each file is open:
+  - Replace its `[color:var(--…)]` classes (448 in total) with theme utilities such as
+    `text-muted-foreground`.
+  - Replace its `[].join(" ")` and template-string class names with `cn()`.
+
+  *Done when:* `components/select.tsx` and `components/status-dialog.tsx` are gone,
+  `components/ui.tsx` holds only app-specific pieces such as `PageHeader`, and
+  `git grep "\[color:var(--"` is empty.
+
+- [ ] **5.5 One HTTP client** `[structure]`
   - Put a single `requestJson<T>(url, init)` in `lib/http.ts` that handles the 401 redirect and
     `{ message, code }` errors. Today:
     - `lib/api.ts` repeats parse + throw 5 times and copies the 401 redirect at `:146`.
@@ -458,7 +503,7 @@ lib/
   - Remove the barrel re-exports (`ml-api.ts:10-51`, `api.ts:11`, the `export *` in
     `lib/auth/index.ts`) and import from `@moby/types` directly.
 
-- [ ] **5.3 Load data one way; fetch the run list once** `[structure]`
+- [ ] **5.6 Load data one way; fetch the run list once** `[structure]`
   - Add a small `useAsync` hook to replace the 9 copies of the `let alive` effect.
   - Move the run list and its loading and error state into `stores/run-store.ts`. Today it is fetched
     by the header, the page, and `ai-chat-view.tsx:408`.
@@ -467,15 +512,15 @@ lib/
     `customers-client.tsx:211-216` and `customer-detail-client.tsx:39-44`.
   - Fix the reverse import from `status-dialog-store` into `components/`.
 
-- [ ] **5.4 Show errors and loading one way** `[behaviour]`
-  - Add `<ErrorBanner>` and `<PageLoading>` to `components/ui.tsx` and use them on every page.
+- [ ] **5.7 Show errors and loading one way** `[behaviour]`
+  - Use shadcn `Alert` for errors and `Skeleton` for loading on every page (from 5.4).
   - `getDisplayError` returns a string; this replaces the 13 inline `e instanceof Error` checks.
   - Stop swallowing errors at `training-view.tsx:110` (which makes `loadError` unreachable),
     `ai-chat-view.tsx:412`, `chat-store.ts:196` and `run-insight-card.tsx:26`.
   - A failed run-list fetch shows an error, not "no completed run".
   - Remove the redundant `Suspense` at `customers-client.tsx:341`.
 
-- [ ] **5.5 One container convention: `*-view.tsx`** `[structure]`
+- [ ] **5.8 One container convention: `*-view.tsx`** `[structure]`
   - `*-view.tsx` is the route's container (it fetches data and owns state). Presentational pieces are
     named for what they render. The `-client` suffix goes away:
     - `dashboard-client` + `dashboard-view` → `dashboard-view` + `dashboard-grid`
@@ -500,7 +545,7 @@ lib/
     (`runs-utils.ts:9`, `training-run-utils.ts:4`).
   - Rename `selectedSourceId2` (`training-view.tsx:152`).
 
-- [ ] **5.6 One pannable chart** `[structure]`
+- [ ] **5.9 One pannable chart** `[structure]`
   - Put `usePannableViewport(length, defaultVisible)` and `<ChartNavigator>` in
     `components/pannable-chart.tsx`.
   - Today each chart has its own viewport, clamp, range label, wheel and drag handlers, and
@@ -510,8 +555,8 @@ lib/
     - `customers/customer-payment-chart.tsx:17-68`, `:86-247`, `:351-384`
   - Afterwards each chart keeps only its data mapping and its `<Line>` / `<Bar>`.
 
-- [ ] **5.7 AI chat: share the pieces, split the view** `[structure]`
-  - Share the message, streaming and thinking bubbles, the auto-resizing textarea, auto-scroll and
+- [ ] **5.10 AI chat: share the pieces, split the view** `[structure]`
+  - Share the message, streaming and thinking bubbles, the auto-resizing textarea (shadcn `Textarea`), auto-scroll and
     the LLM status label in `components/chat/`, used by both `features/ai-chat/ai-chat-view.tsx` and
     `components/ai-chat-widget.tsx`. Today the two copies use different textarea max heights (160 vs
     96) and different status labels (`view:451` vs `widget:152`).
@@ -521,7 +566,7 @@ lib/
   - Use selectors with `useChatStore` (`:136`, `:398`), so the sidebar stops re-rendering on every
     streamed token.
 
-- [ ] **5.8 Types come from `@moby/types`** `[structure]`
+- [ ] **5.11 Types come from `@moby/types`** `[structure]`
   - Replace `CustomerDetail` (`customer-detail-view.tsx:27-57`) with `PredictionOutput`.
   - `CleanCounts` is redefined at `runs-utils.ts:16` and `training-utils.ts:9`.
   - `TrainCleanManifest` / `TrainImportProgress` (`api.ts:55-102`) and `DeleteTrainingRunResult`
@@ -530,7 +575,7 @@ lib/
   - Replace `STAGES` (`customers-view.tsx:31`) with `LIFECYCLE_STAGES`.
   - `icon?: any` (`ui.tsx:270`) becomes `LucideIcon`.
 
-- [ ] **5.9 One formatter set and one name per page** `[behaviour]`
+- [ ] **5.12 One formatter set and one name per page** `[behaviour]`
   - `lib/format.ts` owns all display formats:
     - currency `฿12,345`, compact `฿12.3K` / `฿1.2M`
     - dates `23 Oct 2026`, or `23 Oct 2026, 14:05` when the time matters
@@ -546,23 +591,10 @@ lib/
     Model Performance, AI Assistant, My Account.
   - Give Model Training and Model Performance different nav icons (`nav.ts:49`, `:55`).
 
-- [ ] **5.10 Small duplicates** `[structure]`
+- [ ] **5.13 Small duplicates** `[structure]`
   - One `HighValueMedal` (`customer-row-ui.tsx:50`, `customer-detail-primitives.tsx:132`), one
     `isHighValueTier`, and one `initials` (`user-nav-profile.tsx:10`, `profile-view.tsx:9`).
   - Split `InlineImportForm` (`create-run-panel.tsx:288-409`) into `predict-import-form.tsx`.
-  - Add `<Button>` to `ui.tsx`, replacing the duplicated class strings (`create-run-panel.tsx:160`,
-    `:395`; `PRIMARY_BUTTON_CLS` in `training-utils.ts:6`).
-
-- [ ] **5.11 Styling tokens (last web PR, mechanical)** `[structure]`
-  - Map the CSS colour variables into `theme.extend.colors` in Tailwind 3.4, so the 448
-    `[color:var(--…)]` classes become `text-muted` etc.
-  - Move the 81 hex literals in `.tsx` files into one `lib/brand.ts`. Lifecycle colour alone is
-    defined 4 times (unused `--c-*` in `globals.css:109-112`, `LIFECYCLE_PALETTE`,
-    `customer-row-ui.tsx:38`, `customer-detail-primitives.tsx:255`). Fold in `lib/login-brand-colors.ts`
-    and `dashboard/palette.ts`.
-  - Use `clsx` everywhere instead of `[].join(" ")` (10 places) and template strings.
-
-  *Done when:* before and after screenshots of every page match.
 
 ---
 
