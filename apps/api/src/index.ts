@@ -10,7 +10,7 @@ import { modelPerformanceRoutes } from "./routes/model-performance";
 import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
 import { startStaleRunReaper } from "./lib/run-reaper";
 import { maxUploadBytes } from "./lib/constants";
-import { ensureImportSchemaCompat } from "./lib/schema-compat";
+import { runMigrations } from "./db/migrate";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -19,9 +19,11 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000")
   .map((s) => s.trim())
   .filter(Boolean);
 
-ensureImportSchemaCompat().catch((e) =>
-  console.error("[api] Failed to apply schema compat:", e)
-);
+// Bring the schema up to date before serving anything; a failed migration stops the boot.
+const appliedMigrations = await runMigrations();
+if (appliedMigrations.length > 0) {
+  console.log(`[api] Applied migrations: ${appliedMigrations.join(", ")}`);
+}
 
 // Fail stuck runs and delete stuck imports — now and every 5 minutes.
 startStaleRunReaper();

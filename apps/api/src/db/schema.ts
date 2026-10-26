@@ -1,8 +1,8 @@
 /**
- * Drizzle schema reflects the single PostgreSQL bootstrap:
- *   db/init/001_schema.sql creates auth, train/predict, and ml_* tables.
+ * Drizzle schema reflects the PostgreSQL schema built by the migrations:
+ *   db/migrations/ creates auth, train/predict, and ml_* tables.
  *
- * DO NOT run drizzle-kit generate or push — edit the bootstrap schema deliberately.
+ * DO NOT run drizzle-kit generate or push — add a migration, then `bun run db:introspect`.
  * This file is for the query builder only.
  */
 import {
@@ -633,7 +633,7 @@ export const mlPredictionOutputs = pgTable(
   ]
 );
 
-// ── AI Chat v2 (reflects db/init/001_schema.sql) ──────────────────────────────
+// ── AI Chat v2 (reflects db/migrations/) ──────────────────────────────
 export const aiConversations = pgTable(
   "ai_conversations",
   {

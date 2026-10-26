@@ -15,7 +15,7 @@ It ingests a fixed-schema Excel export, then predicts customer **churn**, segmen
 | **Frontend** (`apps/web`) | Next.js 16 (App Router) · React 18 · TypeScript · Tailwind · Better Auth client · recharts · gsap |
 | **API** (`apps/api`) | Elysia.js on Bun · Better Auth · Drizzle ORM (introspect-only) · ioredis |
 | **ML** (`apps/ml`) | Python 3.11 · FastAPI (health + internal job triggers) · LightGBM · XGBoost · SHAP · lifetimes · Optuna |
-| **Database** | PostgreSQL 15 (`pgvector/pgvector:pg15` image) · schema bootstrapped from `db/init/001_schema.sql` |
+| **Database** | PostgreSQL 15 (`pgvector/pgvector:pg15` image) · schema from `db/migrations/`, applied by the api on boot |
 | **Queue / progress** | Redis (Arq + Redis Streams for progress) |
 | **Monorepo** | Turborepo + Bun workspaces |
 
@@ -28,7 +28,7 @@ cp .env.example .env          # fill in secrets (Google OAuth, Ollama, etc.)
 docker compose up --build     # db, redis, ml, api, web
 ```
 
-Fresh Postgres volumes initialize automatically from `db/init/001_schema.sql`.
+Postgres starts empty; the api applies `db/migrations/` when it boots.
 
 ### Local dev (fast UI loop)
 
@@ -47,7 +47,7 @@ ELYSIA_URL=http://localhost:3001 bun run dev   # Next.js on :3000
 | `web` (Next.js) | `:3000` | `:3000` | proxy-rewrites `/api/*` → Elysia |
 | `api` (Elysia) | `:3001` | `:3001` | REST + Better Auth + SSE |
 | `ml` (FastAPI) | `:8000` | `:8001` | internal-only: `/health` + job triggers |
-| `db` (Postgres) | `:5432` | `:5433` | schema from `db/init/001_schema.sql` |
+| `db` (Postgres) | `:5432` | `:5433` | schema from `db/migrations/` |
 | `redis` | `:6379` | — | Arq queue + progress Streams |
 
 ## How data flows

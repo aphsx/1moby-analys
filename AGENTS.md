@@ -40,7 +40,7 @@ Run from repo root unless noted.
 bun install
 
 # Full stack via Docker (recommended) — db, redis, ml, api, web.
-# Fresh Postgres volumes initialize from the single schema at db/init/001_schema.sql.
+# Postgres starts empty; the api applies db/migrations/ on boot.
 docker compose up --build
 docker compose up -d db redis ml     # backing services for local dev (host ports: db 5433, ml 8001)
 docker compose up -d --build web     # the web image has no hot reload — `restart` won't pick up code changes
@@ -76,12 +76,17 @@ code is the reference for every formula, threshold and output field.
 
 ## Schema
 
-Schema is a single bootstrap file at `db/init/001_schema.sql`, mounted into Postgres as
-`/docker-entrypoint-initdb.d/001_schema.sql` for fresh Docker volumes. Drizzle only reflects that
-schema for query building — **never run `drizzle-kit generate` or push schema from Drizzle**. There is
-**no Alembic / migration framework**; schema changes are made directly in `001_schema.sql`. This is
-being replaced by numbered plain-SQL migrations ([ADR 0001](docs/adr/0001-plain-sql-migrations.md),
-plan Phase 2).
+The schema lives in numbered plain-SQL migrations in `db/migrations/`
+([ADR 0001](docs/adr/0001-plain-sql-migrations.md)). `001_schema.sql` is the baseline; the API applies
+every unapplied file in order at boot (`apps/api/src/db/migrate.ts`, also `bun run db:migrate`) and
+records it in `schema_migrations`. To change the schema:
+
+1. Add `db/migrations/NNN_short_name.sql` with the next number. Never edit a file that has already
+   been applied anywhere.
+2. Run `cd apps/api && bun run db:migrate`, then `bun run db:introspect` to refresh `src/db/schema.ts`.
+
+Drizzle only reflects the schema for query building — **never run `drizzle-kit generate` or push
+schema from Drizzle**.
 
 ## Traffic Flow
 
@@ -111,7 +116,7 @@ one client view); all UI lives in `features/<route>/*-view.tsx` (`"use client"`,
 files); cross-page state is zustand in `stores/`; data access goes through `lib/api.ts` /
 `lib/ml-api.ts` (there is no mock layer). Don't put JSX bodies or `useState` in `page.tsx`.
 
-## PostgreSQL Schema (Drizzle reflects `db/init/001_schema.sql`)
+## PostgreSQL Schema (Drizzle reflects `db/migrations/`)
 
 Key design decisions:
 
@@ -167,7 +172,7 @@ keyed by `prediction_run_id`). Read via `GET /prediction-runs/:id/realized-outco
 | **ML runs as spawned CLIs** | `python -m src.cli.{train,predict,backfill_outcomes}` launched detached from FastAPI internal endpoints; results land in `ml_*` tables. |
 | **Run progress in Postgres** | Runners write `progress_json` on the run row; the API polls it. Redis Streams are used only for train-import progress. (`arq` is in requirements.txt but unused.) |
 | **SSE not WebSockets** | Server pushes only (AI chat tokens). Auto-reconnect, works behind any proxy. |
-| **Drizzle in introspect mode** | `db/init/001_schema.sql` owns schema; Drizzle reflects it. No `drizzle-kit generate`, no Alembic. |
+| **Drizzle in introspect mode** | `db/migrations/` owns the schema; Drizzle reflects it. No `drizzle-kit generate`, no Alembic. |
 | **PostgreSQL not MongoDB** | Data is relational. All ML output is tabular. |
 
 ## Code Style Rules
@@ -210,7 +215,7 @@ Python (ml) style rules live in `apps/ml/AGENTS.md`.
   `repository.py`, `artifacts.py`, `datasets.py`, `validation.py` data loading, `api/`), as long as the
   golden run is unchanged (plan step 0.6).
 - **A change is structure-only or behaviour-only**, never both in one PR.
-- `db/init/001_schema.sql` — single schema bootstrap; edit deliberately and keep Drizzle in sync.
+- `db/migrations/*.sql` — never edit an applied migration; add a new numbered file and re-introspect Drizzle.
 - `apps/ml/src/cli/train.py` / `apps/ml/src/cli/predict.py` — CLI entrypoints spawned by FastAPI via
   `python -m`; keep their arguments stable.
 

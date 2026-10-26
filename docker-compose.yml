@@ -12,9 +12,8 @@ services:
       POSTGRES_USER:     ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
+      # Starts empty; the api applies db/migrations/ on boot (docs/adr/0001-plain-sql-migrations.md).
       - postgres_data:/var/lib/postgresql/data
-      # Single schema bootstrap. Runs only when postgres_data is first created.
-      - ./db/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "5433:5432"
     healthcheck:

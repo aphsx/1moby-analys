@@ -11,6 +11,7 @@ COPY apps/web/package.json ./apps/web/
 RUN bun install --frozen-lockfile
 
 COPY packages/types ./packages/types
+COPY db/migrations ./db/migrations
 COPY apps/api ./apps/api
 
 WORKDIR /app/apps/api
