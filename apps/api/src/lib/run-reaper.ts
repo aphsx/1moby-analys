@@ -5,11 +5,13 @@
  * container or dropped connection can strand rows in a non-terminal status
  * forever. On API startup and every STALE_RUN_REAPER_INTERVAL_MS, mark any
  * ml_prediction_runs / ml_training_runs row that has been non-terminal for
- * longer than STALE_RUN_TIMEOUT_MINUTES (env, default 120) as 'failed'.
+ * longer than STALE_RUN_TIMEOUT_MINUTES (env, default 120) as 'failed', and
+ * delete Data Sources stuck in importing/cleaning past the import timeout.
  */
 import { and, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import { mlPredictionRuns, mlTrainingRuns } from "../db/schema";
+import { releaseStalePredict, releaseStaleTrainImports } from "./abort-data-source";
 import { RUN_STATUS } from "./constants";
 
 export const STALE_RUN_REAPER_INTERVAL_MS = 5 * 60 * 1000;
@@ -56,7 +58,7 @@ export async function reapStaleRuns(): Promise<{ prediction: number; training: n
 }
 
 /**
- * Run the reaper once now, then on an interval. The timer is unref'd so it
+ * Run the reaper (stale runs + stale imports) once now, then on an interval. The timer is unref'd so it
  * never keeps the process alive during shutdown.
  */
 export function startStaleRunReaper(): void {
@@ -70,6 +72,13 @@ export function startStaleRunReaper(): void {
         }
       })
       .catch((e: unknown) => console.error("[reaper] Failed to reap stale runs:", e));
+    Promise.all([releaseStaleTrainImports(), releaseStalePredict()])
+      .then(([train, predict]) => {
+        if (train > 0 || predict > 0) {
+          console.log(`[reaper] Deleted stale imports: train=${train} predict=${predict}`);
+        }
+      })
+      .catch((e: unknown) => console.error("[reaper] Failed to release stale imports:", e));
   };
   tick();
   const timer = setInterval(tick, STALE_RUN_REAPER_INTERVAL_MS);

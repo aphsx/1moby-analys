@@ -13,7 +13,7 @@ import { requireUser } from "../lib/auth-middleware";
 import { denyNotFound } from "../lib/access-control";
 import { maxUploadBytes } from "../lib/constants";
 import { importPredictExcel, type PredictImportResult } from "../lib/predict-import";
-import { abortPredictDataSource, releaseStalePredict } from "../lib/abort-data-source";
+import { abortPredictDataSource } from "../lib/abort-data-source";
 import { cleanPredictFromRaw } from "../lib/predict-clean";
 import { isXlsxFilename, mapDataSourceRow } from "../lib/data-import/data-source-dto";
 import { getPredictCutoffSuggestion } from "../lib/clean-cutoff";
@@ -48,7 +48,6 @@ const sourceSelect = {
 export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
   .use(requireUser)
   .get("/", async () => {
-    await releaseStalePredict();
     const rows = await db
       .select(sourceSelect)
       .from(predictDataSources)

@@ -20,42 +20,32 @@ export async function abortPredictDataSource(sourceId: string): Promise<void> {
   await db.delete(predictDataSources).where(eq(predictDataSources.id, sourceId));
 }
 
-/** Remove catalogs left in importing/cleaning after server/docker stopped. */
+/** Delete train sources left in importing/cleaning after a crash. Returns how many. */
 export async function releaseStaleTrainImports(): Promise<number> {
-  const cutoff = staleImportCutoff();
-  const stale = await db
-    .select({ id: trainDataSources.id })
-    .from(trainDataSources)
+  const deleted = await db
+    .delete(trainDataSources)
     .where(
       and(
         inArray(trainDataSources.importStatus, ["importing", "cleaning"]),
         isNull(trainDataSources.cleanedAt),
-        lt(trainDataSources.createdAt, cutoff)
+        lt(trainDataSources.createdAt, staleImportCutoff())
       )
-    );
-
-  for (const row of stale) {
-    await abortTrainDataSource(row.id);
-  }
-  return stale.length;
+    )
+    .returning({ id: trainDataSources.id });
+  return deleted.length;
 }
 
-/** Remove predict catalogs left in importing/cleaning after a crash. */
+/** Delete predict sources left in importing/cleaning after a crash. Returns how many. */
 export async function releaseStalePredict(): Promise<number> {
-  const cutoff = staleImportCutoff();
-  const stale = await db
-    .select({ id: predictDataSources.id })
-    .from(predictDataSources)
+  const deleted = await db
+    .delete(predictDataSources)
     .where(
       and(
         inArray(predictDataSources.importStatus, ["importing", "cleaning"]),
         isNull(predictDataSources.cleanedAt),
-        lt(predictDataSources.createdAt, cutoff)
+        lt(predictDataSources.createdAt, staleImportCutoff())
       )
-    );
-
-  for (const row of stale) {
-    await abortPredictDataSource(row.id);
-  }
-  return stale.length;
+    )
+    .returning({ id: predictDataSources.id });
+  return deleted.length;
 }

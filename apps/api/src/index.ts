@@ -8,7 +8,6 @@ import { predictionRunRoutes } from "./routes/prediction-runs";
 import { trainingRunRoutes } from "./routes/training-runs";
 import { modelPerformanceRoutes } from "./routes/model-performance";
 import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
-import { releaseStaleTrainImports, releaseStalePredict } from "./lib/abort-data-source";
 import { startStaleRunReaper } from "./lib/run-reaper";
 import { maxUploadBytes } from "./lib/constants";
 import { ensureImportSchemaCompat } from "./lib/schema-compat";
@@ -20,19 +19,11 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000")
   .map((s) => s.trim())
   .filter(Boolean);
 
-Promise.all([releaseStaleTrainImports(), releaseStalePredict()])
-  .then(([train, predict]) => {
-    if (train > 0 || predict > 0) {
-      console.log(`[api] Released stale imports on startup: train=${train} predict=${predict}`);
-    }
-  })
-  .catch((e) => console.error("[api] Failed to release stale imports:", e));
-
 ensureImportSchemaCompat().catch((e) =>
   console.error("[api] Failed to apply schema compat:", e)
 );
 
-// Mark runs stuck in a non-terminal status as failed — now and every 5 minutes.
+// Fail stuck runs and delete stuck imports — now and every 5 minutes.
 startStaleRunReaper();
 
 const app = new Elysia()

@@ -13,7 +13,7 @@ import { requireUser } from "../lib/auth-middleware";
 import { maxUploadBytes } from "../lib/constants";
 import { getTrainCutoffSuggestion } from "../lib/clean-cutoff";
 import { prepareTrainDataSource } from "../lib/train-import";
-import { abortTrainDataSource, releaseStaleTrainImports } from "../lib/abort-data-source";
+import { abortTrainDataSource } from "../lib/abort-data-source";
 import {
   publishTrainPipelineProgress,
   readLatestTrainImportStreamEntry,
@@ -168,7 +168,6 @@ const trainImportRoutes = new Elysia()
 export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
   .use(requireUser)
   .get("/", async () => {
-    await releaseStaleTrainImports();
     const rows = await db
       .select(sourceSelect)
       .from(trainDataSources)
