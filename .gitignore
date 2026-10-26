@@ -62,3 +62,12 @@ archive/
 
 # Golden run dumps (apps/ml/scripts/golden_run.sh)
 apps/ml/golden/
+
+# UI taste-skill inspector output
+.taste-skill/
+
+# Installed agent skills and local Claude settings
+.agents/
+.claude/settings.local.json
+.claude/skills/
+skills-lock.json

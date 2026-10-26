@@ -74,6 +74,20 @@ The old docs (Thai ML reference, dashboard spec, data-import docs, the final rep
 the `academic` branch and are not canonical. Until the refactor's new docs land (plan Phase 7), the
 code is the reference for every formula, threshold and output field.
 
+The UI refactor has its own docs in [`docs/ui/`](docs/ui/) (Thai): `DESIGN.md` (tokens, components,
+charts), `CONTENT.md` (copy, number formats, ⓘ texts, enum labels) and `REFACTOR-PLAN.md` (phases).
+They replace steps 5.2–5.4 and 5.12 of the main plan.
+
+### UI rules
+
+- Follow `docs/ui/DESIGN.md` and `docs/ui/CONTENT.md`. Work through `docs/ui/REFACTOR-PLAN.md`
+  phase by phase; one phase per PR.
+- Use tokens via Tailwind theme names (`bg-surface`, `text-muted`, `border-border`); never hardcode
+  hex colours in components.
+- Format every number with `apps/web/src/lib/format.ts`; every enum label with `apps/web/src/lib/labels.ts`.
+- No gradients, glows, uppercase labels, icon tiles on KPIs, sparklines, zebra rows or shimmer skeletons.
+- Each page answers one question: the largest block answers it, every KPI and chart title has an `InfoTip`.
+
 ## Schema
 
 The schema lives in numbered plain-SQL migrations in `db/migrations/`

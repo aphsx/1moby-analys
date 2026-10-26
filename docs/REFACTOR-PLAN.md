@@ -25,7 +25,8 @@ infra (2026-10-23), then a decision session with the project owner.
 4. **Any PR that touches `apps/ml/` or the import pipeline must leave the golden run unchanged**
    (step 0.6). A PR that is *meant* to change model output records a new golden baseline
    and says so in its description.
-5. Thai **UI text** and user-facing messages stay as they are; they are product copy. Thai **code
+5. Thai **UI text** and user-facing messages stay as they are; they are product copy. The exception
+   is the UI refactor ([`docs/ui/`](ui/)), which rewrites copy per `docs/ui/CONTENT.md`. Thai **code
    comments** get translated to English when their file is touched.
 
 ---
@@ -438,8 +439,8 @@ lib/
 
 ## Phase 5: Web (`apps/web`)
 
-shadcn/ui replaces the home-made components early (5.2–5.4), so the later splits are written once,
-on the new components.
+Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTOR-PLAN.md`](ui/REFACTOR-PLAN.md)
+(decided 2026-10-26: stay on Tailwind 3 and React 18, own primitives instead of shadcn, Thai copy).
 
 - [ ] **5.1 Delete dead code first** `[structure]`
   Grep-confirm each one.
@@ -458,44 +459,11 @@ on the new components.
     - `training-view.tsx:3-8`, `api.ts:1-7` and `:33-34`, `nav.ts:42`, `run-store.ts:9`
     - six `eslint-disable` comments (there is no ESLint config)
 
-- [ ] **5.2 Upgrade to Tailwind v4** `[structure]`
-  - Run the official codemod (`npx @tailwindcss/upgrade`). It moves `tailwind.config` into CSS
-    (`@theme` in `src/app/globals.css`) and renames changed utilities.
-  - Keep the existing 1Moby colour variables as they are; 5.4 maps them onto shadcn's names.
+- [x] ~~**5.2 Upgrade to Tailwind v4**~~ Replaced: staying on Tailwind 3; tokens go in `tailwind.config.js` (UI plan phase 0).
 
-  *Done when:* `bun run build` passes and before/after screenshots of every page match.
+- [x] ~~**5.3 React 19 and `shadcn init`**~~ Replaced: no shadcn; brand colours become the UI plan's tokens (phase 0, phase 6).
 
-- [ ] **5.3 React 19 and `shadcn init`** `[structure]`
-  - Upgrade `react`, `react-dom` and `@types/react*` to 19; the current shadcn components expect it.
-  - Run `shadcn init`. It adds `components.json`, `lib/utils.ts` (`cn()` = `clsx` + `tailwind-merge`),
-    `class-variance-authority`, and the theme variables in `globals.css`.
-  - Point shadcn's theme variables at the existing brand colours so nothing changes colour:
-    `--primary` = Moby blue, `--destructive` = `--danger`, `--muted-foreground` = the `--ink-*` text
-    grey, and so on. Fold `lib/login-brand-colors.ts` and `dashboard/palette.ts` into those variables,
-    and keep the chart-only hex values in one `lib/brand.ts`.
-
-  *Done when:* the app builds and looks the same, and no component uses shadcn yet.
-
-- [ ] **5.4 Swap the home-made primitives for shadcn, one PR each** `[behaviour]`
-  Each PR adds one shadcn component, replaces every use of the old one, deletes the old one, and is
-  reviewed with before/after screenshots. Expect small spacing and focus-ring changes.
-  1. `Button`, replacing the duplicated class strings (`create-run-panel.tsx:160`, `:395`;
-     `PRIMARY_BUTTON_CLS` in `training-utils.ts:6`)
-  2. `Card` for `SectionCard`
-  3. `Badge` for `StatusPill`
-  4. `Select` for the 324-line `components/select.tsx`
-  5. `Dialog` / `AlertDialog` for `components/status-dialog.tsx`
-  6. `Alert` for the error banners and `Skeleton` for loading
-  7. `Input` / `Textarea` for the form fields and the chat box
-
-  While each file is open:
-  - Replace its `[color:var(--…)]` classes (448 in total) with theme utilities such as
-    `text-muted-foreground`.
-  - Replace its `[].join(" ")` and template-string class names with `cn()`.
-
-  *Done when:* `components/select.tsx` and `components/status-dialog.tsx` are gone,
-  `components/ui.tsx` holds only app-specific pieces such as `PageHeader`, and
-  `git grep "\[color:var(--"` is empty.
+- [x] ~~**5.4 Swap the home-made primitives for shadcn, one PR each**~~ Replaced: the UI plan builds `KpiStrip`, `Panel`, `StatusPill`, `InfoTip`, `EmptyState`, `Skeleton` (phase 0) and swaps them in page by page; the `[color:var(--` sweep is UI plan phase 6.
 
 - [ ] **5.5 One HTTP client** `[structure]`
   - Put a single `requestJson<T>(url, init)` in `lib/http.ts` that handles the 401 redirect and
@@ -517,7 +485,7 @@ on the new components.
   - Fix the reverse import from `status-dialog-store` into `components/`.
 
 - [ ] **5.7 Show errors and loading one way** `[behaviour]`
-  - Use shadcn `Alert` for errors and `Skeleton` for loading on every page (from 5.4).
+  - Use the UI plan's error state and `Skeleton` for loading on every page (`docs/ui/DESIGN.md` §6.11).
   - `getDisplayError` returns a string; this replaces the 13 inline `e instanceof Error` checks.
   - Stop swallowing errors at `training-view.tsx:110` (which makes `loadError` unreachable),
     `ai-chat-view.tsx:412`, `chat-store.ts:196` and `run-insight-card.tsx:26`.
@@ -579,21 +547,7 @@ on the new components.
   - Replace `STAGES` (`customers-view.tsx:31`) with `LIFECYCLE_STAGES`.
   - `icon?: any` (`ui.tsx:270`) becomes `LucideIcon`.
 
-- [ ] **5.12 One formatter set and one name per page** `[behaviour]`
-  - `lib/format.ts` owns all display formats:
-    - currency `฿12,345`, compact `฿12.3K` / `฿1.2M`
-    - dates `23 Oct 2026`, or `23 Oct 2026, 14:05` when the time matters
-
-    It replaces these local formatters:
-    - dates: `customer-profile-panel.tsx:6`, `training-utils.ts:36`, `metric-info.ts:325`,
-      `runs-utils.ts:48`, `profile-view.tsx:54`, `run-insight-card.tsx:83`
-    - currency: `lib/format.ts:12`, `customer-payment-chart.tsx:388`, `monthly-revenue-card.tsx:98`,
-      `value-risk-matrix-card.tsx:103`
-    - the three copies of `formatCompact`
-  - Page names are the same in the sidebar, the header and the browser tab (`lib/nav.ts`,
-    `app/*/page.tsx` metadata): Dashboard, Customers, Customer 360, Prediction Runs, Model Training,
-    Model Performance, AI Assistant, My Account.
-  - Give Model Training and Model Performance different nav icons (`nav.ts:49`, `:55`).
+- [x] ~~**5.12 One formatter set and one name per page**~~ Replaced: UI plan phase 0 (`lib/format.ts`, `lib/labels.ts`, formats in `docs/ui/CONTENT.md` §2) and phase 1 (Thai page names, distinct nav icons).
 
 - [ ] **5.13 Small duplicates** `[structure]`
   - One `HighValueMedal` (`customer-row-ui.tsx:50`, `customer-detail-primitives.tsx:132`), one
