@@ -1,10 +1,11 @@
 /**
- * Predict raw + clean API — Excel → predict_raw_sheet_* → predict_clean_*.
+ * Predict Data Source API — import the workbook (Import + Clean, inline in the request),
+ * reads, suggested cutoff, and delete.
  *
  * Org-shared model: reads and import are available to any authenticated user.
  * A successful import auto-triggers a prediction run (opt out with auto_run=false).
  */
-import { IMPORT_STATUS } from "@moby/types";
+import type { DataSourceImportResult } from "@moby/types";
 import Elysia, { t } from "elysia";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
@@ -12,18 +13,13 @@ import { predictDataSources, user } from "../db/schema";
 import { requireUser } from "../lib/http/auth-middleware";
 import { badRequest, HttpError, notFound } from "../lib/http/errors";
 import { maxUploadBytes } from "../lib/constants";
-import { importPredictExcel, type PredictImportResult } from "../lib/data-import/predict-import";
-import { abortPredictDataSource } from "../lib/data-import/abort-data-source";
-import { cleanPredictFromRaw } from "../lib/data-import/predict-clean";
-import { isXlsxFilename, mapDataSourceRow } from "../lib/data-import/data-source-dto";
+import { deleteDataSource } from "../lib/data-import/abort-data-source";
 import { getPredictCutoffSuggestion } from "../lib/data-import/clean-cutoff";
+import { isXlsxFilename, mapDataSourceRow } from "../lib/data-import/data-source-dto";
+import { readImportBuffer, runImportPipeline } from "../lib/data-import/import-pipeline";
+import { IMPORT_TIMEOUT_CODE, isImportTimeoutError } from "../lib/data-import/import-timeout";
+import { createDataSource } from "../lib/data-import/raw-import";
 import { createAutoPredictionRun } from "../lib/ml/auto-prediction-run";
-import {
-  IMPORT_TIMEOUT_CODE,
-  isImportTimeoutError,
-  throwIfImportAborted,
-  withImportTimeout,
-} from "../lib/data-import/import-timeout";
 
 const sourceSelect = {
   id: predictDataSources.id,
@@ -97,60 +93,35 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
         throw badRequest("Only .xlsx files are supported");
       }
 
-      const buffer = Buffer.from(await body.file.arrayBuffer());
-      const limit = maxUploadBytes();
-      if (buffer.length > limit) {
-        throw new HttpError(413, `File exceeds ${Math.round(limit / (1024 * 1024))}MB limit`);
-      }
-
+      const buffer = await readImportBuffer(body.file);
       const displayName = body.name?.trim() || filename;
+      const sourceId = await createDataSource("predict", {
+        buffer,
+        filename,
+        name: displayName,
+        client_label: body.client_label ?? null,
+        notes: body.notes ?? null,
+        imported_by: userId,
+      });
 
-      let sourceId = "";
-
+      let result: DataSourceImportResult;
       try {
-        return await withImportTimeout(async (signal) => {
-          const rawResult = await importPredictExcel({
-            buffer,
-            filename,
-            name: displayName,
-            imported_by: userId,
-            client_label: body.client_label ?? null,
-            notes: body.notes ?? null,
-            deferReadyCatalog: true,
-            signal,
-          });
-          sourceId = rawResult.source_id;
-
-          throwIfImportAborted(signal);
-          const cleanManifest = await cleanPredictFromRaw(sourceId);
-          const result: PredictImportResult = {
-            ...rawResult,
-            import_status: IMPORT_STATUS.READY,
-            clean_manifest: cleanManifest,
-          };
-
-          // Auto prediction run (default on; opt out with auto_run=false). Fully
-          // isolated from import success — createAutoPredictionRun never throws.
-          const autoRunWanted = body.auto_run !== false && body.auto_run !== "false";
-          const autoRunId = autoRunWanted
-            ? await createAutoPredictionRun({
-                predictSourceId: sourceId,
-                sourceName: displayName,
-                createdBy: userId,
-              })
-            : null;
-
-          return { ...result, auto_prediction_run_id: autoRunId };
-        });
+        result = await runImportPipeline("predict", sourceId, buffer);
       } catch (e) {
+        await deleteDataSource("predict", sourceId);
         const err = e as Error;
         const message = err.message?.slice(0, 500) ?? "Import failed";
-        if (sourceId) {
-          await abortPredictDataSource(sourceId);
-        }
         if (isImportTimeoutError(err)) throw new HttpError(504, message, IMPORT_TIMEOUT_CODE);
         throw badRequest(message);
       }
+
+      // Auto prediction run (default on; opt out with auto_run=false). Fully
+      // isolated from import success — createAutoPredictionRun never throws.
+      const autoRunWanted = body.auto_run !== false && body.auto_run !== "false";
+      const autoRunId = autoRunWanted
+        ? await createAutoPredictionRun({ predictSourceId: sourceId, sourceName: displayName, createdBy: userId })
+        : null;
+      return { ...result, auto_prediction_run_id: autoRunId };
     },
     {
       body: t.Object({

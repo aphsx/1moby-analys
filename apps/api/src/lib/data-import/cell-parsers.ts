@@ -1,5 +1,5 @@
 /**
- * Parse row_payload cell values into typed DB fields (mirrors apps/ml/src/data_loader.py).
+ * Parse row_payload cell values into typed DB fields.
  */
 
 const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mapPaymentRow, mapUsageRow, mapUserRow } from "./sheet-cleaners";
-import { parseCellDateOnly, parseCellInt, parseCellNumeric, parseCellString } from "./train-clean-cell";
+import { parseCellDateOnly, parseCellInt, parseCellNumeric, parseCellString } from "./cell-parsers";
 
 const SOURCE = "source-1";
 const raw = (payload: Record<string, unknown>) => ({ excelRow: 2, rawRowId: 1, payload });

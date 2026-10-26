@@ -23,7 +23,7 @@ infra (2026-10-23), then a decision session with the project owner.
    `runner.py`, `registry.py`, `data.py`, `repository.py`, `artifacts.py`, `datasets.py`,
    `validation.py` data loading, `api/`) may be restructured.
 4. **Any PR that touches `apps/ml/` or the import pipeline must leave the golden run unchanged**
-   (step 0.6). A PR that is *meant* to change model output (e.g. 3.1) records a new golden baseline
+   (step 0.6). A PR that is *meant* to change model output records a new golden baseline
    and says so in its description.
 5. Thai **UI text** and user-facing messages stay as they are; they are product copy. Thai **code
    comments** get translated to English when their file is touched.
@@ -87,7 +87,7 @@ infra (2026-10-23), then a decision session with the project owner.
 
   *Done when:* `bun test` in `apps/api` runs more than zero tests and CI runs them.
 
-- [ ] **0.6 Golden run: an end-to-end regression check for ML and import changes** `[structure]`
+- [x] **0.6 Golden run: an end-to-end regression check for ML and import changes** `[structure]`
   Add `apps/ml/scripts/golden_run.py`:
   1. Create a scratch database `moby_golden` and apply the schema.
   2. Import `data/sample-1moby-workbook.xlsx` as both a train and a predict Data Source, via
@@ -111,7 +111,7 @@ infra (2026-10-23), then a decision session with the project owner.
 
 Data-loss and corruption bugs come first.
 
-- [ ] **1.1 Model versions can collide and overwrite a Champion's files** `[behaviour]`
+- [x] **1.1 Model versions can collide and overwrite a Champion's files** `[behaviour]`
   - `apps/ml/src/training/registry.py:27-38` numbers a version as `count(*)` of this month's versions.
   - Delete one, or run two trainings at once, and it hands out a version that already exists.
   - `artifacts.py:25` uses `mkdir(exist_ok=True)`, so `save_artifacts` overwrites that version's
@@ -131,22 +131,22 @@ Data-loss and corruption bugs come first.
 
   Fix: set `startedAt: null, finishedAt: null` on retry.
 
-- [ ] **1.3 Failed Prediction Runs keep their outputs** `[behaviour]`
+- [x] **1.3 Failed Prediction Runs keep their outputs** `[behaviour]`
   `apps/ml/src/prediction/runner.py:363-368` runs the post-check after `_replace_outputs` has
   committed. Fix: delete the run's `ml_prediction_outputs` rows in the failure branch of
   `run_prediction`.
 
-- [ ] **1.4 Deleting a Model Version removes its files before its row** `[behaviour]`
+- [x] **1.4 Deleting a Model Version removes its files before its row** `[behaviour]`
   - `registry.py:442-452` runs `rmtree` before the database transaction at `:453`.
   - The reference check and the delete use different connections.
 
   Fix: do the check and the delete in one transaction, then `rmtree` after commit.
 
-- [ ] **1.5 Verify the artifact checksum when loading a model** `[behaviour]`
+- [x] **1.5 Verify the artifact checksum when loading a model** `[behaviour]`
   The checksum stored at save time is never checked (`artifacts.py:78`). Fail loudly when it is
   missing or wrong, so a lost volume or a corrupted file can't be served silently.
 
-- [ ] **1.6 Training logs are thrown away** `[behaviour]`
+- [x] **1.6 Training logs are thrown away** `[behaviour]`
   `apps/ml/src/training/runner.py:150-153` captures stdout in a `StringIO` that is never saved, so
   `docker compose logs ml` shows nothing. Fix: drop the `redirect_stdout` and the unused `log_buffer`
   parameter (`:166`). Phase 6.4 then turns the prints into logger calls.
@@ -186,7 +186,7 @@ Data-loss and corruption bugs come first.
 
   Phase 4.4 then merges the four into one helper.
 
-- [ ] **1.13 Record a warning when SHAP explanations fail** `[behaviour]`
+- [x] **1.13 Record a warning when SHAP explanations fail** `[behaviour]`
   `apps/ml/src/prediction/runner.py:462` completes the run with null factors and no sign of the
   failure. Fix: append a warning to the run's `progress_json.warnings`, and show it on the run in the
   Runs page.
@@ -213,7 +213,7 @@ Data-loss and corruption bugs come first.
 
 See [ADR 0001](adr/0001-plain-sql-migrations.md).
 
-- [ ] **2.1 Hand-clean the baseline schema** `[structure]`
+- [x] **2.1 Hand-clean the baseline schema** `[structure]`
   `db/init/001_schema.sql` is a raw pg_dump: 1,744 of its 2,681 lines are headers and blank lines.
   - Rewrite it by hand: put constraints, defaults and indexes inline per table, and drop the
     psql-only `\restrict` / `\unrestrict` lines (`:5`, `:2680`).
@@ -222,7 +222,7 @@ See [ADR 0001](adr/0001-plain-sql-migrations.md).
   *Done when:* `pg_dump --schema-only` of a database built from the old file and one built from the
   new file are identical.
 
-- [ ] **2.2 Migration runner at API boot** `[behaviour]`
+- [x] **2.2 Migration runner at API boot** `[behaviour]`
   - Add `apps/api/src/db/migrate.ts` (about 30 lines). It:
     - takes `pg_advisory_lock`
     - creates `schema_migrations(filename, applied_at)`
@@ -233,11 +233,11 @@ See [ADR 0001](adr/0001-plain-sql-migrations.md).
     only path for fresh and existing databases alike.
   - Document "new migration → run → `bun run db:introspect`" in `AGENTS.md`.
 
-- [ ] **2.3 Turn `schema-compat.ts` into `002_schema_compat.sql`** `[structure]`
+- [x] **2.3 Turn `schema-compat.ts` into `002_schema_compat.sql`** `[structure]`
   Move its idempotent `ALTER`s (`IF EXISTS` / `IF NOT EXISTS`) into the migration, then delete
   `apps/api/src/lib/schema-compat.ts`. Existing local volumes catch up; on fresh ones it does nothing.
 
-- [ ] **2.4 `003`: drop dead columns, add CHECK constraints** `[behaviour]`
+- [x] **2.4 `003`: drop dead columns, add CHECK constraints** `[behaviour]`
   - Drop `ml_model_versions.model_card_path`, `ml_model_evaluations.error_analysis_json` and
     `ml_model_evaluations.artifact_path`. Nothing reads or writes them.
   - Add CHECK constraints on the `ml_*` status columns, `output_status`, and the risk / urgency /
@@ -249,14 +249,15 @@ See [ADR 0001](adr/0001-plain-sql-migrations.md).
 
 ## Phase 3: Dependencies and infra hygiene
 
-- [ ] **3.1 Pin and prune Python dependencies; drop tabicl** `[behaviour]`
-  - Remove `tabicl` from the churn candidates (`apps/ml/src/training/churn_trainer.py:97`), which
-    removes PyTorch, `TORCH_VARIANT` and the `TABICL_*` env vars.
+- [ ] **3.1 Pin and prune Python dependencies (tabicl stays)** `[structure]`
+  - **tabicl is kept.** The decision was to drop it unless it had been winning on real data, and it
+    has: the current churn Champion (`churn-2026.09.0`) is a tabicl model. Removing the package would
+    also make that Champion impossible to load. `docs/ml.md` (7.3) records why it stays. The golden run
+    skips it to stay fast, so tabicl-only code paths are not covered by that gate.
   - Delete the dependencies nothing uses: `arq`, `msgpack`, `redis`, `boto3`, `matplotlib`,
     `seaborn`, `openpyxl`, `python-multipart`. Grep for each one before deleting it.
   - Keep the direct dependencies in `requirements.in`, and generate a fully pinned `requirements.txt`
     with `pip freeze` from a working image.
-  - Record a new golden baseline, because the churn Champion may change.
 
 - [x] **3.2 docker-compose and image cleanup** `[structure]`
   - In `docker-compose.yml`:
@@ -269,12 +270,12 @@ See [ADR 0001](adr/0001-plain-sql-migrations.md).
     can't write to a root-owned `./models` or Railway volume without a `chown` step.
   - Remove the unused `MODEL_DIR` from `apps/ml/entrypoint.sh:4`.
 
-- [ ] **3.3 Sync `.env.example` with the code** `[structure]`
+- [x] **3.3 Sync `.env.example` with the code** `[structure]`
   - Add the variables the code reads but the example lacks: `CHURN_CANDIDATES`,
     `ENABLE_XGB_CREDIT`, `ML_HOST`, `ML_PORT`, `IMPORT_MAX_UPLOAD_BYTES`, `IMPORT_TIMEOUT_MS`,
     `REDIS_PORT`, `REDIS_URL`, `PORT`.
   - Remove the ones nothing reads: `AI_RAG_TOP_K`, `DATA_DIR`, `DOCKER_BUILD`, `TRAIN_CUTOFF_DATE`,
-    and, after 3.1 and 4.7, `TABICL_*`, `TORCH_VARIANT` and `AI_CHAT_DEFAULT_ROLE`.
+    and, after 4.7, `AI_CHAT_DEFAULT_ROLE`. Keep `TABICL_*` and `TORCH_VARIANT` (tabicl stays, see 3.1).
 
 - [x] **3.4 Package metadata** `[structure]`
   - Root `package.json`: set `packageManager` to `bun@1.4.0`, to match CI and the Dockerfiles.
@@ -305,16 +306,19 @@ lib/
   ai/                     as today, minus the customer data loader
 ```
 
-- [ ] **4.1 Move files into the layout** `[structure]`
+- [x] **4.1 Move files into the layout** `[structure]`
   Moves and import-path updates only.
-  - Move `ai/customer-dataset.ts` (the non-AI Customer 360 loader) to `ml/customers.ts`.
+  - ~~Move `ai/customer-dataset.ts` to `ml/customers.ts`.~~ Kept in `ai/`: only the AI customer
+    explanation uses it, so the move bought nothing.
   - Move `routes/prediction-runs/_helpers.ts` to `ml/prediction-runs.ts`.
   - Rename `routes/train-data.ts` and `routes/predict-data.ts` to `train-data-sources.ts` and
     `predict-data-sources.ts`, matching the URLs.
   - Create `env.ts`. The same env-number parsing is written in `constants.ts:105-113`,
     `ml-internal.ts:15` and `run-reaper.ts:22`, and the `localhost:3000` default appears 3 times.
+    Done as one `positiveNumberEnv` helper; the two origin defaults differ on purpose (auth also
+    trusts `:3001`), so they stayed.
 
-- [ ] **4.2 One import pipeline for both kinds of Data Source** `[structure]`
+- [x] **4.2 One import pipeline for both kinds of Data Source** `[structure]`
   Split into 3 PRs; gate each with the golden run plus a UI import of the sample workbook as both kinds.
   - **a. Contract and raw import.**
     - `predict-excel-contract.ts:21-57` writes out by hand what `train-excel-contract.ts:66` builds
@@ -342,7 +346,7 @@ lib/
     `/import/async`.
   - Update `apps/api/scripts/seed-import.ts`.
 
-- [ ] **4.3 One error shape and one way to guard** `[behaviour]`
+- [x] **4.3 One error shape and one way to guard** `[behaviour]`
   - Add an `HttpError` class and an `app.onError` that returns `{ message, code? }`, where `code` is
     `SCREAMING_SNAKE`. Today responses mix these shapes:
     - `{message}`
@@ -360,7 +364,7 @@ lib/
     `model-performance.ts:482`, `training-runs.ts:322`, `:347`.
   - Update the web's error reader (`apps/web/src/lib/ui-error.ts`) in the same PR.
 
-- [ ] **4.4 Run and Model Version helpers in `lib/ml/`** `[structure]`
+- [x] **4.4 Run and Model Version helpers in `lib/ml/`** `[structure]`
   - `ml/prediction-runs.ts` and a new `ml/training-runs.ts` own the select, row type, mapping and
     fetch. Today:
     - `training-runs.ts:33-97` rebuilds them inline.
@@ -379,10 +383,10 @@ lib/
   - Fold the leftover sub-instances from the old role split into their main route groups:
     `trainImportRoutes` (`train-data.ts:50`), `trainingWriteRoutes` (`training-runs.ts:99`),
     `modelActivateRoutes` (`model-performance.ts:317`).
-  - Call `model-activate` through `callMlInternalJson`, as `ml-internal.ts:69` says synchronous calls
-    should.
+  - ~~Call `model-activate` through `callMlInternalJson`.~~ Fixed the doc comment instead: activate
+    doesn't need the response body, so `triggerMlJob` is right.
 
-- [ ] **4.5 Shared types and constants come from `@moby/types`** `[structure]`
+- [x] **4.5 Shared types and constants come from `@moby/types`** `[structure]`
   - Delete the enum copies in `lib/constants.ts:10-103` and import from `@moby/types`.
   - Delete `lib/ml-contract.ts`, which only re-exports.
   - Move `RunInsight` (`ai/run-insight.ts:25`) and `CustomerAiExplanationResult`
@@ -400,7 +404,7 @@ lib/
       `realized-outcomes.ts:20` already has the constant
     - and replace the bare `"completed"` at `insight.ts:29`
 
-- [ ] **4.6 Snake_case responses for AI chat** `[behaviour]`
+- [x] **4.6 Snake_case responses for AI chat** `[behaviour]`
   - `routes/ai-chat.ts:70-86`, `:109`, `:141` and `:165` return raw Drizzle rows (`runId`,
     `evidenceJson`, …). Map them to snake_case.
   - Put `ChatMsg`, `Conversation` and `ChatEvidence` in `@moby/types`. The web defines its own at
@@ -408,7 +412,7 @@ lib/
   - Give the body of `model-performance.ts:326` a `t.Object` schema using `model_version_id`.
   - Update the web in the same PR.
 
-- [ ] **4.7 Dead code and stale comments** `[structure]`
+- [x] **4.7 Dead code and stale comments** `[structure]`
   Grep-confirm each one before deleting it.
   - Dead code:
     - the re-export line at `prediction-runs/_helpers.ts:217`
@@ -427,7 +431,7 @@ lib/
     - "no DB" in `excel-core.ts:3`
     - the misplaced note at `predict-data.ts:6`
 
-- [ ] **4.8 Use the query builder for plain selects** `[structure]`
+- [x] **4.8 Use the query builder for plain selects** `[structure]`
   `ml/customers.ts` (formerly `ai/customer-dataset.ts:32-55`) is a single-table select written in raw SQL.
 
 ---

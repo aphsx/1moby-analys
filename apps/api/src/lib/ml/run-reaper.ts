@@ -12,7 +12,7 @@ import { RUN_STATUS } from "@moby/types";
 import { and, inArray, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionRuns, mlTrainingRuns } from "../../db/schema";
-import { releaseStalePredict, releaseStaleTrainImports } from "../data-import/abort-data-source";
+import { releaseStaleImports } from "../data-import/abort-data-source";
 import { positiveNumberEnv } from "../env";
 
 export const STALE_RUN_REAPER_INTERVAL_MS = 5 * 60 * 1000;
@@ -72,7 +72,7 @@ export function startStaleRunReaper(): void {
         }
       })
       .catch((e: unknown) => console.error("[reaper] Failed to reap stale runs:", e));
-    Promise.all([releaseStaleTrainImports(), releaseStalePredict()])
+    Promise.all([releaseStaleImports("train"), releaseStaleImports("predict")])
       .then(([train, predict]) => {
         if (train > 0 || predict > 0) {
           console.log(`[reaper] Deleted stale imports: train=${train} predict=${predict}`);

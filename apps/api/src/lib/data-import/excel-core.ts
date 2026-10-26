@@ -1,5 +1,5 @@
 /**
- * Shared Excel parsing utilities used by both train-import and predict-import.
+ * Excel parsing shared by every Data Source import (raw-import.ts).
  * Parsing is pure; insertSheetRows writes the parsed rows in batches.
  */
 import * as XLSX from "xlsx";
@@ -62,12 +62,7 @@ export function validateHeaders(sheetName: string, headers: (string | null)[], r
   }
 }
 
-export function validateWorkbookSheets(
-  sheetNames: string[],
-  sheetConfig: Record<string, unknown>,
-  requiredSheets: readonly string[]
-): void {
-  const expected = new Set(Object.keys(sheetConfig));
+export function validateWorkbookSheets(sheetNames: string[], requiredSheets: readonly string[]): void {
   for (const req of requiredSheets) {
     if (!sheetNames.includes(req)) {
       throw new Error(`Missing required sheet: ${req}`);

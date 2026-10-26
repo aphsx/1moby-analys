@@ -7,7 +7,7 @@ import {
   parseCellInt,
   parseCellNumeric,
   parseCellString,
-} from "./train-clean-cell";
+} from "./cell-parsers";
 export interface RawRowInput {
   excelRow: number;
   rawRowId: number;

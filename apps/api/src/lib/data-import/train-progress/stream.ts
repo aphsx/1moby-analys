@@ -1,9 +1,18 @@
 /**
- * Redis Stream progress for async train import (polled via GET /import/progress).
+ * Progress of an async train import: the background job publishes to a Redis Stream
+ * (`train-import:{source_id}`), and GET /import/progress reads it back, with the
+ * Data Source row's terminal status taking precedence.
  */
-import { IMPORT_STATUS } from "@moby/types";
-import type { TrainImportResult } from "../train-import";
-import type { TrainPipelineProgressEvent } from "./pipeline-progress";
+import {
+  IMPORT_STATUS,
+  type DataSourceImportResult,
+  type ImportProgressEvent,
+  type TrainImportStatus,
+} from "@moby/types";
+import { eq } from "drizzle-orm";
+import { db } from "../../../db/client";
+import { trainDataSources } from "../../../db/schema";
+import { READY_STEP } from "./progress";
 import { getRedis } from "./redis";
 
 const STREAM_TTL_SEC = 3600;
@@ -12,9 +21,9 @@ export function trainImportStreamKey(sourceId: string): string {
   return `train-import:${sourceId}`;
 }
 
-export async function publishTrainPipelineProgress(
+export async function publishTrainImportProgress(
   sourceId: string,
-  event: TrainPipelineProgressEvent
+  event: ImportProgressEvent
 ): Promise<void> {
   const redis = getRedis();
   const fields: string[] = [
@@ -30,14 +39,14 @@ export async function publishTrainPipelineProgress(
 
 export async function publishTrainImportDone(
   sourceId: string,
-  result: TrainImportResult
+  result: DataSourceImportResult
 ): Promise<void> {
   const redis = getRedis();
   await redis.xadd(
     trainImportStreamKey(sourceId),
     "*",
     "progress", "100",
-    "step", "Ready for model training",
+    "step", READY_STEP,
     "status", "done",
     "payload", JSON.stringify(result)
   );
@@ -65,14 +74,14 @@ function fieldsToMap(fields: string[]): Map<string, string> {
   return map;
 }
 
-export type TrainImportStreamSnapshot =
-  | { kind: "progress"; event: TrainPipelineProgressEvent }
-  | { kind: "done"; result: TrainImportResult }
+type TrainImportStreamSnapshot =
+  | { kind: "progress"; event: ImportProgressEvent }
+  | { kind: "done"; result: DataSourceImportResult }
   | { kind: "failed"; message: string; code?: string; source_id?: string }
   | { kind: "empty" };
 
-/** Latest Redis stream entry for GET /import/progress. */
-export async function readLatestTrainImportStreamEntry(
+/** Latest Redis stream entry for one import. */
+async function readLatestStreamEntry(
   sourceId: string
 ): Promise<TrainImportStreamSnapshot> {
   const redis = getRedis();
@@ -92,8 +101,8 @@ export async function readLatestTrainImportStreamEntry(
   if (status === "done") {
     const payloadRaw = fieldMap.get("payload");
     const result = payloadRaw
-      ? (JSON.parse(payloadRaw) as TrainImportResult)
-      : ({ source_id: sourceId, import_status: IMPORT_STATUS.READY, sheet_manifest: {} } as TrainImportResult);
+      ? (JSON.parse(payloadRaw) as DataSourceImportResult)
+      : ({ source_id: sourceId, import_status: IMPORT_STATUS.READY, sheet_manifest: {} } as DataSourceImportResult);
     return { kind: "done", result };
   }
 
@@ -117,4 +126,59 @@ export async function readLatestTrainImportStreamEntry(
       rows: fieldMap.get("rows") ? Number(fieldMap.get("rows")) : undefined,
     },
   };
+}
+
+const failed = (message: string, extra: Partial<TrainImportStatus> = {}): TrainImportStatus => ({
+  status: "failed",
+  progress: 0,
+  step: message,
+  message,
+  ...extra,
+});
+
+const ready = (result: DataSourceImportResult): TrainImportStatus => ({
+  status: "ready",
+  progress: 100,
+  step: READY_STEP,
+  phase: "clean",
+  result,
+});
+
+/**
+ * Where one train import stands. The Data Source row's terminal status wins over Redis,
+ * because progress events are published fire-and-forget and can land after "done".
+ * A missing row means the import failed and was rolled back (or never existed).
+ */
+export async function trainImportStatus(sourceId: string): Promise<TrainImportStatus> {
+  const [row] = await db
+    .select({
+      importStatus: trainDataSources.importStatus,
+      errorMessage: trainDataSources.errorMessage,
+      sheetManifest: trainDataSources.sheetManifest,
+      cleanManifest: trainDataSources.cleanManifest,
+      fileChecksumSha256: trainDataSources.fileChecksumSha256,
+    })
+    .from(trainDataSources)
+    .where(eq(trainDataSources.id, sourceId))
+    .limit(1);
+
+  if (row?.importStatus === IMPORT_STATUS.READY) {
+    return ready({
+      source_id: sourceId,
+      import_status: IMPORT_STATUS.READY,
+      sheet_manifest: (row.sheetManifest ?? {}) as Record<string, number>,
+      file_checksum_sha256: row.fileChecksumSha256,
+      clean_manifest: (row.cleanManifest as DataSourceImportResult["clean_manifest"]) ?? undefined,
+    });
+  }
+  if (row?.importStatus === IMPORT_STATUS.FAILED) {
+    return failed(row.errorMessage ?? "Import failed");
+  }
+
+  const snap = await readLatestStreamEntry(sourceId);
+  if (snap.kind === "failed") return failed(snap.message, { code: snap.code, source_id: snap.source_id });
+  if (!row) return { status: "not_found", progress: 0, step: "", message: "Train data source not found" };
+  if (snap.kind === "done") return ready(snap.result);
+  if (snap.kind === "progress") return { status: "importing", ...snap.event };
+  return { status: "importing", progress: 0, step: "Waiting for import to start…", phase: "raw" };
 }
