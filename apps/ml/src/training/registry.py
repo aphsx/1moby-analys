@@ -25,17 +25,23 @@ def _json(value: Any) -> str:
 
 
 def next_version(model_type: str) -> str:
-    """Version naming: {type}-{YYYY.MM}.{seq}."""
+    """Version naming: {type}-{YYYY.MM}.{seq}, seq one past the highest used this month.
+
+    Counts both registered versions and artifact folders on disk, so a deleted version
+    or a folder orphaned by a failed run is never handed out again. (A count of rows
+    reused numbers after a delete and overwrote that version's files.)
+    """
+    from src.training.artifacts import models_dir
 
     prefix = f"{model_type}-{datetime.now(timezone.utc).strftime('%Y.%m')}"
     with create_engine(database_url()).connect() as conn:
-        count = conn.execute(
-            text(
-                "SELECT count(*) FROM ml_model_versions WHERE model_type = :model_type AND version LIKE :prefix"
-            ),
+        registered = conn.execute(
+            text("SELECT version FROM ml_model_versions WHERE model_type = :model_type AND version LIKE :prefix"),
             {"model_type": model_type, "prefix": f"{prefix}.%"},
-        ).scalar_one()
-    return f"{prefix}.{count}"
+        ).scalars().all()
+    on_disk = [p.name for p in (models_dir() / model_type).glob(f"{prefix}.*")]
+    used = [int(seq) for _, seq in (v.rsplit(".", 1) for v in [*registered, *on_disk]) if seq.isdigit()]
+    return f"{prefix}.{max(used, default=-1) + 1}"
 
 
 def insert_model_version(

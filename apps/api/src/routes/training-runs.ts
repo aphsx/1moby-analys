@@ -8,7 +8,7 @@
  * owned by the run are auto-repointed or cleared when safe to delete).
  */
 import Elysia, { t } from "elysia";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import {
   mlModelVersions,
@@ -176,6 +176,17 @@ const trainingWriteRoutes = new Elysia()
             "cutoff_date does not satisfy training Gate 3. Use the suggested cutoff for this source.",
           details: cutoffCheck ?? null,
         };
+      }
+
+      // One Training Run at a time: overlapping runs race for the same model version numbers.
+      const [active] = await db
+        .select({ id: mlTrainingRuns.id })
+        .from(mlTrainingRuns)
+        .where(inArray(mlTrainingRuns.status, [RUN_STATUS.PENDING, RUN_STATUS.IN_PROGRESS]))
+        .limit(1);
+      if (active) {
+        set.status = 409;
+        return { message: "Another training run is still in progress; wait for it to finish" };
       }
 
       const [inserted] = await db

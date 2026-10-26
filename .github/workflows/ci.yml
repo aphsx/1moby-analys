@@ -57,6 +57,7 @@ jobs:
       # The contract scripts that need no database.
       - run: python scripts/verify_promotion_policy.py
       - run: python scripts/verify_constants_sync.py
+      - run: python scripts/verify_model_versioning.py
 
   # Token deploy (no GitHub-repo connection on Railway). Requires a Project
   # Token in repo secret RAILWAY_TOKEN — Project Settings → Tokens, scoped to

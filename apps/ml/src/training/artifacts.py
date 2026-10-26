@@ -23,8 +23,10 @@ def models_dir() -> Path:
 
 
 def artifact_dir(model_type: str, version: str) -> Path:
+    """Create a new version's folder. Fails if it exists, so a version's files are never overwritten."""
     target = models_dir() / model_type / version
-    target.mkdir(parents=True, exist_ok=True)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.mkdir()
     return target
 
 
