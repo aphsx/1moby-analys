@@ -3,6 +3,7 @@
 import { type PredictionOutput } from "@moby/types";
 import type { MouseEvent } from "react";
 import { Loader2, Sparkles } from "lucide-react";
+import { BUTTON } from "@/components/ui";
 import { isCustomerAiGenerated, isCustomerAiGenerating } from "./customer-ai";
 
 type GenAiButtonProps = {
@@ -21,10 +22,10 @@ export function GenAiButton({ ai, inFlight, disabled = false, onClick }: GenAiBu
       type="button"
       disabled={disabled || generating}
       onClick={onClick}
-      className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-[color:var(--moby-600)] px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-[color:var(--moby-800)] disabled:cursor-not-allowed disabled:opacity-70"
+      className={`${BUTTON.ghost} text-small`}
     >
-      {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-      {generating ? "Generating" : generated ? "Generated" : "Gen AI"}
+      {generating ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Sparkles size={13} aria-hidden className="text-accent" />}
+      {generating ? "กำลังสรุป…" : generated ? "สรุปใหม่" : "สรุป AI"}
     </button>
   );
 }

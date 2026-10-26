@@ -1,8 +1,8 @@
 /**
  * App-wide 1Moby design tokens (brand colors + intro assets), sourced from the
  * 1moby.com intro CSS. Despite the filename, these are used across the whole app,
- * not just the login page — `MOBY_BRAND` is the single source for brand colors
- * (see features/dashboard/palette.ts for derived gradients/palettes).
+ * not just the login page. Pages migrated to docs/ui/DESIGN.md use the CSS tokens instead;
+ * UI plan phase 6 folds what is left here into them.
  */
 export const MOBY_BRAND = {
   dark: "#1D1F2A",

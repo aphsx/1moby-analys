@@ -12,11 +12,12 @@
 import { type OutputsPage, type OutputsQuery } from "@moby/types";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { Database } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useActiveRun } from "@/stores/run-store";
-import { EmptyState, Skeleton } from "@/components/ui";
-import { fetchRunOutputs, generateCustomerAiExplanation } from "@/lib/ml-api";
+import { BUTTON, EmptyState, Skeleton } from "@/components/ui";
+import { fetchRunOutputs, fetchRunSummary, generateCustomerAiExplanation } from "@/lib/ml-api";
+import { getDisplayError } from "@/lib/ui-error";
+import { useAsync } from "@/lib/use-async";
 import {
   CustomersView,
   type CustomerFilters,
@@ -27,7 +28,7 @@ import {
 
 // Server-side sort keeps the most important customers in the fetched page;
 // filters are applied server-side so every lifecycle stage is reachable.
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 300;
 const FILTER_KEYS = [
   "lifecycle_stage",
@@ -108,6 +109,8 @@ function CustomersClientInner() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  // Tab and preset counts; the list still renders if this fails
+  const summary = useAsync(() => fetchRunSummary(effectiveRunId), [effectiveRunId], Boolean(effectiveRunId)).data ?? null;
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -228,9 +231,7 @@ function CustomersClientInner() {
         }
         setPage(result);
       })
-      .catch((e: unknown) =>
-        alive && setError(e instanceof Error ? e.message : "โหลดข้อมูลลูกค้าไม่สำเร็จ")
-      )
+      .catch((e: unknown) => alive && setError(getDisplayError(e, "เกิดข้อผิดพลาด")))
       .finally(() => alive && setPending(false));
     return () => {
       alive = false;
@@ -248,18 +249,11 @@ function CustomersClientInner() {
 
   if (!runsLoading && !run) {
     return (
-      <div className="px-4 py-10 sm:px-6 lg:px-8">
+      <div className="px-4 pt-6 sm:px-6 lg:px-8">
         <EmptyState
-          title="ยังไม่มี prediction run ที่เสร็จสมบูรณ์"
-          hint="import ข้อมูล predict แล้วสร้าง run ก่อน — รายชื่อลูกค้าทั้งหมดมาจากผลของ run"
-          action={
-            <Link
-              href="/runs"
-              className="inline-flex h-9 items-center rounded-lg bg-[color:var(--moby-600)] px-4 text-[13px] font-medium text-white hover:bg-[color:var(--moby-700)]"
-            >
-              ไปหน้า Prediction Runs
-            </Link>
-          }
+          title="ยังไม่มีผลทำนาย"
+          hint="อัปโหลดข้อมูลแล้วสร้างรอบทำนายแรกได้ที่ “รอบทำนาย”"
+          action={<Link href="/runs" className={BUTTON.primary}>สร้างรอบทำนาย</Link>}
         />
       </div>
     );
@@ -267,18 +261,18 @@ function CustomersClientInner() {
 
   if (error) {
     return (
-      <div className="px-4 py-6 sm:px-6 lg:px-8">
-        <EmptyState title="โหลดข้อมูลลูกค้าไม่สำเร็จ" hint={error} />
+      <div className="px-4 pt-6 sm:px-6 lg:px-8">
+        <EmptyState title="โหลดรายชื่อลูกค้าไม่สำเร็จ" hint={error} />
       </div>
     );
   }
 
   if (runsLoading || !page) {
     return (
-      <div className="space-y-3 px-4 py-5 sm:px-6 lg:px-8">
-        {[...Array(8)].map((_, i) => (
-          <Skeleton key={i} className="h-14" />
-        ))}
+      <div className="space-y-5 px-4 pt-6 sm:px-6 lg:px-8">
+        <Skeleton className="h-11" />
+        <Skeleton className="h-11 w-2/3" />
+        <Skeleton className="h-[480px]" />
       </div>
     );
   }
@@ -300,7 +294,7 @@ function CustomersClientInner() {
         };
       });
     } catch (e: unknown) {
-      setAiError(e instanceof Error ? e.message : "สร้างคำอธิบาย AI ไม่สำเร็จ");
+      setAiError(getDisplayError(e, "สร้างสรุปจาก AI ไม่สำเร็จ"));
     }
   };
 
@@ -308,6 +302,8 @@ function CustomersClientInner() {
     <CustomersView
       rows={page.data}
       total={page.total}
+      revenueAtRiskSum={page.revenue_at_risk_sum}
+      summary={summary}
       page={page.page}
       pageSize={page.page_size}
       pending={pending}
@@ -326,7 +322,7 @@ function CustomersClientInner() {
 
 export function CustomersClient() {
   return (
-    <Suspense fallback={<div className="p-8 text-[color:var(--ink-5)]">Loading…</div>}>
+    <Suspense fallback={<div className="p-8 text-muted">กำลังโหลด…</div>}>
       <CustomersClientInner />
     </Suspense>
   );
