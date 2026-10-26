@@ -8,12 +8,12 @@
  * default 30s) — a hung ML service must surface as a thrown error so callers
  * can mark the run 'failed' instead of leaving it stuck.
  */
+import { positiveNumberEnv } from "../env";
 
 const DEFAULT_ML_INTERNAL_TIMEOUT_MS = 30_000;
 
 function mlInternalTimeoutMs(): number {
-  const parsed = Number(process.env.ML_INTERNAL_TIMEOUT_MS);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ML_INTERNAL_TIMEOUT_MS;
+  return positiveNumberEnv("ML_INTERNAL_TIMEOUT_MS", DEFAULT_ML_INTERNAL_TIMEOUT_MS);
 }
 
 async function postMlInternal(path: string, payload: object): Promise<Response> {

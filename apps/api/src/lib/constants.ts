@@ -6,6 +6,7 @@
  * string literals (a typo here vs. there is a silent contract break the compiler
  * cannot catch).
  */
+import { positiveNumberEnv } from "./env";
 
 export const RUN_STATUS = {
   PENDING: "pending",
@@ -105,11 +106,9 @@ export const DEFAULT_MAX_UPLOAD_BYTES = 1024 * 1024 * 1024;
 export const DEFAULT_IMPORT_TIMEOUT_MS = 10 * 60 * 1000;
 
 export function maxUploadBytes(): number {
-  const parsed = Number(process.env.IMPORT_MAX_UPLOAD_BYTES);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_UPLOAD_BYTES;
+  return positiveNumberEnv("IMPORT_MAX_UPLOAD_BYTES", DEFAULT_MAX_UPLOAD_BYTES);
 }
 
 export function importTimeoutMs(): number {
-  const parsed = Number(process.env.IMPORT_TIMEOUT_MS);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_IMPORT_TIMEOUT_MS;
+  return positiveNumberEnv("IMPORT_TIMEOUT_MS", DEFAULT_IMPORT_TIMEOUT_MS);
 }
