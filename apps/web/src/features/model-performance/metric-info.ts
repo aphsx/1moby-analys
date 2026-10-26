@@ -1,7 +1,6 @@
 /**
  * Metric display metadata for the Model Performance page.
- * Thai tooltip meanings come from docs/ML-CALCULATIONS-TH.md §9 —
- * the UI never computes metrics, it only explains them.
+ * The UI never computes metrics, it only explains them.
  */
 
 export interface MetricInfo {

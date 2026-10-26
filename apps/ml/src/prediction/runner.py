@@ -1,4 +1,4 @@
-"""Prediction run executor (see docs/ML-CALCULATIONS-TH.md §13 — output contract).
+"""Prediction run executor.
 
 Loads `predict_clean_*`, runs the production champions (churn / clv / credit)
 through the same feature contract used at training time, computes derived

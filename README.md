@@ -4,8 +4,9 @@ Internal analytics platform for **1Moby**, a B2B SaaS messaging company (SMS/Ema
 It ingests a fixed-schema Excel export, then predicts customer **churn**, segments customers by
 **CLV / value tier**, and forecasts **credit consumption** — for ~10–50 internal users.
 
-> **New here?** Start with [`claude.md`](claude.md) for the full architecture, then
-> [`docs/README.md`](docs/README.md) for the documentation map.
+> **New here?** Start with [`CLAUDE.md`](CLAUDE.md) for the architecture and [`GLOSSARY.md`](GLOSSARY.md)
+> for the domain terms. The docs are being rewritten after the refactor in
+> [`docs/REFACTOR-PLAN.md`](docs/REFACTOR-PLAN.md); old docs live on the `academic` branch.
 
 ## Stack
 
@@ -39,8 +40,6 @@ cd apps/web && bun install
 ELYSIA_URL=http://localhost:3001 bun run dev   # Next.js on :3000
 ```
 
-See [`docs/WEB-DEV-WORKFLOW.md`](docs/WEB-DEV-WORKFLOW.md) for the full UI workflow.
-
 ## Service ports
 
 | Service | Internal | External | Notes |
@@ -67,7 +66,7 @@ WEB        Overview ▸ Customers ▸ Customer 360 ▸ Model Performance ▸ Run
 ```
 
 Elysia owns all REST + auth + SSE. The ML FastAPI service is internal-only: Elysia triggers training
-and prediction over `/internal/*` (token-gated), which spawn `apps/ml/train_v2.py` / `predict_v2.py`.
+and prediction over `/internal/*` (token-gated), which spawn `python -m src.cli.train` / `src.cli.predict`.
 There are **3 ML models** (churn, CLV, credit) plus rule-based lifecycle — win-back and conversion
 models were permanently cut.
 
@@ -75,10 +74,7 @@ models were permanently cut.
 
 | Doc | Purpose |
 |---|---|
-| [`claude.md`](claude.md) | Architecture, schema, conventions — the project's source of truth |
-| [`docs/README.md`](docs/README.md) | Index of all docs |
-| [`docs/FINAL-REPORT-FULL-TH.docx`](docs/FINAL-REPORT-FULL-TH.docx) | **Final project report (Thai, 5 chapters)** — submission copy; `.md` source alongside |
-| [`docs/ML-CALCULATIONS-TH.md`](docs/ML-CALCULATIONS-TH.md) | Canonical ML reference: formulas, metrics, thresholds, output contract, training design/policy (TH) |
-| [`docs/ML-V2-DASHBOARD-SPEC.md`](docs/ML-V2-DASHBOARD-SPEC.md) | Dashboard/UI spec: every page/widget, field-by-field |
-| [`docs/AI-ASSISTANT.md`](docs/AI-ASSISTANT.md) | AI chat assistant architecture + build plan |
-| [`moby-data-prep/`](moby-data-prep/) | Excel import contract, naming convention, raw/clean schemas |
+| [`CLAUDE.md`](CLAUDE.md) | Architecture, schema, conventions — the project's source of truth |
+| [`GLOSSARY.md`](GLOSSARY.md) | Domain terms and the words to avoid |
+| [`docs/adr/`](docs/adr/) | Architecture decision records |
+| [`docs/REFACTOR-PLAN.md`](docs/REFACTOR-PLAN.md) | Production-readiness refactor in progress |

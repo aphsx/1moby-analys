@@ -52,3 +52,10 @@ dump.rdb
 
 models/
 *.tsbuildinfo
+
+# Local archive of material moved to the `academic` branch
+archive/
+
+# Office lock files
+~$*
+.~*

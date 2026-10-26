@@ -1,6 +1,6 @@
 /**
- * [NEW] ML v2 training runs API — docs/ML-V2-DASHBOARD-SPEC.md §2.6/§7.
- * Response contract mirrors apps/web/src/lib/mlApi.ts (snake_case keys).
+ * ML v2 training runs API.
+ * Response contract mirrors apps/web/src/lib/ml-api.ts (snake_case keys).
  *
  * Org-shared model: reads are org-wide for any authenticated user; triggering
  * training and deleting a finished run are available to any authenticated user

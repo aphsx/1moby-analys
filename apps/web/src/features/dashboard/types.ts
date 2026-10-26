@@ -1,6 +1,6 @@
 /**
- * Dashboard view-model types + adapter from the ML v2 RunSummary contract
- * (docs/ML-V2-DASHBOARD-SPEC.md §4). The card components render this shape;
+ * Dashboard view-model types + adapter from the ML v2 RunSummary contract.
+ * The card components render this shape;
  * the adapter is the only place that maps contract → view-model.
  */
 import type { RunSummary } from "@/lib/ml-api";

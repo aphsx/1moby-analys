@@ -1,5 +1,5 @@
 /**
- * [NEW] Train raw Excel contract — mirrors moby-data-prep/config/excel_schema.yaml.
+ * Train raw Excel contract: the required sheets and their headers.
  * Predict raw uses the same sheet list + required headers in predict-excel-contract.ts.
  *
  * Extra columns are allowed. Every listed header must be present (exact name

@@ -1,6 +1,6 @@
 /**
  * [NEW] Train raw import logic — faithful row_payload per sheet.
- * Parallel to predict-import.ts and moby-data-prep/scripts/import_train_raw.py.
+ * Parallel to predict-import.ts.
  * Each upload is a new snapshot (no merge with prior sources). No checksum dedupe.
  */
 import { createHash } from "node:crypto";

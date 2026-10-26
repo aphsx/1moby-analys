@@ -1,5 +1,5 @@
 /**
- * Map raw row_payload → typed clean row shapes (shared contract with excel_schema.yaml).
+ * Map raw row_payload → typed clean row shapes.
  */
 import {
   parseCellDate,

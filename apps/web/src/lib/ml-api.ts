@@ -1,6 +1,5 @@
 /**
- * ML v2 API client — contract per docs/ML-V2-DASHBOARD-SPEC.md §4/§7 and
- * docs/ML-CALCULATIONS-TH.md §13 (output contract).
+ * ML v2 API client.
  *
  * The Elysia routes are mounted: /prediction-runs, /training-runs,
  * /model-performance, plus suggested-cutoff endpoints for train/predict data.

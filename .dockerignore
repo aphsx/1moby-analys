@@ -22,4 +22,3 @@ data
 # docs and import tooling (not needed in api/web images)
 *.md
 docs
-moby-data-prep

@@ -1,7 +1,7 @@
 /**
- * [NEW] ML v2 model performance API — docs/ML-V2-DASHBOARD-SPEC.md §2.4/§7.
+ * ML v2 model performance API.
  * Champion (alias='production') per model type + holdout/backtest evaluations
- * and baselines from ml_model_evaluations. Contract: apps/web/src/lib/mlApi.ts.
+ * and baselines from ml_model_evaluations. Contract: apps/web/src/lib/ml-api.ts.
  */
 import Elysia from "elysia";
 import { and, desc, eq, sql } from "drizzle-orm";
