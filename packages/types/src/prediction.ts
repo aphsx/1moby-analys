@@ -170,6 +170,8 @@ export interface OutputsQuery {
 
 export interface OutputsPage {
   total: number;
+  /** Sum of revenue_at_risk over every row matching the filters, not just this page. */
+  revenue_at_risk_sum: number;
   page: number;
   page_size: number;
   data: PredictionOutput[];
