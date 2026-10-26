@@ -109,9 +109,9 @@ function ConversationItem({
           </div>
         )}
       </div>
-      {conv.runId && conv.runName && (
+      {conv.run_id && conv.run_name && (
         <div className="pl-[21px]">
-          <RunBadge name={conv.runName} />
+          <RunBadge name={conv.run_name} />
         </div>
       )}
     </div>
@@ -142,7 +142,7 @@ function Sidebar({
     const q = query.trim().toLowerCase();
     return conversations
       .filter((c) => c.archived === showArchived)
-      .filter((c) => !q || c.title.toLowerCase().includes(q) || (c.runName ?? "").toLowerCase().includes(q));
+      .filter((c) => !q || c.title.toLowerCase().includes(q) || (c.run_name ?? "").toLowerCase().includes(q));
   }, [conversations, showArchived, query]);
 
   return (
@@ -448,8 +448,8 @@ export function AIChatView() {
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
   const showMessages = messages.length > 0 || streaming !== null;
-  const statusLine = activeConv?.runId && activeConv.runName
-    ? `Run “${activeConv.runName}”`
+  const statusLine = activeConv?.run_id && activeConv.run_name
+    ? `Run “${activeConv.run_name}”`
     : config?.configured
       ? `${config.provider} · ${config.model}`
       : "ตั้งค่า LLM ก่อนใช้งาน";
@@ -503,7 +503,7 @@ export function AIChatView() {
             {!activeId ? (
               <NoConversation onCreate={() => createConversation()} />
             ) : !showMessages ? (
-              <EmptyState onPrompt={(p) => handleSend(p)} runName={activeConv?.runName ?? null} />
+              <EmptyState onPrompt={(p) => handleSend(p)} runName={activeConv?.run_name ?? null} />
             ) : (
               <div className="space-y-5">
                 {messages.map((msg) => (

@@ -15,7 +15,7 @@ import {
   type ModelVersionSummary,
   type SplitMetrics,
 } from "@moby/types";
-import Elysia from "elysia";
+import Elysia, { t } from "elysia";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import {
@@ -419,26 +419,28 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
   })
   // Manually pin a version to production. Reuses the ML service's promotion
   // transaction (action='manual_override') so the registry stays consistent.
-  .post("/:modelType/activate", async ({ params, body, userId }) => {
-    if (!isModelType(params.modelType)) {
-      throw badRequest("Unknown model type");
+  .post(
+    "/:modelType/activate",
+    async ({ params, body, userId }) => {
+      if (!isModelType(params.modelType)) {
+        throw badRequest("Unknown model type");
+      }
+      try {
+        await triggerMlJob("/internal/model-activate", {
+          model_type: params.modelType,
+          model_version_id: body.model_version_id,
+          reason: body.reason,
+          created_by: userId,
+        });
+      } catch (error) {
+        throw new HttpError(502, error instanceof Error ? error.message : "Activation failed");
+      }
+      return { ok: true };
+    },
+    {
+      body: t.Object({
+        model_version_id: t.String({ format: "uuid" }),
+        reason: t.Optional(t.String()),
+      }),
     }
-    const { modelVersionId, reason } = (body ?? {}) as {
-      modelVersionId?: string;
-      reason?: string;
-    };
-    if (!modelVersionId) {
-      throw badRequest("modelVersionId is required");
-    }
-    try {
-      await triggerMlJob("/internal/model-activate", {
-        model_type: params.modelType,
-        model_version_id: modelVersionId,
-        reason,
-        created_by: userId ?? null,
-      });
-    } catch (error) {
-      throw new HttpError(502, error instanceof Error ? error.message : "Activation failed");
-    }
-    return { ok: true };
-  });
+  );

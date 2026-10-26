@@ -17,6 +17,7 @@
 
 import { db } from "../../db/client";
 import { aiConversations, aiMessages, mlPredictionRuns } from "../../db/schema";
+import type { ChatEvidence } from "@moby/types";
 import { eq, desc } from "drizzle-orm";
 import { complete, stream, LLMError, type ChatMessage } from "./llm-client";
 import { getLLMConfig, isLLMConfigured } from "./llm-config";
@@ -36,15 +37,7 @@ import {
 
 // ── SSE envelope ─────────────────────────────────────────────────────────────
 
-type EvidenceEvent = {
-  mode: "text_to_sql" | "direct";
-  sql: string | null;
-  row_count: number;
-  rows: unknown[];
-  columns: string[];
-  warnings: string[];
-  sources: string[];
-};
+type EvidenceEvent = ChatEvidence;
 
 function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;

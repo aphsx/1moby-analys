@@ -202,7 +202,7 @@ export async function activateModelVersion(
   reason?: string
 ): Promise<{ ok: boolean }> {
   return sendJson(`/api/model-performance/${modelType}/activate`, "POST", {
-    modelVersionId,
+    model_version_id: modelVersionId,
     reason,
   });
 }

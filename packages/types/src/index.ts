@@ -5,3 +5,4 @@ export * from "./training";
 export * from "./model-performance";
 export * from "./realized-outcomes";
 export * from "./data-sources";
+export * from "./ai-chat";

@@ -20,6 +20,7 @@
  *   POST   /ai-chat/conversations/:id/messages → SSE stream
  */
 
+import type { ChatConversation, ChatConversationDetail, ChatEvidence, ChatMessageRecord } from "@moby/types";
 import Elysia, { t } from "elysia";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
@@ -29,7 +30,6 @@ import { badRequest, notFound } from "../lib/http/errors";
 import { orchestrate, sseError } from "../lib/ai";
 import { getLLMConfig, isLLMConfigured } from "../lib/ai/llm-config";
 import { DEFAULT_CONVERSATION_TITLE, ERROR_CODE } from "../lib/ai/constants";
-import { UUID_RE } from "../lib/constants";
 
 const MAX_MESSAGE_CHARS = 12_000;
 
@@ -46,13 +46,26 @@ async function getConversation(id: string, userId: string) {
 
 /** Verify a prediction run exists before binding a chat to it (org-shared). */
 async function runExists(runId: string): Promise<boolean> {
-  if (!UUID_RE.test(runId)) return false;
   const [row] = await db
     .select({ id: mlPredictionRuns.id })
     .from(mlPredictionRuns)
     .where(eq(mlPredictionRuns.id, runId))
     .limit(1);
   return Boolean(row);
+}
+
+type ConversationRow = typeof aiConversations.$inferSelect;
+
+function mapConversation(row: ConversationRow, runName: string | null = null): ChatConversation {
+  return {
+    id: row.id,
+    title: row.title,
+    archived: row.archived,
+    run_id: row.runId,
+    run_name: runName,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  };
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
@@ -67,23 +80,15 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   })
 
   // ── List conversations (+ bound run name) ────────────────────────────────────
-  .get("/conversations", async ({ userId }) => {
-    const convs = await db
-      .select({
-        id: aiConversations.id,
-        title: aiConversations.title,
-        archived: aiConversations.archived,
-        runId: aiConversations.runId,
-        runName: mlPredictionRuns.name,
-        createdAt: aiConversations.createdAt,
-        updatedAt: aiConversations.updatedAt,
-      })
+  .get("/conversations", async ({ userId }): Promise<ChatConversation[]> => {
+    const rows = await db
+      .select({ conversation: aiConversations, runName: mlPredictionRuns.name })
       .from(aiConversations)
       .leftJoin(mlPredictionRuns, eq(aiConversations.runId, mlPredictionRuns.id))
       .where(eq(aiConversations.userId, userId))
       .orderBy(desc(aiConversations.updatedAt))
       .limit(100);
-    return convs;
+    return rows.map((r) => mapConversation(r.conversation, r.runName));
   })
 
   // ── Create conversation (optionally bound to a run) ──────────────────────────
@@ -105,12 +110,12 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
           title: body.title?.trim() || DEFAULT_CONVERSATION_TITLE,
         })
         .returning();
-      return conv;
+      return mapConversation(conv);
     },
     {
       body: t.Object({
         title: t.Optional(t.String({ maxLength: 100 })),
-        run_id: t.Optional(t.String()),
+        run_id: t.Optional(t.String({ format: "uuid" })),
       }),
     }
   )
@@ -123,20 +128,24 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
       if (!conv) throw notFound("Conversation not found");
 
       const msgs = await db
-        .select({
-          id: aiMessages.id,
-          role: aiMessages.role,
-          content: aiMessages.content,
-          evidenceJson: aiMessages.evidenceJson,
-          model: aiMessages.model,
-          createdAt: aiMessages.createdAt,
-        })
+        .select()
         .from(aiMessages)
         .where(eq(aiMessages.conversationId, params.id))
         .orderBy(aiMessages.id)
         .limit(200);
 
-      return { ...conv, messages: msgs };
+      const detail: ChatConversationDetail = {
+        ...mapConversation(conv),
+        messages: msgs.map((m) => ({
+          id: m.id,
+          role: m.role as ChatMessageRecord["role"],
+          content: m.content,
+          evidence: (m.evidenceJson as ChatEvidence | null) ?? null,
+          model: m.model,
+          created_at: m.createdAt.toISOString(),
+        })),
+      };
+      return detail;
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
@@ -159,7 +168,7 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
         .set(updates)
         .where(eq(aiConversations.id, params.id))
         .returning();
-      return updated;
+      return mapConversation(updated);
     },
     {
       params: t.Object({ id: t.String({ format: "uuid" }) }),

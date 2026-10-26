@@ -12,6 +12,7 @@
  *  - Abort via AbortController kept outside state to avoid re-renders.
  */
 
+import type { ChatConversation, ChatConversationDetail, ChatEvidence } from "@moby/types";
 import { create } from "zustand";
 import { redirectingFetch } from "@/lib/http";
 
@@ -27,25 +28,8 @@ export type ChatMsg = {
   error?: boolean;
 };
 
-export type ChatEvidence = {
-  mode: "text_to_sql" | "direct";
-  sql: string | null;
-  row_count: number;
-  rows: unknown[];
-  columns: string[];
-  warnings: string[];
-  sources: string[];
-};
-
-export type Conversation = {
-  id: string;
-  title: string;
-  archived: boolean;
-  runId: string | null;
-  runName: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+export type { ChatEvidence };
+export type Conversation = ChatConversation;
 
 export type ThinkingStep = { step: string; message: string };
 export type StreamingMsg = { id: string; content: string; evidence?: ChatEvidence };
@@ -219,24 +203,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     controller = null;
     set({ activeId: id, messages: [], streaming: null, sending: false, thinkingStep: null });
     try {
-      const conv = await apiGet<
-        Conversation & {
-          messages: Array<{
-            id: number;
-            role: string;
-            content: string;
-            evidenceJson: ChatEvidence | null;
-            createdAt: string;
-          }>;
-        }
-      >(`/api/ai-chat/conversations/${id}`);
+      const conv = await apiGet<ChatConversationDetail>(`/api/ai-chat/conversations/${id}`);
       const msgs: ChatMsg[] = conv.messages.map((m) => ({
         id: `db:${m.id}`,
         dbId: m.id,
-        role: m.role as "user" | "assistant",
+        role: m.role,
         content: m.content,
-        ts: new Date(m.createdAt).getTime(),
-        evidence: m.evidenceJson ?? undefined,
+        ts: new Date(m.created_at).getTime(),
+        evidence: m.evidence ?? undefined,
       }));
       // Ignore late responses if the user switched away mid-load.
       if (get().activeId === id) set({ messages: msgs });
