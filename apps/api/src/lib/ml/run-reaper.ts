@@ -9,10 +9,10 @@
  * delete Data Sources stuck in importing/cleaning past the import timeout.
  */
 import { and, inArray, sql } from "drizzle-orm";
-import { db } from "../db/client";
-import { mlPredictionRuns, mlTrainingRuns } from "../db/schema";
-import { releaseStalePredict, releaseStaleTrainImports } from "./abort-data-source";
-import { RUN_STATUS } from "./constants";
+import { db } from "../../db/client";
+import { mlPredictionRuns, mlTrainingRuns } from "../../db/schema";
+import { releaseStalePredict, releaseStaleTrainImports } from "../data-import/abort-data-source";
+import { RUN_STATUS } from "../constants";
 
 export const STALE_RUN_REAPER_INTERVAL_MS = 5 * 60 * 1000;
 export const DEFAULT_STALE_RUN_TIMEOUT_MINUTES = 120;

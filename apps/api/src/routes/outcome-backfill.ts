@@ -12,9 +12,9 @@ import Elysia, { t } from "elysia";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { mlPredictionRuns } from "../db/schema";
-import { requireUser } from "../lib/auth-middleware";
-import { denyNotFound } from "../lib/access-control";
-import { triggerMlJob } from "../lib/ml-internal";
+import { requireUser } from "../lib/http/auth-middleware";
+import { denyNotFound } from "../lib/http/access-control";
+import { triggerMlJob } from "../lib/ml/ml-internal";
 import { RUN_STATUS } from "../lib/constants";
 import type { OutcomeBackfillResponse } from "@moby/types";
 

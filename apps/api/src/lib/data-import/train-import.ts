@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { eq } from "drizzle-orm";
 import * as XLSX from "xlsx";
-import { db } from "../db/client";
+import { db } from "../../db/client";
 import {
   trainDataSources,
   trainRawSheetBackendPayment,
@@ -18,7 +18,7 @@ import {
   trainRawSheetSmsUsageBc,
   trainRawSheetSmsUsageOtp,
   trainRawSheetUsersUserProfile,
-} from "../db/schema";
+} from "../../db/schema";
 import {
   TRAIN_IMPORT_BATCH_SIZE,
   TRAIN_REQUIRED_SHEETS,
@@ -31,14 +31,14 @@ import {
   progressAfterValidate,
   progressBeforeSheet,
   progressFinalize,
-} from "./train-import-progress";
+} from "./train-progress/import-progress";
 import type { TrainCleanManifest } from "./train-clean";
 import {
   validateWorkbookSheets as validateWorkbookSheetsCore,
   parseSheetRows as parseSheetRowsCore,
   insertSheetRows as insertSheetRowsCore,
   type CellJson,
-} from "./data-import/excel-core";
+} from "./excel-core";
 import { throwIfImportAborted } from "./import-timeout";
 
 type TrainRawInsertTable = PgTable;

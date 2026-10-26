@@ -1,14 +1,14 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { auth } from "./auth";
-import { trainDataRoutes } from "./routes/train-data";
-import { predictDataRoutes } from "./routes/predict-data";
+import { trainDataRoutes } from "./routes/train-data-sources";
+import { predictDataRoutes } from "./routes/predict-data-sources";
 import { aiChatRoutes } from "./routes/ai-chat";
 import { predictionRunRoutes } from "./routes/prediction-runs";
 import { trainingRunRoutes } from "./routes/training-runs";
 import { modelPerformanceRoutes } from "./routes/model-performance";
 import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
-import { startStaleRunReaper } from "./lib/run-reaper";
+import { startStaleRunReaper } from "./lib/ml/run-reaper";
 import { maxUploadBytes } from "./lib/constants";
 import { runMigrations } from "./db/migrate";
 

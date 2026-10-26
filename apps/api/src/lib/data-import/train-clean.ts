@@ -3,7 +3,7 @@
  * Parse + lineage only; ML rules (period, labels) stay in Python.
  */
 import { eq } from "drizzle-orm";
-import { db } from "../db/client";
+import { db } from "../../db/client";
 import {
   trainCleanCustomers,
   trainCleanPayments,
@@ -17,7 +17,7 @@ import {
   trainRawSheetSmsUsageBc,
   trainRawSheetSmsUsageOtp,
   trainRawSheetUsersUserProfile,
-} from "../db/schema";
+} from "../../db/schema";
 import {
   emptySkippedCounts,
   mapPaymentRow,
@@ -34,14 +34,14 @@ import {
 import type { CleanManifest } from "./clean-manifest";
 export type { CleanManifest, CleanSkipped, TrainCleanManifest, TrainCleanSkipped } from "./clean-manifest";
 import { abortTrainDataSource } from "./abort-data-source";
-import type { TrainPipelineProgressEvent } from "./train-pipeline-progress";
+import type { TrainPipelineProgressEvent } from "./train-progress/pipeline-progress";
 import {
   progressCleanCustomers,
   progressCleanPayments,
   progressCleanStart,
   progressCleanUsageSheet,
   progressPipelineDone,
-} from "./train-pipeline-progress";
+} from "./train-progress/pipeline-progress";
 
 const USAGE_RAW_TABLES = {
   "SMS_usage (BC)": trainRawSheetSmsUsageBc,

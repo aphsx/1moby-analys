@@ -13,8 +13,8 @@ import {
   mlPredictionRuns,
   mlTrainingRuns,
 } from "../db/schema";
-import { requireUser } from "../lib/auth-middleware";
-import { requireFoundForRead } from "../lib/access-control";
+import { requireUser } from "../lib/http/auth-middleware";
+import { requireFoundForRead } from "../lib/http/access-control";
 import {
   DEFAULT_RISK_THRESHOLDS,
   type CandidateResult,
@@ -23,7 +23,7 @@ import {
   type ModelVersionSummary,
   type SplitMetrics,
 } from "../lib/ml-contract";
-import { triggerMlJob } from "../lib/ml-internal";
+import { triggerMlJob } from "../lib/ml/ml-internal";
 
 const MODEL_TYPES = ["churn", "clv", "credit"] as const;
 type ModelType = (typeof MODEL_TYPES)[number];

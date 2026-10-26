@@ -2,9 +2,9 @@
  * Roll back a failed import — delete catalog row (CASCADE raw + clean).
  */
 import { and, eq, inArray, isNull, lt } from "drizzle-orm";
-import { db } from "../db/client";
-import { predictDataSources, trainDataSources } from "../db/schema";
-import { importTimeoutMs } from "./constants";
+import { db } from "../../db/client";
+import { predictDataSources, trainDataSources } from "../../db/schema";
+import { importTimeoutMs } from "../constants";
 
 /** Reap catalogs still importing after timeout + buffer (crash / killed container). */
 function staleImportCutoff(): Date {

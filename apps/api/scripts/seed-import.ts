@@ -8,10 +8,10 @@
 import { readFileSync } from "node:fs";
 import { sql } from "drizzle-orm";
 import { db, sqlClient } from "../src/db/client";
-import { importTrainExcel } from "../src/lib/train-import";
-import { cleanTrainFromRaw } from "../src/lib/train-clean";
-import { importPredictExcel } from "../src/lib/predict-import";
-import { cleanPredictFromRaw } from "../src/lib/predict-clean";
+import { importTrainExcel } from "../src/lib/data-import/train-import";
+import { cleanTrainFromRaw } from "../src/lib/data-import/train-clean";
+import { importPredictExcel } from "../src/lib/data-import/predict-import";
+import { cleanPredictFromRaw } from "../src/lib/data-import/predict-clean";
 
 const DEV_USER_ID = "dev-user-local";
 

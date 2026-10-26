@@ -2,14 +2,14 @@ import Elysia, { t } from "elysia";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
-import { requireUser } from "../../lib/auth-middleware";
-import { denyNotFound } from "../../lib/access-control";
+import { requireUser } from "../../lib/http/auth-middleware";
+import { denyNotFound } from "../../lib/http/access-control";
 import {
   createCustomerAiExplanation,
   loadCustomerPayments,
   loadCustomerUsageMonthly,
 } from "../../lib/ai";
-import { fetchRun, mapOutput, requireRunFound } from "./_helpers";
+import { fetchRun, mapOutput, requireRunFound } from "../../lib/ml/prediction-runs";
 
 export const customer360Routes = new Elysia()
   .use(requireUser)

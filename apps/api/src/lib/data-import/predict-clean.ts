@@ -3,7 +3,7 @@
  * Same parse + lineage rules as train clean; ML semantics stay in Python.
  */
 import { eq } from "drizzle-orm";
-import { db } from "../db/client";
+import { db } from "../../db/client";
 import {
   predictCleanCustomers,
   predictCleanPayments,
@@ -17,7 +17,7 @@ import {
   predictRawSheetSmsUsageBc,
   predictRawSheetSmsUsageOtp,
   predictRawSheetUsersUserProfile,
-} from "../db/schema";
+} from "../../db/schema";
 import { abortPredictDataSource } from "./abort-data-source";
 import type { CleanManifest } from "./clean-manifest";
 import {

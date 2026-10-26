@@ -9,12 +9,12 @@ import Elysia, { t } from "elysia";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlModelEvaluations, mlModelVersions } from "../../db/schema";
-import { requireUser } from "../../lib/auth-middleware";
+import { requireUser } from "../../lib/http/auth-middleware";
 import type {
   RealizedOutcome,
   RealizedOutcomesResponse,
 } from "@moby/types";
-import { fetchRun, requireRunFound } from "./_helpers";
+import { fetchRun, requireRunFound } from "../../lib/ml/prediction-runs";
 
 /** Must match PRODUCTION_HOLDOUT_EVALUATION_TYPE in apps/ml/src/outcomes/runner.py. */
 const PRODUCTION_HOLDOUT_EVALUATION_TYPE = "production_holdout";

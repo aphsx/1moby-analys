@@ -17,10 +17,10 @@ import {
   trainDataSources,
   user,
 } from "../db/schema";
-import { requireUser } from "../lib/auth-middleware";
-import { denyNotFound, requireFoundForRead } from "../lib/access-control";
-import { callMlInternalJson, triggerMlJob } from "../lib/ml-internal";
-import { getTrainCutoffSuggestion } from "../lib/clean-cutoff";
+import { requireUser } from "../lib/http/auth-middleware";
+import { denyNotFound, requireFoundForRead } from "../lib/http/access-control";
+import { callMlInternalJson, triggerMlJob } from "../lib/ml/ml-internal";
+import { getTrainCutoffSuggestion } from "../lib/data-import/clean-cutoff";
 import {
   type RunStatus,
   type TrainingRun,

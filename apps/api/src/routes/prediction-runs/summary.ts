@@ -2,8 +2,8 @@ import Elysia, { t } from "elysia";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlModelAliases, mlModelVersions, mlPredictionOutputs, mlPredictionRuns, predictDataSources, user } from "../../db/schema";
-import { requireUser } from "../../lib/auth-middleware";
-import { denyNotFound } from "../../lib/access-control";
+import { requireUser } from "../../lib/http/auth-middleware";
+import { denyNotFound } from "../../lib/http/access-control";
 import {
   DEFAULT_RISK_THRESHOLDS,
   EMPTY_MODEL_VERSIONS,
@@ -15,8 +15,8 @@ import {
   type RunSummary,
   type ValueTier,
 } from "../../lib/ml-contract";
-import { fetchRunAggregates } from "../../lib/run-aggregates";
-import { runSelect, type RunRow } from "./_helpers";
+import { fetchRunAggregates } from "../../lib/ml/run-aggregates";
+import { runSelect, type RunRow } from "../../lib/ml/prediction-runs";
 
 async function churnThresholds(): Promise<{ medium: number; high: number; critical: number }> {
   const rows = await db

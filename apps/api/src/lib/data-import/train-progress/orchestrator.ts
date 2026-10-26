@@ -1,25 +1,25 @@
 /**
  * Train import orchestration — glues the raw Excel import to the clean pipeline
- * and Redis progress streaming. Extracted from routes/train-data.ts so the route
+ * and Redis progress streaming. Extracted from routes/train-data-sources.ts so the route
  * file stays thin (HTTP concerns only).
  */
-import { importTrainExcel, type TrainImportResult } from "./train-import";
-import type { TrainImportProgressEvent } from "./train-import-progress";
-import { abortTrainDataSource } from "./abort-data-source";
-import { cleanTrainFromRaw } from "./train-clean";
-import { mapRawImportProgress } from "./train-pipeline-progress";
+import { importTrainExcel, type TrainImportResult } from "../train-import";
+import type { TrainImportProgressEvent } from "./import-progress";
+import { abortTrainDataSource } from "../abort-data-source";
+import { cleanTrainFromRaw } from "../train-clean";
+import { mapRawImportProgress } from "./pipeline-progress";
 import {
   publishTrainImportDone,
   publishTrainImportError,
   publishTrainPipelineProgress,
-} from "./train-import-stream";
-import { maxUploadBytes } from "./constants";
+} from "./stream";
+import { maxUploadBytes } from "../../constants";
 import {
   IMPORT_TIMEOUT_CODE,
   isImportTimeoutError,
   throwIfImportAborted,
   withImportTimeout,
-} from "./import-timeout";
+} from "../import-timeout";
 
 export interface TrainImportParams {
   buffer: Buffer;

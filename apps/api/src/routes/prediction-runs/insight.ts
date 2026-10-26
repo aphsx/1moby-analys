@@ -1,7 +1,7 @@
 import Elysia, { t } from "elysia";
-import { requireUser } from "../../lib/auth-middleware";
+import { requireUser } from "../../lib/http/auth-middleware";
 import { createRunInsight, getRunInsight } from "../../lib/ai";
-import { fetchRun, requireRunFound } from "./_helpers";
+import { fetchRun, requireRunFound } from "../../lib/ml/prediction-runs";
 
 /**
  * Run-level AI base summary (the "สรุปก่อน" of the whole customer base).

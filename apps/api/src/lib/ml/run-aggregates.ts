@@ -6,9 +6,9 @@
  * two consumers from drifting independently.
  */
 import { and, eq, sql } from "drizzle-orm";
-import { db } from "../db/client";
-import { mlPredictionOutputs } from "../db/schema";
-import type { RiskLevel, UrgencyLevel, ValueTier } from "./ml-contract";
+import { db } from "../../db/client";
+import { mlPredictionOutputs } from "../../db/schema";
+import type { RiskLevel, UrgencyLevel, ValueTier } from "../ml-contract";
 
 export type RunAggregates = {
   total_customers: number;

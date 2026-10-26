@@ -2,15 +2,15 @@ import Elysia, { t } from "elysia";
 import { asc, eq, and, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
-import { requireUser } from "../../lib/auth-middleware";
-import { denyNotFound } from "../../lib/access-control";
+import { requireUser } from "../../lib/http/auth-middleware";
+import { denyNotFound } from "../../lib/http/access-control";
 import {
   fetchRun,
   mapOutput,
   requireRunFound,
   SORT_COLUMNS,
   type OutputsQueryParams,
-} from "./_helpers";
+} from "../../lib/ml/prediction-runs";
 
 function parseSort(sort: string | undefined): SQL {
   const [field, dir] = (sort ?? "priority_score:desc").split(":");

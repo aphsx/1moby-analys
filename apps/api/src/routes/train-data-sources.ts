@@ -8,23 +8,23 @@ import Elysia, { t } from "elysia";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { trainDataSources, user } from "../db/schema";
-import { requireFoundForRead } from "../lib/access-control";
-import { requireUser } from "../lib/auth-middleware";
+import { requireFoundForRead } from "../lib/http/access-control";
+import { requireUser } from "../lib/http/auth-middleware";
 import { maxUploadBytes } from "../lib/constants";
-import { getTrainCutoffSuggestion } from "../lib/clean-cutoff";
-import { prepareTrainDataSource } from "../lib/train-import";
-import { abortTrainDataSource } from "../lib/abort-data-source";
+import { getTrainCutoffSuggestion } from "../lib/data-import/clean-cutoff";
+import { prepareTrainDataSource } from "../lib/data-import/train-import";
+import { abortTrainDataSource } from "../lib/data-import/abort-data-source";
 import {
   publishTrainPipelineProgress,
   readLatestTrainImportStreamEntry,
-} from "../lib/train-import-stream";
+} from "../lib/data-import/train-progress/stream";
 import {
   readImportBuffer,
   runTrainImportJob,
   runTrainImportPipeline,
-} from "../lib/train-import-orchestrator";
+} from "../lib/data-import/train-progress/orchestrator";
 import { isXlsxFilename, mapDataSourceRow } from "../lib/data-import/data-source-dto";
-import { IMPORT_TIMEOUT_CODE, isImportTimeoutError } from "../lib/import-timeout";
+import { IMPORT_TIMEOUT_CODE, isImportTimeoutError } from "../lib/data-import/import-timeout";
 
 const sourceSelect = {
   id: trainDataSources.id,

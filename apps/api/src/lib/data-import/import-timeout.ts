@@ -2,7 +2,7 @@
  * Import wall-clock timeout. Large workbooks can take minutes; without a
  * bound a hung parse/insert leaves catalogs in `importing` forever.
  */
-import { importTimeoutMs } from "./constants";
+import { importTimeoutMs } from "../constants";
 
 export const IMPORT_TIMEOUT_CODE = "IMPORT_TIMEOUT";
 

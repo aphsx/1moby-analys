@@ -16,7 +16,7 @@ const RAW_END = 45;
 const CLEAN_START = 45;
 const CLEAN_END = 97;
 
-/** Map raw-only progress (5–100 from train-import-progress) → 5–45% pipeline. */
+/** Map raw-only progress (5–100 from import-progress.ts) → 5–45% pipeline. */
 export function mapRawImportProgress(rawPct: number): number {
   const clamped = Math.max(5, Math.min(100, rawPct));
   return Math.round(5 + ((clamped - 5) / 95) * (RAW_END - 5));

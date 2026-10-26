@@ -9,21 +9,21 @@ import Elysia, { t } from "elysia";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { predictDataSources, user } from "../db/schema";
-import { requireUser } from "../lib/auth-middleware";
-import { denyNotFound } from "../lib/access-control";
+import { requireUser } from "../lib/http/auth-middleware";
+import { denyNotFound } from "../lib/http/access-control";
 import { maxUploadBytes } from "../lib/constants";
-import { importPredictExcel, type PredictImportResult } from "../lib/predict-import";
-import { abortPredictDataSource } from "../lib/abort-data-source";
-import { cleanPredictFromRaw } from "../lib/predict-clean";
+import { importPredictExcel, type PredictImportResult } from "../lib/data-import/predict-import";
+import { abortPredictDataSource } from "../lib/data-import/abort-data-source";
+import { cleanPredictFromRaw } from "../lib/data-import/predict-clean";
 import { isXlsxFilename, mapDataSourceRow } from "../lib/data-import/data-source-dto";
-import { getPredictCutoffSuggestion } from "../lib/clean-cutoff";
-import { createAutoPredictionRun } from "../lib/auto-prediction-run";
+import { getPredictCutoffSuggestion } from "../lib/data-import/clean-cutoff";
+import { createAutoPredictionRun } from "../lib/ml/auto-prediction-run";
 import {
   IMPORT_TIMEOUT_CODE,
   isImportTimeoutError,
   throwIfImportAborted,
   withImportTimeout,
-} from "../lib/import-timeout";
+} from "../lib/data-import/import-timeout";
 
 const sourceSelect = {
   id: predictDataSources.id,

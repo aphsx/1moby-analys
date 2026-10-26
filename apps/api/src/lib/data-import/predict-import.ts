@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { eq } from "drizzle-orm";
 import * as XLSX from "xlsx";
-import { db } from "../db/client";
+import { db } from "../../db/client";
 import {
   predictDataSources,
   predictRawSheetBackendPayment,
@@ -17,7 +17,7 @@ import {
   predictRawSheetSmsUsageBc,
   predictRawSheetSmsUsageOtp,
   predictRawSheetUsersUserProfile,
-} from "../db/schema";
+} from "../../db/schema";
 import {
   PREDICT_IMPORT_BATCH_SIZE,
   PREDICT_REQUIRED_SHEETS,
@@ -30,7 +30,7 @@ import {
   parseSheetRows as parseSheetRowsCore,
   insertSheetRows as insertSheetRowsCore,
   type CellJson,
-} from "./data-import/excel-core";
+} from "./excel-core";
 import { throwIfImportAborted } from "./import-timeout";
 
 type RawInsertTable = PgTable;

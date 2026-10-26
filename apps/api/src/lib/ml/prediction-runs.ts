@@ -10,7 +10,7 @@ import {
   predictDataSources,
   user,
 } from "../../db/schema";
-import { requireFoundForRead } from "../../lib/access-control";
+import { requireFoundForRead } from "../http/access-control";
 import {
   EMPTY_MODEL_VERSIONS,
   num,
@@ -24,8 +24,8 @@ import {
   type RunStatus,
   type UrgencyLevel,
   type ValueTier,
-} from "../../lib/ml-contract";
-import { UUID_RE } from "../../lib/constants";
+} from "../ml-contract";
+import { UUID_RE } from "../constants";
 
 // ── Run select + row mapping ───────────────────────────────────
 

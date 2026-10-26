@@ -11,11 +11,11 @@
  * auto-run is simply skipped with a log line.
  */
 import { eq } from "drizzle-orm";
-import { db } from "../db/client";
-import { mlPredictionRuns } from "../db/schema";
-import { getPredictCutoffSuggestion } from "./clean-cutoff";
+import { db } from "../../db/client";
+import { mlPredictionRuns } from "../../db/schema";
+import { getPredictCutoffSuggestion } from "../data-import/clean-cutoff";
 import { triggerMlJob } from "./ml-internal";
-import { RUN_STATUS } from "./constants";
+import { RUN_STATUS } from "../constants";
 
 /** Prefix for auto-created run names: "Auto — {source} {YYYY-MM-DD}". */
 export const AUTO_RUN_NAME_PREFIX = "Auto";

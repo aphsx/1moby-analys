@@ -16,7 +16,7 @@
  *              the incomplete current month.
  */
 import { sql } from "drizzle-orm";
-import { db } from "../db/client";
+import { db } from "../../db/client";
 
 export type CutoffSuggestion = {
   /** Suggested cutoff in YYYY-MM-DD, or null when the source has no clean activity. */

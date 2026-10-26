@@ -1,8 +1,8 @@
 /**
  * Redis Stream progress for async train import (polled via GET /import/progress).
  */
-import type { TrainImportResult } from "./train-import";
-import type { TrainPipelineProgressEvent } from "./train-pipeline-progress";
+import type { TrainImportResult } from "../train-import";
+import type { TrainPipelineProgressEvent } from "./pipeline-progress";
 import { getRedis } from "./redis";
 
 const STREAM_TTL_SEC = 3600;

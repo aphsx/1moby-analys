@@ -142,9 +142,9 @@ were **permanently cut** — do not reintroduce them.
 
 1. A signed-in user imports predict data on `/runs` (`POST /predict-data-sources/import`) — raw + clean
    awaited inline in the request (no progress stream). Train import is the async one: it runs via
-   `train-import-orchestrator.ts` and publishes progress to Redis Stream `train-import:{source_id}`.
+   `lib/data-import/train-progress/orchestrator.ts` and publishes progress to Redis Stream `train-import:{source_id}`.
 2. On import success an **auto prediction run** is created + triggered with the suggested cutoff
-   (`apps/api/src/lib/auto-prediction-run.ts`; opt out with `auto_run: false`). Users can still
+   (`apps/api/src/lib/ml/auto-prediction-run.ts`; opt out with `auto_run: false`). Users can still
    create manual runs (`POST /prediction-runs`) with `{ predict_source_id, name, cutoff_date }`.
 3. Elysia calls FastAPI `/internal/prediction-runs` (token-gated, AbortController timeout
    `ML_INTERNAL_TIMEOUT_MS`, default 30s), which spawns `python -m src.cli.predict` detached and returns.
@@ -152,7 +152,7 @@ were **permanently cut** — do not reintroduce them.
    champion models (churn / clv / credit) → SHAP (churn) → derived fields → **batch insert** into
    `ml_prediction_outputs` (one row per customer).
 5. Run status moves `in_progress` → `completed` / `failed` (every exception ends in `failed` + `error_message`).
-   A stale-run reaper (`apps/api/src/lib/run-reaper.ts`) marks runs non-terminal for longer than
+   A stale-run reaper (`apps/api/src/lib/ml/run-reaper.ts`) marks runs non-terminal for longer than
    `STALE_RUN_TIMEOUT_MINUTES` (default 120) as failed, on startup and every 5 minutes.
 
 Training follows the same shape via `POST /training-runs` → `/internal/training-runs` → `python -m src.cli.train`.
