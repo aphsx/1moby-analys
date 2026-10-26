@@ -259,7 +259,7 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
                 )
         champions[model_type] = {
             **selected,
-            "bundle": load_artifacts(selected["artifact_path"]),
+            "bundle": load_artifacts(selected["artifact_path"], selected["artifact_checksum"]),
         }
 
     # ── Gates on the predict source ───────────────────────────────
