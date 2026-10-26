@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { validateTextToSql } from "./sql-guard";
 
-const check = (sql: string) => validateTextToSql(sql, "admin");
-
 describe("validateTextToSql", () => {
   test("accepts a modeled SELECT and applies the default LIMIT", () => {
-    const result = check(
+    const result = validateTextToSql(
       "SELECT acc_id, churn_probability FROM ml_prediction_outputs WHERE churn_probability > 0.5"
     );
     expect(result.ok).toBe(true);
@@ -13,7 +11,7 @@ describe("validateTextToSql", () => {
   });
 
   test("caps an oversized LIMIT", () => {
-    const result = check("SELECT acc_id FROM ml_prediction_outputs LIMIT 5000");
+    const result = validateTextToSql("SELECT acc_id FROM ml_prediction_outputs LIMIT 5000");
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.sql).toContain("LIMIT 100");
   });
@@ -28,6 +26,6 @@ describe("validateTextToSql", () => {
     ["an unknown function", "SELECT pg_sleep(10) FROM ml_prediction_outputs"],
     ["a dollar-quoted block", "SELECT $$x$$ FROM ml_prediction_outputs"],
   ])("rejects %s", (_label, sql) => {
-    expect(check(sql).ok).toBe(false);
+    expect(validateTextToSql(sql).ok).toBe(false);
   });
 });

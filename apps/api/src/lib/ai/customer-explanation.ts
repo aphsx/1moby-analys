@@ -8,7 +8,7 @@
  *
  * The audience wants to UNDERSTAND the customer's behaviour, not be told whom
  * to contact — there is intentionally no action/recommendation section
- * (OUTPUT-CONTRACT §5.2 removed the action workflow). Predictions appear only
+ * (there is no action workflow). Predictions appear only
  * as forward-looking context grounded in the observed numbers.
  *
  * Output sections:

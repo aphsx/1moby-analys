@@ -9,7 +9,7 @@
  *
  * Like the per-customer overview, this is descriptive — it explains WHAT the
  * base looks like and WHAT is notable, and intentionally prescribes nothing
- * (OUTPUT-CONTRACT §5.2 removed the action workflow). The human decides.
+ * (there is no action workflow). The human decides.
  *
  * One summary per run, cached in ml_prediction_runs.cohort_insight_json and
  * regenerated on demand. ~1 LLM call per run, not per customer — cheap at scale.

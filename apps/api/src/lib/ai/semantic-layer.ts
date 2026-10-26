@@ -1,5 +1,3 @@
-export type AiUserRole = "viewer" | "analyst" | "admin";
-
 export type SemanticColumn = {
   name: string;
   type: "uuid" | "text" | "integer" | "numeric" | "boolean" | "date" | "timestamp" | "json";
@@ -10,14 +8,7 @@ export type SemanticColumn = {
 export type SemanticTable = {
   name: string;
   description: string;
-  minimumRole: AiUserRole;
   columns: SemanticColumn[];
-};
-
-export const ROLE_RANK: Record<AiUserRole, number> = {
-  viewer: 1,
-  analyst: 2,
-  admin: 3,
 };
 
 export const AI_SQL_DEFAULT_LIMIT = 50;
@@ -27,7 +18,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "predict_data_sources",
     description: "Uploaded prediction datasets and import/clean status.",
-    minimumRole: "viewer",
     columns: [
       { name: "id", type: "uuid", description: "Prediction data source id." },
       { name: "name", type: "text", description: "Human-readable data source name." },
@@ -42,7 +32,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "predict_clean_customers",
     description: "Clean customer profile rows for prediction datasets.",
-    minimumRole: "analyst",
     columns: [
       { name: "source_id", type: "uuid", description: "Prediction data source id." },
       { name: "acc_id", type: "integer", description: "1Moby customer account id." },
@@ -60,7 +49,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "predict_clean_payments",
     description: "Clean customer payment and top-up transactions for prediction datasets.",
-    minimumRole: "analyst",
     columns: [
       { name: "source_id", type: "uuid", description: "Prediction data source id." },
       { name: "acc_id", type: "integer", description: "1Moby customer account id." },
@@ -73,7 +61,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "predict_clean_usage",
     description: "Clean monthly usage rows by account, channel, and usage source.",
-    minimumRole: "analyst",
     columns: [
       { name: "source_id", type: "uuid", description: "Prediction data source id." },
       { name: "acc_id", type: "integer", description: "1Moby customer account id." },
@@ -87,7 +74,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "ml_prediction_runs",
     description: "ML prediction run catalog and run status.",
-    minimumRole: "viewer",
     columns: [
       { name: "id", type: "uuid", description: "Prediction run id." },
       { name: "predict_source_id", type: "uuid", description: "Prediction data source id used for the run." },
@@ -102,7 +88,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "ml_prediction_outputs",
     description: "Per-customer ML prediction outputs: churn, lifecycle, CLV, credit forecast, and recommended action.",
-    minimumRole: "analyst",
     columns: [
       { name: "prediction_run_id", type: "uuid", description: "Prediction run id." },
       { name: "acc_id", type: "integer", description: "1Moby customer account id." },
@@ -135,18 +120,13 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   },
 ];
 
-export function getAiUserRole(): AiUserRole {
-  const role = process.env.AI_CHAT_DEFAULT_ROLE?.trim().toLowerCase();
-  if (role === "admin" || role === "analyst" || role === "viewer") return role;
-  return "admin";
+/** Every modeled table; access is org-wide, so the AI may query all of them. */
+export function getAllowedTables(): SemanticTable[] {
+  return SEMANTIC_TABLES;
 }
 
-export function getAllowedTables(role: AiUserRole): SemanticTable[] {
-  return SEMANTIC_TABLES.filter((table) => ROLE_RANK[role] >= ROLE_RANK[table.minimumRole]);
-}
-
-export function renderSemanticLayerForPrompt(role: AiUserRole): string {
-  return getAllowedTables(role)
+export function renderSemanticLayerForPrompt(): string {
+  return getAllowedTables()
     .map((table) => {
       const columns = table.columns
         .filter((column) => !column.sensitive)

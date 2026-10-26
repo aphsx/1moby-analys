@@ -1,5 +1,5 @@
 /**
- * [NEW] Predict raw import — faithful row_payload per sheet into predict_* tables.
+ * Predict raw import — faithful row_payload per sheet into predict_* tables.
  * Each upload is a new snapshot (no merge with prior sources). No checksum dedupe.
  */
 import { createHash } from "node:crypto";

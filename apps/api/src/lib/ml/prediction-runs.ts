@@ -2,7 +2,7 @@
  * Shared helpers for prediction-runs sub-routes.
  * Not a route file — imported by runs.ts, outputs.ts, summary.ts, customer-360.ts.
  */
-import { and, eq, type SQL } from "drizzle-orm";
+import { eq, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import {
   mlPredictionOutputs,
@@ -214,4 +214,3 @@ export interface OutputsQueryParams {
   needs_review?: string;
 }
 
-export { mlPredictionOutputs, mlPredictionRuns, predictDataSources, user, db, eq, and };

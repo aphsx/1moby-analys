@@ -1,5 +1,5 @@
 /**
- * [NEW] Train raw data API — import 8-sheet Excel into train_data_sources + train_raw_sheet_*.
+ * Train raw data API — import 8-sheet Excel into train_data_sources + train_raw_sheet_*.
  *
  * Org-shared model: reads are org-wide; any authenticated user can import and
  * delete a source.

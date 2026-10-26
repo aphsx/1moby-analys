@@ -1,6 +1,6 @@
 /**
- * Shared auth contract — single source of truth for the authenticated user
- * shape and the extra profile fields populated from the Google OAuth profile.
+ * Shared auth contract: the extra user profile fields populated from the
+ * Google OAuth profile.
  *
  * Consumed by:
  *  - apps/api  → Better Auth `user.additionalFields` (server)

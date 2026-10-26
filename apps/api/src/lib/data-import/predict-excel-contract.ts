@@ -1,7 +1,6 @@
 /**
- * [NEW] Predict raw Excel contract — same 8 sheets + required headers as train.
+ * Predict raw Excel contract — same 8 sheets + required headers as train.
  * Extra columns are allowed; every SHEET_REQUIRED_HEADERS name must be present.
- * Legacy raw_customers/payments/usage removed (see 004_drop_legacy_raw_tables.sql).
  */
 export {
   TRAIN_REQUIRED_SHEETS as PREDICT_REQUIRED_SHEETS,

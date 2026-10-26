@@ -1,6 +1,6 @@
 /**
  * Shared Excel parsing utilities used by both train-import and predict-import.
- * Pure functions — no DB, no side effects.
+ * Parsing is pure; insertSheetRows writes the parsed rows in batches.
  */
 import * as XLSX from "xlsx";
 import type { PgTable } from "drizzle-orm/pg-core";

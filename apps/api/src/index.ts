@@ -43,13 +43,13 @@ const app = new Elysia()
   .use(predictDataRoutes)
   // Isolated LLM chat API. UI wiring will be rebuilt separately.
   .use(aiChatRoutes)
-  // ML v2 — prediction runs + outputs/summary (spec §4/§7)
+  // Prediction runs, their outputs and summaries
   .use(predictionRunRoutes)
-  // ML v2 — training runs (spec §2.6)
+  // Training runs
   .use(trainingRunRoutes)
-  // ML v2 — champion model performance (spec §2.4)
+  // Champion model performance
   .use(modelPerformanceRoutes)
-  // ML v2 — realized-outcome backfill trigger (TRAINING-PIPELINE §15)
+  // Realized-outcome backfill trigger
   .use(outcomeBackfillRoutes)
   .get("/health", () => {
     return {

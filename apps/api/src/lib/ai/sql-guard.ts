@@ -1,7 +1,6 @@
 import {
   AI_SQL_DEFAULT_LIMIT,
   AI_SQL_MAX_LIMIT,
-  type AiUserRole,
   getAllowedTables,
 } from "./semantic-layer";
 
@@ -171,7 +170,7 @@ function outputAliases(sql: string): Set<string> {
   return aliases;
 }
 
-export function validateTextToSql(sql: string, role: AiUserRole): SqlValidationResult {
+export function validateTextToSql(sql: string): SqlValidationResult {
   const normalized = normalizeSql(sql);
   const warnings: string[] = [];
 
@@ -193,7 +192,7 @@ export function validateTextToSql(sql: string, role: AiUserRole): SqlValidationR
     }
   }
 
-  const allowedTables = getAllowedTables(role);
+  const allowedTables = getAllowedTables();
   const allowedTableNames = new Set(allowedTables.map((table) => table.name));
   const usedTables = referencedTables(normalized);
   if (usedTables.length === 0) {
@@ -201,7 +200,7 @@ export function validateTextToSql(sql: string, role: AiUserRole): SqlValidationR
   }
   for (const tableName of usedTables) {
     if (!allowedTableNames.has(tableName)) {
-      return { ok: false, reason: `Table is not allowed for this role: ${tableName}.` };
+      return { ok: false, reason: `Table is not allowed: ${tableName}.` };
     }
   }
 

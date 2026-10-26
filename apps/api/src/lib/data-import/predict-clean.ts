@@ -1,5 +1,5 @@
 /**
- * [NEW] Predict clean — ETL from predict_raw_sheet_* → predict_clean_* per upload/run.
+ * Predict clean — ETL from predict_raw_sheet_* → predict_clean_* per upload/run.
  * Same parse + lineage rules as train clean; ML semantics stay in Python.
  */
 import { eq } from "drizzle-orm";

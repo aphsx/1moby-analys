@@ -17,7 +17,6 @@ import { complete, type ChatMessage } from "./llm-client";
 import { extractJsonObject } from "./json";
 import {
   renderSemanticLayerForPrompt,
-  type AiUserRole,
 } from "./semantic-layer";
 import { validateTextToSql } from "./sql-guard";
 import { executeReadOnlySql, type QueryResultPreview } from "./sql-executor";
@@ -50,7 +49,6 @@ export type SqlAgentEvent =
 export type SqlAgentOptions = {
   question: string;
   history: ChatMessage[];
-  role: AiUserRole;
   scope: UserScope;
   boundRun: BoundRun | null;
 };
@@ -110,7 +108,7 @@ function isGreetingOrChitchat(question: string): boolean {
 }
 
 function buildPlannerMessages(opts: SqlAgentOptions, feedback: string | null): ChatMessage[] {
-  const semanticLayer = renderSemanticLayerForPrompt(opts.role);
+  const semanticLayer = renderSemanticLayerForPrompt();
   const historyText = opts.history
     .slice(-PLANNER_HISTORY_TURNS)
     .map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 800)}`)
@@ -237,7 +235,7 @@ export async function* runSqlAgent(opts: SqlAgentOptions): AsyncGenerator<SqlAge
     };
 
     // Guard: read-only SELECT over modeled tables/columns.
-    const guard = validateTextToSql(decision.sql, opts.role);
+    const guard = validateTextToSql(decision.sql);
     if (!guard.ok) {
       feedback = guard.reason;
       continue;

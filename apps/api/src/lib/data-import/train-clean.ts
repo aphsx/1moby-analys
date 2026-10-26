@@ -1,5 +1,5 @@
 /**
- * [NEW] Train clean — ETL from train_raw_sheet_* → train_clean_* for model training.
+ * Train clean — ETL from train_raw_sheet_* → train_clean_* for model training.
  * Parse + lineage only; ML rules (period, labels) stay in Python.
  */
 import { eq } from "drizzle-orm";

@@ -73,7 +73,7 @@ function uuidsIn(sql: string): string[] {
 }
 
 /**
- * Enforce that `sql` only reads the user's own rows (and, when set, only the
+ * Enforce that `sql` only reads known org rows (and, when set, only the
  * bound run). Returns a feedback `reason` on rejection so the agent can retry.
  */
 export function enforceScope(
@@ -90,14 +90,14 @@ export function enforceScope(
   const allowedSources = new Set(scope.sourceIds.map((id) => id.toLowerCase()));
   const present = uuidsIn(lower);
 
-  // No foreign ids: every UUID literal must be one of the user's own ids.
+  // No foreign ids: every UUID literal must be a known run or source id.
   for (const id of present) {
     if (!allowedRuns.has(id) && !allowedSources.has(id)) {
       return {
         ok: false,
         reason:
-          "Query references an id that does not belong to this user. " +
-          "Only filter by the user's own run/source ids.",
+          "Query references an unknown id. " +
+          "Only filter by existing prediction run / predict source ids.",
       };
     }
   }
@@ -111,7 +111,7 @@ export function enforceScope(
         ok: false,
         reason:
           "Queries on ml_prediction_runs / ml_prediction_outputs must filter by " +
-          "the user's own prediction run id (e.g. prediction_run_id IN (...)).",
+          "a known prediction run id (e.g. prediction_run_id IN (...)).",
       };
     }
     if (boundRunId && !presentSet.has(boundRunId.toLowerCase())) {
@@ -130,7 +130,7 @@ export function enforceScope(
         ok: false,
         reason:
           "Queries on predict_clean_* / predict_data_sources must filter by the " +
-          "user's own source id (source_id = '...').",
+          "known predict source id (source_id = '...').",
       };
     }
   }

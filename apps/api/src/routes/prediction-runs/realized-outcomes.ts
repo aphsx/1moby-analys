@@ -1,5 +1,5 @@
 /**
- * Realized outcomes for one prediction run (TRAINING-PIPELINE §15).
+ * Realized outcomes for one prediction run.
  *
  * The outcome-backfill job (apps/ml/src/outcomes/) writes production_holdout
  * rows into ml_model_evaluations linked to the run via prediction_run_id.

@@ -346,7 +346,7 @@ export const predictCleanUsage = pgTable(
   ]
 );
 
-// ── [NEW] ML v2 — training, model registry, evaluation, prediction outputs ──
+// ── ML v2 — training, model registry, evaluation, prediction outputs ──
 
 export const mlTrainingRuns = pgTable(
   "ml_training_runs",
@@ -541,7 +541,7 @@ export const mlModelEvaluations = pgTable(
     trainingRunId: uuid("training_run_id").notNull().references(() => mlTrainingRuns.id, {
       onDelete: "cascade",
     }),
-    // Realized-outcome loop (TRAINING-PIPELINE §15): set on production_holdout rows.
+    // Realized-outcome loop: set on production_holdout rows.
     predictionRunId: uuid("prediction_run_id").references(() => mlPredictionRuns.id, {
       onDelete: "cascade",
     }),

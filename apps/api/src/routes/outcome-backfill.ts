@@ -1,5 +1,5 @@
 /**
- * Realized-outcome backfill trigger (TRAINING-PIPELINE §15).
+ * Realized-outcome backfill trigger.
  *
  * Any authenticated user: proxies to FastAPI /internal/outcome-backfill, which spawns
  * `python -m src.cli.backfill_outcomes`. The job finds completed prediction

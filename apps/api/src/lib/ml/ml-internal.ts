@@ -1,5 +1,5 @@
 /**
- * [NEW] Elysia → FastAPI internal job trigger (ML v2).
+ * Elysia → FastAPI internal job trigger (ML v2).
  *
  * The ML service authenticates internal calls with the shared
  * INTERNAL_SERVICE_TOKEN (see apps/ml/api/main.py).

@@ -21,7 +21,6 @@ import { eq, desc } from "drizzle-orm";
 import { complete, stream, LLMError, type ChatMessage } from "./llm-client";
 import { getLLMConfig, isLLMConfigured } from "./llm-config";
 import { checkUserQuestionSafety } from "./safety";
-import { getAiUserRole } from "./semantic-layer";
 import { loadUserScope } from "./scope";
 import { runSqlAgent, type BoundRun, type SqlAgentResult } from "./sql-agent";
 import {
@@ -211,12 +210,11 @@ export async function* orchestrate(opts: OrchestratorOptions): AsyncGenerator<st
 
   // Resolve + ownership-check the bound run.
   const boundRun = await resolveBoundRun(opts.boundRunId);
-  const role = getAiUserRole();
   const scope = await loadUserScope(opts.userId);
 
   // Self-correcting Text-to-SQL agent.
   let result: SqlAgentResult | null = null;
-  for await (const ev of runSqlAgent({ question: opts.userMessage, history, role, scope, boundRun })) {
+  for await (const ev of runSqlAgent({ question: opts.userMessage, history, scope, boundRun })) {
     if (ev.type === "thinking") {
       yield sseThinking(ev.step, ev.message);
     } else {
