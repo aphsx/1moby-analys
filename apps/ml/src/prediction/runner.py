@@ -205,6 +205,12 @@ def run_prediction(prediction_run_id: str) -> None:
         _run_prediction_inner(prediction_run_id)
     except Exception as exc:  # noqa: BLE001 - §6.8: never leave a run in_progress.
         logger.exception("prediction run %s failed", prediction_run_id)
+        # Outputs may already be committed (the post-check runs after the insert); a failed
+        # run must not leave rows that the outputs routes and the AI SQL agent would read.
+        try:
+            _delete_outputs(prediction_run_id)
+        except Exception:  # noqa: BLE001 - the run is still marked failed below.
+            logger.exception("could not delete outputs of failed prediction run %s", prediction_run_id)
         _update_run(
             prediction_run_id,
             status=RunStatus.FAILED,
@@ -1156,6 +1162,14 @@ OUTPUT_COLUMNS = [
     "model_versions_json",
     "profile_snapshot_json",
 ]
+
+
+def _delete_outputs(prediction_run_id: str) -> None:
+    with create_engine(database_url()).begin() as conn:
+        conn.execute(
+            text("DELETE FROM ml_prediction_outputs WHERE prediction_run_id = CAST(:run_id AS UUID)"),
+            {"run_id": prediction_run_id},
+        )
 
 
 def _replace_outputs(prediction_run_id: str, rows: list[dict[str, Any]]) -> None:
