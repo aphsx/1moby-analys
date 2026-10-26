@@ -418,7 +418,6 @@ export const mlModelVersions = pgTable(
     labelDefinitionJson: jsonb("label_definition_json"),
     trainingDataSnapshotJson: jsonb("training_data_snapshot_json"),
     modelCardJson: jsonb("model_card_json"),
-    modelCardPath: text("model_card_path"),
     isActive: boolean("is_active").notNull().default(false),
     activatedAt: timestamp("activated_at", { withTimezone: true }),
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
@@ -560,9 +559,7 @@ export const mlModelEvaluations = pgTable(
     calibrationJson: jsonb("calibration_json"),
     liftTableJson: jsonb("lift_table_json"),
     featureImportanceJson: jsonb("feature_importance_json"),
-    errorAnalysisJson: jsonb("error_analysis_json"),
     businessMetricsJson: jsonb("business_metrics_json"),
-    artifactPath: text("artifact_path"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`NOW()`),
   },
   (t) => [
