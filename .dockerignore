@@ -9,7 +9,6 @@ dist
 .turbo
 **/.turbo
 *.tsbuildinfo
-apps/web/bun.lock
 
 # unrelated services
 apps/ml

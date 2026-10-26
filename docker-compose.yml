@@ -2,7 +2,7 @@ services:
   db:
     # pgvector/pgvector:pg15 is the official Postgres 15 image with the `vector`
     # extension preinstalled (drop-in replacement for postgres:15-alpine).
-    # Required by AI Chat v2 RAG (ai_knowledge_chunks.embedding).
+    # Kept for the planned AI chat RAG; no table uses `vector` yet.
     image: pgvector/pgvector:pg15
     restart: unless-stopped
     env_file:
@@ -50,11 +50,8 @@ services:
       - "8001:8000"
     volumes:
       - ./models:/app/models
-      - ./data:/data
     depends_on:
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""]
@@ -72,8 +69,6 @@ services:
       - .env
     ports:
       - "3001:3001"
-    volumes:
-      - ./models:/app/models   # needed for /model-metrics and /training-log
     depends_on:
       db:
         condition: service_healthy
