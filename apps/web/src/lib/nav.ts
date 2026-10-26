@@ -68,6 +68,14 @@ export function shouldShowRunSelector(pathname: string): boolean {
   return pathname === "/" || pathname === "/customers" || pathname.startsWith("/customers/");
 }
 
+/** Pages that render their own PageHeader (with a finding and a primary action). */
+const OWN_HEADER_ROUTES = ["/"];
+
+/** The shell renders the page header unless the page owns it or is the full-height AI chat. */
+export function shellRendersPageHeader(pathname: string): boolean {
+  return !OWN_HEADER_ROUTES.includes(pathname) && !isAiChatRoute(pathname);
+}
+
 /** The AI chat page fills the canvas height itself, so it gets no page header or floating widget. */
 export function isAiChatRoute(pathname: string): boolean {
   return pathname.startsWith("/ai-chat");

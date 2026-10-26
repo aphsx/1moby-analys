@@ -64,7 +64,7 @@ const FEATURE_LABELS: Record<string, string> = {
 };
 
 /** Fallback: snake_case → spaced, capitalised words. */
-function humanizeFeature(feature: string): string {
+export function humanizeFeature(feature: string): string {
   return (
     FEATURE_LABELS[feature] ??
     feature

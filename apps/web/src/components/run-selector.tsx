@@ -25,7 +25,7 @@ export function RunScope() {
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <label className="flex min-w-0 items-center gap-2 text-small text-muted">
+      <label className="flex min-w-0 items-center gap-2 whitespace-nowrap text-small text-muted">
         รอบทำนาย
         <Select
           value={runId}

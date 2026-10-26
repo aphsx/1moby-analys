@@ -9,7 +9,7 @@ import { GlobalStatusDialogHost } from "./global-status-dialog-host";
 import { RunScope } from "./run-selector";
 import { RunUrlSync } from "./run-url-sync";
 import { PageHeader } from "./ui";
-import { getRouteTitle, isAiChatRoute, isBareRoute, shouldShowRunSelector } from "@/lib/nav";
+import { getRouteTitle, isAiChatRoute, isBareRoute, shellRendersPageHeader, shouldShowRunSelector } from "@/lib/nav";
 
 /**
  * App frame (docs/ui/DESIGN.md §5): no top bar from 860px up; below that a 48px bar with the page
@@ -70,7 +70,7 @@ export default function Shell({ children }: { children: ReactNode }) {
             {title ? <span className="min-w-0 truncate text-body font-semibold text-text">{title}</span> : null}
           </header>
           <main className="flex-1 overflow-y-auto">
-            {!aiChat && title ? (
+            {shellRendersPageHeader(pathname) && title ? (
               <PageHeader title={title} scope={showRunSelector ? <RunScope /> : undefined} />
             ) : null}
             <Suspense fallback={<div className="p-8 text-muted">กำลังโหลด…</div>}>{children}</Suspense>

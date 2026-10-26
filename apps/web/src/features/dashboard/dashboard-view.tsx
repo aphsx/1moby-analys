@@ -1,112 +1,167 @@
 "use client";
-
+/**
+ * Overview page (UI plan phase 2). Its question: which revenue is at risk, and who holds it.
+ * The largest block (RiskMap) answers it; the KPI strip and the rail support it.
+ */
+import Link from "next/link";
 import { type RunSummary } from "@moby/types";
-import {
-  CalendarClock,
-  CreditCard,
-  Gem,
-  ShieldCheck,
-  TrendingDown,
-  Users,
-} from "lucide-react";
-import { formatBahtCompact, formatCount, formatCredits, formatPercent } from "@/lib/format";
-import { CreditUrgencyCard } from "./credit-urgency-card";
-import { LifecycleMixCard } from "./lifecycle-mix-card";
-import { MetricCard } from "./metric-card";
-import { MonthlyRevenueCard } from "./monthly-revenue-card";
-import { RiskCard } from "./risk-card";
-import { TopPriorityCard } from "./top-priority-card";
-import { ValueCard } from "./value-card";
-import { ValueRiskMatrixCard } from "./value-risk-matrix-card";
-import { RunInsightCard } from "./run-insight-card";
-import { TEXT_SAFE } from "./palette";
-import { fromRunSummary } from "./types";
+import { RunScope } from "@/components/run-selector";
+import { BUTTON, Delta, EmptyState, KpiStrip, PageHeader, Skeleton } from "@/components/ui";
+import { fetchRunSummary } from "@/lib/ml-api";
+import { formatBahtCompact, formatCount, formatDate, formatPercent } from "@/lib/format";
+import { getRouteTitle } from "@/lib/nav";
+import { getDisplayError } from "@/lib/ui-error";
+import { useAsync } from "@/lib/use-async";
+import { useActiveRun } from "@/stores/run-store";
+import { AiSummaryLine } from "./ai-summary-line";
+import { MonthlyRevenue } from "./monthly-revenue";
+import { CallFirstList, TopupUrgency } from "./overview-rail";
+import { assertAtRiskMatches, overviewModel, type OverviewModel } from "./overview-model";
+import { RiskMap } from "./risk-map";
 
-export function DashboardView({ summary, runId }: { summary: RunSummary; runId: string }) {
-  const { overview, monthlyRevenue } = fromRunSummary(summary);
-  const activeHighRiskPct =
-    overview.active_churn.base_customers > 0
-      ? (overview.active_churn.high / overview.active_churn.base_customers) * 100
-      : 0;
+const TITLE = getRouteTitle("/") ?? "";
+
+export function DashboardView() {
+  const { run, runId, loading: runsLoading } = useActiveRun();
+  const loaded = useAsync(() => fetchRunSummary(runId), [runId], Boolean(runId));
+  const summary = loaded.data;
+  const model = summary ? overviewModel(summary) : null;
+  if (summary && model) assertAtRiskMatches(model, summary);
+
+  const callFirstHref = `/customers?run=${encodeURIComponent(runId)}&customer_value_tier=high&churn_risk_level=high,critical&sort=revenue_at_risk:desc`;
+
+  let body;
+  if (!runsLoading && !run) {
+    body = (
+      <EmptyState
+        title="ยังไม่มีผลทำนาย"
+        hint="อัปโหลดข้อมูลแล้วสร้างรอบทำนายแรกได้ที่ “รอบทำนาย”"
+        action={<Link href="/runs" className={BUTTON.primary}>สร้างรอบทำนาย</Link>}
+      />
+    );
+  } else if (loaded.error) {
+    body = (
+      <div className="rounded-card border border-border bg-surface p-5 text-body text-text">
+        โหลดภาพรวมไม่สำเร็จ: {getDisplayError(loaded.error, "เกิดข้อผิดพลาด")}{" "}
+        <button type="button" onClick={loaded.reload} className="text-accent-ink underline underline-offset-2">
+          ลองอีกครั้ง
+        </button>
+      </div>
+    );
+  } else if (!summary || !model) {
+    body = <OverviewSkeleton />;
+  } else {
+    body = <OverviewBody summary={summary} model={model} runId={runId} callFirstHref={callFirstHref} />;
+  }
 
   return (
-    <main className="min-w-0 px-4 py-6 pb-12 sm:px-6 lg:px-8">
-      {/* Active-run banner — the dashboard auto-selects the latest completed run;
-          switch to older runs via the run selector in the top-right header. */}
-      <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="type-display text-[22px] leading-tight">
-          ข้อมูล ณ วันที่ {overview.run.cutoff_date}
-        </h2>
-        <span className="min-w-0 truncate text-[13px] text-[color:var(--ink-4)]">
-          Run: {overview.run.name} — เปลี่ยน run เก่าได้จากตัวเลือกมุมขวาบน
-        </span>
+    <>
+      <PageHeader
+        title={TITLE}
+        finding={
+          model ? (
+            <>
+              <p>{finding(model)}</p>
+              <AiSummaryLine runId={runId} />
+            </>
+          ) : undefined
+        }
+        action={
+          model && model.callFirst.count > 0 ? (
+            <Link href={callFirstHref} className={BUTTON.primary}>
+              เปิดรายชื่อ {formatCount(model.callFirst.count)} ราย
+            </Link>
+          ) : undefined
+        }
+        scope={<RunScope />}
+      />
+      <div className="px-4 pb-12 pt-6 sm:px-6 lg:px-8">{body}</div>
+    </>
+  );
+}
+
+/** One sentence about the data, not about the screen (docs/ui/CONTENT.md §1). */
+function finding(m: OverviewModel): string {
+  if (m.atRisk <= 0) return "รอบนี้ยังไม่มีรายได้ที่เสี่ยงหาย";
+  const tier = `${formatPercent(m.highTier.share)} ของรายได้ที่เสี่ยงหายอยู่กับลูกค้ามูลค่าสูง ${formatCount(m.highTier.count)} ราย`;
+  if (m.callFirst.count === 0) return `${tier} ไม่มีรายใดเสี่ยงสูง`;
+  return `${tier} ในนั้น ${formatCount(m.callFirst.count)} รายเสี่ยงสูงขึ้นไป`;
+}
+
+// Grid at 1440: 1440 − 232 sidebar − 64 padding = 1144; main = 1144 − 384 rail − 24 gap = 736.
+// Below 1180 the rail drops under the main column.
+const GRID = "grid gap-6 min-[1180px]:grid-cols-[minmax(0,1fr)_384px]";
+
+function OverviewBody({
+  summary,
+  model,
+  runId,
+  callFirstHref,
+}: {
+  summary: RunSummary;
+  model: OverviewModel;
+  runId: string;
+  callFirstHref: string;
+}) {
+  const cutoff = formatDate(summary.run.cutoff_date);
+  return (
+    <div className={GRID}>
+      <div className="min-w-0 space-y-6">
+        <KpiStrip
+          items={[
+            {
+              label: "รายได้ที่เสี่ยงหาย",
+              lead: true,
+              value: formatBahtCompact(model.atRisk),
+              caption: `จากมูลค่า 6 เดือน ${formatBahtCompact(model.clvTotal)}`,
+              info: `ผลรวมของ โอกาสเลิกใช้ × มูลค่าที่คาดว่าจะจ่ายใน 6 เดือน ของลูกค้า ${formatCount(model.scored)} รายที่มีคะแนน อีก ${formatCount(model.unscored)} รายใช้งานไม่ถึง 90 วัน ยังไม่มีคะแนน`,
+            },
+            {
+              label: "รายได้ 12 เดือน",
+              value: formatBahtCompact(model.revenue12m),
+              caption: <Delta value={model.revenueChange} base="จากปีก่อน" />,
+              info: "ยอดเติมเครดิตรวม 12 เดือนก่อนวันตัดข้อมูล จากตารางการชำระเงิน เทียบกับ 12 เดือนก่อนหน้านั้น",
+            },
+            {
+              label: "ไม่มีการใช้งาน",
+              value: formatCount(model.paidNoUsage),
+              unit: "ราย",
+              caption: `จากลูกค้าที่จ่ายเงิน ${formatCount(model.paidCustomers)} ราย`,
+              info: "ลูกค้าที่ใช้งานและจ่ายเงิน แต่ไม่ได้ส่งข้อความเลยใน 180 วันก่อนวันตัดข้อมูล",
+            },
+            {
+              label: "ต้องเติมเครดิตใน 14 วัน",
+              value: formatCount(summary.credit.by_urgency.critical),
+              unit: "ราย",
+              caption: `ใน 7 วัน ${formatCount(summary.credit.topup_due_7d)} ราย`,
+              info: `วันที่คาดว่าลูกค้าจะเติมเครดิตครั้งถัดไป ทำนายจากรอบการเติมเงินที่ผ่านมา นับจากวันตัดข้อมูล ${cutoff}`,
+            },
+          ]}
+        />
+        <RiskMap model={model} thresholds={summary.churn.thresholds} runId={runId} />
       </div>
+      <aside className="space-y-6" aria-label="รายการที่ต้องดูแล">
+        <CallFirstList rows={summary.top_priority} total={model.callFirst.count} listHref={callFirstHref} runId={runId} />
+        <TopupUrgency credit={summary.credit} runId={runId} />
+        {/* in the rail so main and rail end near each other (DESIGN.md §5) */}
+        <MonthlyRevenue model={model} />
+      </aside>
+    </div>
+  );
+}
 
-      <div className="mb-6">
-        <RunInsightCard runId={runId} />
+function OverviewSkeleton() {
+  return (
+    <div className={GRID}>
+      <div className="min-w-0 space-y-6">
+        <Skeleton className="h-[124px]" />
+        <Skeleton className="h-[540px]" />
       </div>
-
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard
-          icon={Users}
-          label="Total customers"
-          value={formatCount(overview.totals.customers)}
-          hint={`run cutoff ${overview.run.cutoff_date}`}
-          tone="brand"
-        />
-        <MetricCard
-          icon={Gem}
-          label="Avg monthly value"
-          value={formatBahtCompact(overview.monthly_value.avg_monthly_revenue)}
-          hint={`${overview.monthly_value.months}-month avg from payment history (actual)`}
-          tone="warn"
-        />
-        <MetricCard
-          icon={TrendingDown}
-          label="Active high risk"
-          value={formatCount(overview.active_churn.high)}
-          hint={`${formatPercent(activeHighRiskPct / 100, 1)} of churn-eligible (active paid) — forecast`}
-          tone="danger"
-        />
-        <MetricCard
-          icon={CreditCard}
-          label="Revenue at risk"
-          value={formatBahtCompact(overview.totals.revenue_at_risk)}
-          hint="expected 6m loss across active paid — forecast"
-          tone="warn"
-        />
-        <MetricCard
-          icon={CalendarClock}
-          label="30d credit demand"
-          value={formatCredits(overview.credit.predicted_usage_30d)}
-          hint="การคาดการณ์ความต้องการในการใช้งาน SMS/Email"
-          tone="brand"
-        />
-      </section>
-
-      <section className="mt-6 space-y-6">
-        <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(340px,0.8fr)_minmax(0,1.2fr)]">
-          <LifecycleMixCard overview={overview} />
-          <MonthlyRevenueCard data={monthlyRevenue} />
-        </div>
-        <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-3">
-          <RiskCard overview={overview} />
-          <ValueCard overview={overview} />
-          <CreditUrgencyCard overview={overview} />
-        </div>
-        <ValueRiskMatrixCard summary={summary} runId={runId} />
-        <TopPriorityCard summary={summary} runId={runId} />
-      </section>
-
-      <section className="surface mt-6 p-4">
-        <div className={`flex min-w-0 flex-wrap items-center gap-3 text-[11px] text-[color:var(--ink-5)] ${TEXT_SAFE}`}>
-          <ShieldCheck size={12} />
-          Run: {overview.run.name} · cutoff {overview.run.cutoff_date}
-          <span className="opacity-50">·</span>
-          Models: churn {summary.model_versions.churn} / clv {summary.model_versions.clv} / credit{" "}
-          {summary.model_versions.credit}
-        </div>
-      </section>
-    </main>
+      <div className="space-y-6">
+        <Skeleton className="h-[400px]" />
+        <Skeleton className="h-[180px]" />
+        <Skeleton className="h-[340px]" />
+      </div>
+    </div>
   );
 }

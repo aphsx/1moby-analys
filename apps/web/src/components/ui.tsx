@@ -26,7 +26,7 @@ export function PageHeader({
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h1 className="text-[24px] font-semibold leading-[1.25] text-text min-[860px]:text-title">{title}</h1>
-          {finding ? <p className="mt-1 max-w-[64ch] text-body text-muted">{finding}</p> : null}
+          {finding ? <div className="mt-1 max-w-[64ch] text-body text-muted">{finding}</div> : null}
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </div>
@@ -34,6 +34,17 @@ export function PageHeader({
     </header>
   );
 }
+
+/* ────────────────────────────────────────── */
+/*  Buttons (§6.8): one primary per page      */
+/* ────────────────────────────────────────── */
+const BUTTON_BASE =
+  "inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-control px-3 text-body font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 max-[859px]:h-11";
+export const BUTTON = {
+  primary: `${BUTTON_BASE} bg-primary text-primary-ink hover:opacity-90`,
+  secondary: `${BUTTON_BASE} border border-control bg-surface text-text hover:bg-raised`,
+  ghost: `${BUTTON_BASE} text-text hover:bg-raised`,
+} as const;
 
 /* ────────────────────────────────────────── */
 /*  SectionCard (replaced by Panel page by page) */
@@ -96,8 +107,8 @@ export function Panel({
   return (
     <section className={`surface rounded-card p-5 ${className}`}>
       {(title || right) && (
-        <header className="mb-4 flex items-start justify-between gap-4">
-          <div className="min-w-0">
+        <header className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="min-w-0 flex-[1_1_220px]">
             {title ? (
               <h2 className="flex items-center gap-1 text-section font-semibold leading-snug text-text">
                 {title}
@@ -144,7 +155,7 @@ export function InfoTip({ label, children, align = "left" }: { label: string; ch
         onClick={() => setOpen((v) => !v)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-control text-faint transition-colors duration-150 hover:text-text focus-visible:text-text max-[859px]:h-11 max-[859px]:w-11"
+        className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-control text-faint transition-colors duration-150 after:absolute after:-inset-2 after:content-[''] hover:text-text focus-visible:text-text"
       >
         <Info size={14} aria-hidden />
       </button>
