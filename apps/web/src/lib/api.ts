@@ -7,12 +7,7 @@
  */
 
 import type { TrainDataSource, PredictDataSource } from "@moby/types";
-import {
-  IS_ML_MOCK,
-  isApiError,
-  loadMlMock as mockMl,
-  redirectingFetch as apiFetch,
-} from "./http";
+import { isApiError, redirectingFetch as apiFetch } from "./http";
 export type { TrainDataSource, PredictDataSource };
 
 /** Must stay in sync with apps/api DEFAULT_IMPORT_TIMEOUT_MS (10 minutes). */
@@ -325,25 +320,6 @@ export function uploadTrainDataFileWithProgress(
   })();
 }
 
-/** JSON import (no progress stream) — prefer uploadTrainDataFileWithProgress in UI. */
-export async function uploadTrainDataFile(
-  file: File,
-  name: string,
-  client_label?: string
-): Promise<TrainImportDone> {
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("name", name);
-  if (client_label) fd.append("client_label", client_label);
-
-  const res = await apiFetch("/api/train-data-sources/import", { method: "POST", body: fd });
-  const body = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(isApiError(body) ? body.message : `Import failed (${res.status})`);
-  }
-  return body as TrainImportDone;
-}
-
 // Predict raw data import
 // predict_data_sources + predict_raw_sheet_* + predict_clean_*.
 
@@ -359,7 +335,6 @@ export interface PredictImportDone {
 }
 
 export async function fetchPredictDataSources(): Promise<PredictDataSource[]> {
-  if (IS_ML_MOCK) return (await mockMl()).mockPredictDataSources();
 
   const res = await apiFetch("/api/predict-data-sources");
   const body = await parseJson(res);
@@ -371,28 +346,12 @@ export async function fetchPredictDataSources(): Promise<PredictDataSource[]> {
   return asArray<PredictDataSource>(body);
 }
 
-export async function fetchPredictDataSource(id: string): Promise<PredictDataSource> {
-  if (IS_ML_MOCK) return (await mockMl()).mockPredictDataSource(id);
-
-  const res = await apiFetch(`/api/predict-data-sources/${id}`);
-  const body = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(
-      isApiError(body) ? body.message : `Failed to load predict data source (${res.status})`
-    );
-  }
-  return body as PredictDataSource;
-}
-
 export async function uploadPredictDataFile(
   file: File,
   name?: string,
   client_label?: string,
   notes?: string
 ): Promise<PredictImportDone> {
-  if (IS_ML_MOCK) {
-    return (await mockMl()).mockUploadPredictDataFile(file, name, client_label, notes);
-  }
 
   const fd = new FormData();
   fd.append("file", file);

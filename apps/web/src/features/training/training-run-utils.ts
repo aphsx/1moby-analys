@@ -11,13 +11,6 @@ export const MODEL_TYPE_LABELS: Record<TrainingRunResult["model_type"], string> 
   credit: "Credit",
 };
 
-/** Fallback cutoff = today minus the default horizon (used until the Gate 3 suggestion loads). */
-export function defaultCutoffDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - DEFAULT_HORIZON_DAYS);
-  return d.toISOString().slice(0, 10);
-}
-
 /** 0.712 → "0.712", 0.5700 → "0.57" */
 export function formatMetric(value: number): string {
   return Number(value.toFixed(3)).toString();

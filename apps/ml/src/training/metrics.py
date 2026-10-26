@@ -1,8 +1,8 @@
 """Evaluation metrics for the ML v2 training pipeline (TRAINING-PIPELINE §11).
 
 Metric key names are part of the API contract — the Model Performance page
-renders `metrics_json` records directly (see apps/web/src/mocks/ml.ts and
-apps/web/src/features/model-performance/metricInfo.ts). Do not rename keys.
+renders `metrics_json` records directly (see
+apps/web/src/features/model-performance/metric-info.ts). Do not rename keys.
 
 Gold-standard extensions (additive — no existing key is removed):
   log_loss            Binary cross-entropy (threshold-free calibration)

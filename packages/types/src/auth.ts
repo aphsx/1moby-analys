@@ -16,24 +16,4 @@ export const USER_PROFILE_FIELDS = {
   locale: { type: "string", required: false, input: false },
 } as const;
 
-/** Keys of the OAuth-derived profile fields (`["givenName", "familyName", "locale"]`). */
-export const USER_PROFILE_FIELD_KEYS = Object.keys(USER_PROFILE_FIELDS) as Array<
-  keyof typeof USER_PROFILE_FIELDS
->;
-
-export type UserProfileFieldKey = keyof typeof USER_PROFILE_FIELDS;
-
-/** The full authenticated-user shape (Better Auth built-ins + our profile fields). */
-export interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  emailVerified: boolean;
-  image: string | null;
-  givenName: string | null;
-  familyName: string | null;
-  locale: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
 

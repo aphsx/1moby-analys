@@ -181,24 +181,6 @@ export function StatusPill({
 }
 
 /* ────────────────────────────────────────── */
-/*  Lifecycle / churn / urgency mappers     */
-/* ────────────────────────────────────────── */
-/* Tone mapping follows the dashboard brand palettes (palette.ts):
-   Paid/Low/Stable = blue, Free/Medium/Warning = #FFA400, Churned/High/Critical = #FC4C02 */
-export const lifecycleTone = (s: string): keyof typeof PILL_TONES =>
-  s === "Active Paid" ? "brand"
-  : s === "Active Free" ? "warm"
-  : s === "Churned" ? "orange"
-  : s === "Ghost" ? "neutral"
-  : "neutral";
-
-export const churnTone = (t: string): keyof typeof PILL_TONES =>
-  t === "High" ? "orange" : t === "Medium" ? "warm" : t === "Low" ? "brand" : "neutral";
-
-export const urgencyTone = (u: string): keyof typeof PILL_TONES =>
-  u === "Critical" ? "orange" : u === "Warning" ? "warm" : u === "Monitor" ? "neutral" : u === "Stable" ? "brand" : "neutral";
-
-/* ────────────────────────────────────────── */
 /*  StackBar — compact horizontal stack      */
 /* ────────────────────────────────────────── */
 export function StackBar({

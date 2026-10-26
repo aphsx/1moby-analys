@@ -5,7 +5,6 @@ import os
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncEngine
-from sqlalchemy.orm import DeclarativeBase
 
 
 def get_database_url() -> str:
@@ -27,10 +26,6 @@ def _init_db() -> tuple[AsyncEngine, async_sessionmaker]:
         _engine = create_async_engine(async_url, echo=False, pool_pre_ping=True)
         _session_local = async_sessionmaker(_engine, expire_on_commit=False)
     return _engine, _session_local  # type: ignore[return-value]
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 async def get_db():

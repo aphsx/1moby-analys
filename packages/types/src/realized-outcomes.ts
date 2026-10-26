@@ -65,14 +65,6 @@ export interface RealizedOutcomesResponse {
   outcomes: RealizedOutcome[];
 }
 
-/** POST /outcome-backfill */
-export interface OutcomeBackfillRequest {
-  /** Measure one specific completed run; omit to backfill every eligible run. */
-  prediction_run_id?: string;
-  /** Re-measure runs that already have production_holdout evaluations. */
-  force?: boolean;
-}
-
 export interface OutcomeBackfillResponse {
   accepted: boolean;
   prediction_run_id: string | null;

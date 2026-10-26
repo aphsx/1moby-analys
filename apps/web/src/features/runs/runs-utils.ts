@@ -5,30 +5,11 @@
 
 import type { PredictDataSource } from "@/lib/api";
 
-export type PillTone = "ok" | "warn" | "danger" | "info" | "neutral" | "brand" | "violet";
-
 // Run status tone/label live in the shared module (single source for runs + training).
 export { runStatusTone, runStatusLabel } from "@/lib/run-status";
 
 /** Poll cadence while a prediction run is in_progress. */
 export const RUN_POLL_MS = 3000;
-
-// ── predict_data_sources.import_status ──────────────────────────
-
-export function importStatusTone(status: string): PillTone {
-  if (status === "ready") return "brand";
-  if (status === "failed") return "danger";
-  if (status === "importing" || status === "cleaning") return "info";
-  return "neutral";
-}
-
-export function importStatusLabel(status: string): string {
-  if (status === "ready") return "Ready";
-  if (status === "failed") return "Failed";
-  if (status === "cleaning") return "Cleaning";
-  if (status === "importing") return "Importing";
-  return status || "—";
-}
 
 // ── clean_manifest.clean row counts (shape-guarded) ─────────────
 
@@ -64,22 +45,10 @@ const DATE_FMT: Intl.DateTimeFormatOptions = {
   timeZone: BKK,
 };
 
-const DATETIME_FMT: Intl.DateTimeFormatOptions = {
-  ...DATE_FMT,
-  hour: "2-digit",
-  minute: "2-digit",
-};
-
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-GB", DATE_FMT);
-}
-
-export function formatDateTime(value: string | null | undefined): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("en-GB", DATETIME_FMT);
 }
 
 /** Compact relative time in Thai, e.g. "เพิ่งเริ่ม", "5 นาทีก่อน", "2 ชม. ก่อน", "เมื่อวาน". */

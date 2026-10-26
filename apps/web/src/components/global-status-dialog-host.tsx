@@ -3,8 +3,6 @@
 import { StatusDialog } from "@/components/status-dialog";
 import { useStatusDialogStore, type StatusDialogPayload } from "@/stores/status-dialog-store";
 
-export type GlobalStatusDialogPayload = StatusDialogPayload;
-
 /** Imperative helper — callable from non-React code (e.g. async handlers). */
 export function notifyStatusDialog(payload: StatusDialogPayload) {
   useStatusDialogStore.getState().notify(payload);
