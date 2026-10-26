@@ -3,13 +3,12 @@ import { asc, eq, and, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
-import { denyNotFound } from "../../lib/http/access-control";
+import { notFound } from "../../lib/http/errors";
 import {
-  fetchRun,
   mapOutput,
-  requireRunFound,
-  SORT_COLUMNS,
   type OutputsQueryParams,
+  requireRun,
+  SORT_COLUMNS,
 } from "../../lib/ml/prediction-runs";
 
 function parseSort(sort: string | undefined): SQL {
@@ -42,14 +41,12 @@ export const outputsRoutes = new Elysia()
   .use(requireUser)
   .get(
     "/:id/outputs",
-    async ({ params, query, set }) => {
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
+    async ({ params, query }) => {
+      const run = await requireRun(params.id);
 
       const page = Math.max(1, query.page ?? 1);
       const pageSize = Math.min(200, Math.max(1, query.page_size ?? 8));
-      const where = outputFilters(run!.id, query);
+      const where = outputFilters(run.id, query);
 
       const [[{ total }], rows] = await Promise.all([
         db
@@ -86,14 +83,12 @@ export const outputsRoutes = new Elysia()
   )
   .get(
     "/:id/outputs/:acc_id",
-    async ({ params, set }) => {
+    async ({ params }) => {
       const accId = Number(params.acc_id);
       if (!Number.isInteger(accId)) {
-        return denyNotFound(set, "Prediction output not found");
+        throw notFound("Prediction output not found");
       }
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
+      const run = await requireRun(params.id);
       const [row] = await db
         .select()
         .from(mlPredictionOutputs)
@@ -104,7 +99,7 @@ export const outputsRoutes = new Elysia()
           )
         )
         .limit(1);
-      if (!row) return denyNotFound(set, "Prediction output not found");
+      if (!row) throw notFound("Prediction output not found");
       return mapOutput(row);
     },
     { params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }) }

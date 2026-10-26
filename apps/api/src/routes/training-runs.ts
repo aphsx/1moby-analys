@@ -26,8 +26,8 @@ import {
   user,
 } from "../db/schema";
 import { requireUser } from "../lib/http/auth-middleware";
-import { denyNotFound, requireFoundForRead } from "../lib/http/access-control";
-import { callMlInternalJson, triggerMlJob } from "../lib/ml/ml-internal";
+import { badRequest, conflict, notFound } from "../lib/http/errors";
+import { callMlInternalJson, mlErrorToHttp, triggerMlJob } from "../lib/ml/ml-internal";
 import { getTrainCutoffSuggestion } from "../lib/data-import/clean-cutoff";
 import { DATE_RE, UUID_RE } from "../lib/constants";
 const DEFAULT_HORIZON_DAYS = 180;
@@ -103,41 +103,34 @@ const trainingWriteRoutes = new Elysia()
   .use(requireUser)
   .post(
     "/",
-    async ({ body, userId, set }) => {
+    async ({ body, userId }) => {
       if (body.cutoff_date !== undefined && !DATE_RE.test(body.cutoff_date)) {
-        set.status = 400;
-        return { message: "cutoff_date must be YYYY-MM-DD" };
+        throw badRequest("cutoff_date must be YYYY-MM-DD");
       }
       const [source] = await db
         .select({ id: trainDataSources.id, importStatus: trainDataSources.importStatus })
         .from(trainDataSources)
         .where(eq(trainDataSources.id, body.train_source_id))
         .limit(1);
-      if (!source) return denyNotFound(set, "Train data source not found");
+      if (!source) throw notFound("Train data source not found");
       if (source.importStatus !== IMPORT_STATUS.READY) {
-        set.status = 400;
-        return { message: "Train data source must be ready before training" };
+        throw badRequest("Train data source must be ready before training");
       }
       const horizonDays = body.horizon_days ?? DEFAULT_HORIZON_DAYS;
       if (horizonDays <= 0) {
-        set.status = 400;
-        return { message: "horizon_days must be positive" };
+        throw badRequest("horizon_days must be positive");
       }
       // Month-aligned: usage data is monthly, so a mid-month cutoff makes the
       // credit 30d label window catch usage periods inconsistently.
       const suggested = await getTrainCutoffSuggestion(body.train_source_id, horizonDays);
       const cutoffDate = body.cutoff_date ?? suggested.cutoff_date;
       if (!cutoffDate) {
-        set.status = 400;
-        return { message: "No clean activity data for this source yet" };
+        throw badRequest("No clean activity data for this source yet");
       }
       if (!cutoffDate.endsWith("-01")) {
-        set.status = 400;
-        return {
-          message:
-            "cutoff_date must be the first day of a month — usage data is monthly, so a mid-month cutoff leaks post-cutoff usage into features. Use the suggested cutoff.",
-          suggested_cutoff: suggested?.cutoff_date ?? null,
-        };
+        throw badRequest(
+          "cutoff_date must be the first day of a month — usage data is monthly, so a mid-month cutoff leaks post-cutoff usage into features. Use the suggested cutoff."
+        );
       }
 
       const [cutoffCheck] = await db.execute<{
@@ -173,12 +166,7 @@ const trainingWriteRoutes = new Elysia()
         FROM activity
       `);
       if (!cutoffCheck?.history_ok || !cutoffCheck.label_ok) {
-        set.status = 400;
-        return {
-          message:
-            "cutoff_date does not satisfy training Gate 3. Use the suggested cutoff for this source.",
-          details: cutoffCheck ?? null,
-        };
+        throw badRequest("cutoff_date does not satisfy training Gate 3. Use the suggested cutoff for this source.");
       }
 
       // One Training Run at a time: overlapping runs race for the same model version numbers.
@@ -188,8 +176,7 @@ const trainingWriteRoutes = new Elysia()
         .where(inArray(mlTrainingRuns.status, [RUN_STATUS.PENDING, RUN_STATUS.IN_PROGRESS]))
         .limit(1);
       if (active) {
-        set.status = 409;
-        return { message: "Another training run is still in progress; wait for it to finish" };
+        throw conflict("Another training run is still in progress; wait for it to finish");
       }
 
       const [inserted] = await db
@@ -199,7 +186,7 @@ const trainingWriteRoutes = new Elysia()
           cutoffDate,
           horizonDays,
           status: RUN_STATUS.PENDING,
-          createdBy: userId!,
+          createdBy: userId,
         })
         .returning({ id: mlTrainingRuns.id });
 
@@ -241,11 +228,10 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
   .use(trainingWriteRoutes)
   .get(
     "/:id",
-    async ({ params, set }) => {
+    async ({ params }) => {
       const run = await fetchTrainingRun(params.id);
-      const denied = requireFoundForRead(run, set, "Training run not found");
-      if (denied) return denied;
-      return mapTrainingRun(run!);
+      if (!run) throw notFound("Training run not found");
+      return mapTrainingRun(run);
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
@@ -255,12 +241,11 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
   // owned by the run are auto-repointed (or cleared when no replacement exists).
   .delete(
     "/:id",
-    async ({ params, userId, set }) => {
+    async ({ params, userId }) => {
       const run = await fetchTrainingRun(params.id);
-      if (!run) return denyNotFound(set, "Training run not found");
+      if (!run) throw notFound("Training run not found");
       if (run.status === RUN_STATUS.PENDING || run.status === RUN_STATUS.IN_PROGRESS) {
-        set.status = 409;
-        return { message: "Cannot delete a training run that is still running" };
+        throw conflict("Cannot delete a training run that is still running");
       }
 
       const versions = await db
@@ -304,12 +289,10 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
         if (refs.length > 0) {
           const names = refs.map((r) => r.name || r.id.slice(0, 8)).join(", ");
           const more = refs.length === 5 ? "…" : "";
-          set.status = 409;
-          return {
-            message: `ยังมี prediction run ที่ใช้โมเดลจากรอบนี้: ${names}${more} — ลบผล prediction เหล่านั้นก่อน`,
-            error_code: "training_run_in_use_by_predictions",
-            prediction_run_ids: refs.map((r) => r.id),
-          };
+          throw conflict(
+            `ยังมี prediction run ที่ใช้โมเดลจากรอบนี้: ${names}${more} — ลบผล prediction เหล่านั้นก่อน`,
+            "TRAINING_RUN_IN_USE_BY_PREDICTIONS"
+          );
         }
 
         const production = versions.filter((v) => v.isActive || v.status === MODEL_VERSION_STATUS.PRODUCTION);
@@ -329,14 +312,7 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
             productionRepointed = repoint.repointed ?? [];
             productionCleared = repoint.cleared ?? [];
           } catch (error) {
-            const upstream = (error as { upstreamStatus?: number }).upstreamStatus;
-            set.status = upstream === 400 ? 409 : 502;
-            return {
-              message:
-                error instanceof Error
-                  ? error.message
-                  : "Failed to repoint production champions before delete",
-            };
+            throw mlErrorToHttp(error, "Failed to repoint production champions before delete");
           }
         }
 
@@ -354,14 +330,7 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
               auto_promote_sole_remaining: false,
             });
           } catch (error) {
-            const upstream = (error as { upstreamStatus?: number }).upstreamStatus;
-            set.status = upstream === 400 ? 409 : 502;
-            return {
-              message:
-                error instanceof Error
-                  ? error.message
-                  : `Failed to delete model version ${version.version}`,
-            };
+            throw mlErrorToHttp(error, `Failed to delete model version ${version.version}`);
           }
         }
       }

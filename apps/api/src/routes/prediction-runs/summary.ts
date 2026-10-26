@@ -11,7 +11,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlModelAliases, mlModelVersions, mlPredictionOutputs, mlPredictionRuns, predictDataSources, user } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
-import { denyNotFound } from "../../lib/http/access-control";
+import { notFound } from "../../lib/http/errors";
 import {
   DEFAULT_RISK_THRESHOLDS,
   EMPTY_MODEL_VERSIONS,
@@ -19,7 +19,7 @@ import {
   num,
 } from "../../lib/ml-contract";
 import { fetchRunAggregates } from "../../lib/ml/run-aggregates";
-import { runSelect, type RunRow } from "../../lib/ml/prediction-runs";
+import { type RunRow, runSelect } from "../../lib/ml/prediction-runs";
 
 async function churnThresholds(): Promise<{ medium: number; high: number; critical: number }> {
   const rows = await db
@@ -125,7 +125,7 @@ export const summaryRoutes = new Elysia()
   .use(requireUser)
   .get(
     "/:id/summary",
-    async ({ params, set }) => {
+    async ({ params }) => {
       const [row] = await db
         .select({
           ...runSelect,
@@ -136,7 +136,7 @@ export const summaryRoutes = new Elysia()
         .leftJoin(user, eq(mlPredictionRuns.createdBy, user.id))
         .where(eq(mlPredictionRuns.id, params.id))
         .limit(1);
-      if (!row) return denyNotFound(set, "Prediction run not found");
+      if (!row) throw notFound("Prediction run not found");
       return buildSummary(row);
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }

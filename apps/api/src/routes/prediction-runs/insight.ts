@@ -1,7 +1,8 @@
 import Elysia, { t } from "elysia";
 import { requireUser } from "../../lib/http/auth-middleware";
+import { badRequest } from "../../lib/http/errors";
 import { createRunInsight, getRunInsight } from "../../lib/ai";
-import { fetchRun, requireRunFound } from "../../lib/ml/prediction-runs";
+import { requireRun } from "../../lib/ml/prediction-runs";
 
 /**
  * Run-level AI base summary (the "สรุปก่อน" of the whole customer base).
@@ -12,31 +13,21 @@ export const insightRoutes = new Elysia()
   .use(requireUser)
   .get(
     "/:id/insight",
-    async ({ params, set }) => {
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
-      return getRunInsight(run!.id);
+    async ({ params }) => {
+      const run = await requireRun(params.id);
+      return getRunInsight(run.id);
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   .post(
     "/:id/insight",
-    async ({ params, body, set }) => {
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
-      if (run!.status !== "completed") {
-        set.status = 400;
-        return { message: "Run must be completed before generating insight" };
+    async ({ params, body }) => {
+      const run = await requireRun(params.id);
+      if (run.status !== "completed") {
+        throw badRequest("Run must be completed before generating insight");
       }
 
-      const result = await createRunInsight(run!.id, body.force ?? false);
-      if ("status" in result) {
-        set.status = result.status;
-        return result.body;
-      }
-      return result;
+      return createRunInsight(run.id, body.force ?? false);
     },
     {
       params: t.Object({ id: t.String({ format: "uuid" }) }),

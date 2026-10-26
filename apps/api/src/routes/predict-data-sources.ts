@@ -10,7 +10,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { predictDataSources, user } from "../db/schema";
 import { requireUser } from "../lib/http/auth-middleware";
-import { denyNotFound } from "../lib/http/access-control";
+import { badRequest, HttpError, notFound } from "../lib/http/errors";
 import { maxUploadBytes } from "../lib/constants";
 import { importPredictExcel, type PredictImportResult } from "../lib/data-import/predict-import";
 import { abortPredictDataSource } from "../lib/data-import/abort-data-source";
@@ -55,7 +55,7 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
       .orderBy(desc(predictDataSources.createdAt));
     return rows.map(mapDataSourceRow);
   })
-  .get("/:id", async ({ params, set }) => {
+  .get("/:id", async ({ params }) => {
     const rows = await db
       .select(sourceSelect)
       .from(predictDataSources)
@@ -63,25 +63,24 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
       .where(eq(predictDataSources.id, params.id))
       .limit(1);
 
-    if (rows.length === 0) return denyNotFound(set, "Predict data source not found");
+    if (rows.length === 0) throw notFound("Predict data source not found");
     return mapDataSourceRow(rows[0]);
   })
   // Suggested prediction cutoff = day after the latest observed activity
   // (payments + usage months) in the source's clean tables.
   .get(
     "/:id/suggested-cutoff",
-    async ({ params, set }) => {
+    async ({ params }) => {
       const [source] = await db
         .select({ id: predictDataSources.id })
         .from(predictDataSources)
         .where(eq(predictDataSources.id, params.id))
         .limit(1);
-      if (!source) return denyNotFound(set, "Predict data source not found");
+      if (!source) throw notFound("Predict data source not found");
 
       const { cutoff_date, latest_data_date } = await getPredictCutoffSuggestion(params.id);
       if (!cutoff_date) {
-        set.status = 400;
-        return { message: "No clean activity data for this source yet" };
+        throw badRequest("No clean activity data for this source yet");
       }
       return {
         suggested_cutoff: cutoff_date,
@@ -92,18 +91,16 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
   )
   .post(
     "/import",
-    async ({ body, userId, set }) => {
+    async ({ body, userId }) => {
       const filename = body.file.name ?? "upload.xlsx";
       if (!isXlsxFilename(filename)) {
-        set.status = 400;
-        return { message: "Only .xlsx files are supported" };
+        throw badRequest("Only .xlsx files are supported");
       }
 
       const buffer = Buffer.from(await body.file.arrayBuffer());
       const limit = maxUploadBytes();
       if (buffer.length > limit) {
-        set.status = 413;
-        return { message: `File exceeds ${Math.round(limit / (1024 * 1024))}MB limit` };
+        throw new HttpError(413, `File exceeds ${Math.round(limit / (1024 * 1024))}MB limit`);
       }
 
       const displayName = body.name?.trim() || filename;
@@ -116,7 +113,7 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
             buffer,
             filename,
             name: displayName,
-            imported_by: userId!,
+            imported_by: userId,
             client_label: body.client_label ?? null,
             notes: body.notes ?? null,
             deferReadyCatalog: true,
@@ -139,7 +136,7 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
             ? await createAutoPredictionRun({
                 predictSourceId: sourceId,
                 sourceName: displayName,
-                createdBy: userId!,
+                createdBy: userId,
               })
             : null;
 
@@ -151,12 +148,8 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
         if (sourceId) {
           await abortPredictDataSource(sourceId);
         }
-        if (isImportTimeoutError(err)) {
-          set.status = 504;
-          return { message, code: IMPORT_TIMEOUT_CODE };
-        }
-        set.status = 400;
-        return { message };
+        if (isImportTimeoutError(err)) throw new HttpError(504, message, IMPORT_TIMEOUT_CODE);
+        throw badRequest(message);
       }
     },
     {

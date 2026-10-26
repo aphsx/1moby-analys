@@ -1,6 +1,7 @@
 import type { CustomerAiExplanationResult, PredictionOutput } from "@moby/types";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../db/client";
+import { conflict, HttpError } from "../http/errors";
 import { mlPredictionOutputs } from "../../db/schema";
 import { buildCustomerAiContext } from "./customer-ai-context";
 import { generateCustomerAiExplanation } from "./customer-explanation";
@@ -12,11 +13,6 @@ type RunRow = {
   predictSourceId: string;
 };
 
-type ServiceError = {
-  status: number;
-  body: { message: string; code?: string };
-};
-
 const outputWhere = (runId: string, accId: number) =>
   and(eq(mlPredictionOutputs.predictionRunId, runId), eq(mlPredictionOutputs.accId, accId));
 
@@ -25,12 +21,9 @@ export async function createCustomerAiExplanation(
   accId: number,
   output: PredictionOutput,
   force: boolean
-): Promise<CustomerAiExplanationResult | ServiceError> {
+): Promise<CustomerAiExplanationResult> {
   if (output.ai_status === "completed" && output.ai_explanation && !force) {
-    return {
-      status: 409,
-      body: { message: "AI explanation already exists", code: "ai_already_exists" },
-    };
+    throw conflict("AI explanation already exists", "AI_ALREADY_EXISTS");
   }
 
   await db.update(mlPredictionOutputs).set({ aiStatus: "pending" }).where(outputWhere(run.id, accId));
@@ -73,9 +66,6 @@ export async function createCustomerAiExplanation(
     };
   } catch (e) {
     await db.update(mlPredictionOutputs).set({ aiStatus: "failed" }).where(outputWhere(run.id, accId));
-    return {
-      status: 500,
-      body: { message: (e as Error).message || "Failed to generate AI explanation" },
-    };
+    throw new HttpError(500, (e as Error).message || "Failed to generate AI explanation");
   }
 }

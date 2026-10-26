@@ -26,9 +26,9 @@ import {
   mlTrainingRuns,
 } from "../db/schema";
 import { requireUser } from "../lib/http/auth-middleware";
-import { requireFoundForRead } from "../lib/http/access-control";
+import { badRequest, conflict, HttpError, notFound } from "../lib/http/errors";
 import { DEFAULT_RISK_THRESHOLDS } from "../lib/ml-contract";
-import { triggerMlJob } from "../lib/ml/ml-internal";
+import { mlErrorToHttp, triggerMlJob } from "../lib/ml/ml-internal";
 
 
 // Primary headline metric per model type, read from a version's test metrics.
@@ -321,18 +321,16 @@ const modelActivateRoutes = new Elysia()
   .use(requireUser)
   // Manually pin a version to production. Reuses the ML service's promotion
   // transaction (action='manual_override') so the registry stays consistent.
-  .post("/:modelType/activate", async ({ params, body, userId, set }) => {
+  .post("/:modelType/activate", async ({ params, body, userId }) => {
     if (!isModelType(params.modelType)) {
-      set.status = 400;
-      return { message: "Unknown model type" };
+      throw badRequest("Unknown model type");
     }
     const { modelVersionId, reason } = (body ?? {}) as {
       modelVersionId?: string;
       reason?: string;
     };
     if (!modelVersionId) {
-      set.status = 400;
-      return { message: "modelVersionId is required" };
+      throw badRequest("modelVersionId is required");
     }
     try {
       await triggerMlJob("/internal/model-activate", {
@@ -342,8 +340,7 @@ const modelActivateRoutes = new Elysia()
         created_by: userId ?? null,
       });
     } catch (error) {
-      set.status = 502;
-      return { message: error instanceof Error ? error.message : "Activation failed" };
+      throw new HttpError(502, error instanceof Error ? error.message : "Activation failed");
     }
     return { ok: true };
   });
@@ -359,11 +356,8 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
     return entries;
   })
   // All trained versions for a model type — fuels the production-override picker.
-  .get("/:modelType/versions", async ({ params, set }): Promise<ModelVersionSummary[]> => {
-    if (!isModelType(params.modelType)) {
-      set.status = 400;
-      return [];
-    }
+  .get("/:modelType/versions", async ({ params }): Promise<ModelVersionSummary[]> => {
+    if (!isModelType(params.modelType)) throw badRequest("Unknown model type");
     const primary = PRIMARY_METRIC[params.modelType];
     const rows = await db
       .select({
@@ -414,14 +408,12 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
   // Any authenticated user. Blocked while any prediction run still references
   // the version — delete those prediction results first.
   // The ML service also refuses the current production champion.
-  .delete("/:modelType/versions/:id", async ({ params, userId, set }) => {
+  .delete("/:modelType/versions/:id", async ({ params, userId }) => {
     if (!isModelType(params.modelType)) {
-      set.status = 400;
-      return { message: "Unknown model type" };
+      throw badRequest("Unknown model type");
     }
     if (!params.id) {
-      set.status = 400;
-      return { message: "model version id is required" };
+      throw badRequest("model version id is required");
     }
 
     const [version] = await db
@@ -446,31 +438,26 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
       )
       .limit(1);
 
-    const denied = requireFoundForRead(version, set, "Model version not found");
-    if (denied) return denied;
+    if (!version) throw notFound("Model version not found");
 
-    if (version!.isActive || version!.status === MODEL_VERSION_STATUS.PRODUCTION || version!.isProductionAlias) {
-      set.status = 409;
-      return {
-        message:
-          "This version is the production champion — switch production to another version before deleting it.",
-      };
+    if (version.isActive || version.status === MODEL_VERSION_STATUS.PRODUCTION || version.isProductionAlias) {
+      throw conflict(
+        "This version is the production champion — switch production to another version before deleting it."
+      );
     }
 
     const refs = await findReferencingPredictionRuns(
       params.modelType,
-      version!.version,
-      version!.id
+      version.version,
+      version.id
     );
     if (refs.length > 0) {
       const names = refs.map((r) => r.name || r.id.slice(0, 8)).join(", ");
       const more = refs.length === 5 ? "…" : "";
-      set.status = 409;
-      return {
-        message: `ยังมี prediction run ที่ใช้เวอร์ชันนี้: ${names}${more} — ลบผล prediction เหล่านั้นก่อน`,
-        error_code: "model_in_use_by_predictions",
-        prediction_run_ids: refs.map((r) => r.id),
-      };
+      throw conflict(
+        `ยังมี prediction run ที่ใช้เวอร์ชันนี้: ${names}${more} — ลบผล prediction เหล่านั้นก่อน`,
+        "MODEL_IN_USE_BY_PREDICTIONS"
+      );
     }
 
     try {
@@ -480,11 +467,7 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
         created_by: userId ?? null,
       });
     } catch (error) {
-      // The ML service rejects production / in-use versions with HTTP 400 —
-      // surface that as 409 Conflict (a state error), not a 502 gateway error.
-      const upstream = (error as { upstreamStatus?: number }).upstreamStatus;
-      set.status = upstream === 400 ? 409 : 502;
-      return { message: error instanceof Error ? error.message : "Delete failed" };
+      throw mlErrorToHttp(error, "Delete failed");
     }
     return { deleted: true };
   })

@@ -9,8 +9,8 @@ import Elysia, { t } from "elysia";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { trainDataSources, user } from "../db/schema";
-import { requireFoundForRead } from "../lib/http/access-control";
 import { requireUser } from "../lib/http/auth-middleware";
+import { badRequest, HttpError, notFound } from "../lib/http/errors";
 import { maxUploadBytes } from "../lib/constants";
 import { getTrainCutoffSuggestion } from "../lib/data-import/clean-cutoff";
 import { prepareTrainDataSource } from "../lib/data-import/train-import";
@@ -52,11 +52,10 @@ const trainImportRoutes = new Elysia()
   .use(requireUser)
   .post(
     "/import",
-    async ({ body, userId, set }) => {
+    async ({ body, userId }) => {
       const filename = body.file.name ?? "upload.xlsx";
       if (!isXlsxFilename(filename)) {
-        set.status = 400;
-        return { message: "Only .xlsx files are supported" };
+        throw badRequest("Only .xlsx files are supported");
       }
 
       const buffer = await readImportBuffer(body.file);
@@ -69,7 +68,7 @@ const trainImportRoutes = new Elysia()
           name: body.name,
           client_label: body.client_label ?? null,
           notes: body.notes ?? null,
-          imported_by: userId!,
+          imported_by: userId,
         });
         const result = await runTrainImportPipeline({
           buffer,
@@ -77,7 +76,7 @@ const trainImportRoutes = new Elysia()
           name: body.name,
           client_label: body.client_label ?? null,
           notes: body.notes ?? null,
-          imported_by: userId!,
+          imported_by: userId,
           sourceId,
         });
         return result;
@@ -85,11 +84,9 @@ const trainImportRoutes = new Elysia()
         if (sourceId) await abortTrainDataSource(sourceId);
         const err = e as Error;
         if (isImportTimeoutError(err)) {
-          set.status = 504;
-          return { message: err.message, code: IMPORT_TIMEOUT_CODE };
+          throw new HttpError(504, err.message, IMPORT_TIMEOUT_CODE);
         }
-        set.status = 400;
-        return { message: err.message ?? "Import failed" };
+        throw badRequest(err.message ?? "Import failed");
       }
     },
     {
@@ -103,19 +100,17 @@ const trainImportRoutes = new Elysia()
   )
   .post(
     "/import/async",
-    async ({ body, userId, set }) => {
+    async ({ body, userId }) => {
       const filename = body.file.name ?? "upload.xlsx";
       if (!isXlsxFilename(filename)) {
-        set.status = 400;
-        return { message: "Only .xlsx files are supported" };
+        throw badRequest("Only .xlsx files are supported");
       }
 
       let buffer: Buffer;
       try {
         buffer = await readImportBuffer(body.file);
       } catch (e) {
-        set.status = 413;
-        return { message: (e as Error).message };
+        throw new HttpError(413, (e as Error).message);
       }
 
       let sourceId = "";
@@ -126,7 +121,7 @@ const trainImportRoutes = new Elysia()
           name: body.name,
           client_label: body.client_label ?? null,
           notes: body.notes ?? null,
-          imported_by: userId!,
+          imported_by: userId,
         });
 
         await publishTrainPipelineProgress(sourceId, {
@@ -141,7 +136,7 @@ const trainImportRoutes = new Elysia()
           name: body.name,
           client_label: body.client_label ?? null,
           notes: body.notes ?? null,
-          imported_by: userId!,
+          imported_by: userId,
         });
 
         return { source_id: sourceId, import_status: IMPORT_STATUS.IMPORTING };
@@ -149,11 +144,9 @@ const trainImportRoutes = new Elysia()
         if (sourceId) await abortTrainDataSource(sourceId);
         const err = e as Error;
         if (isImportTimeoutError(err)) {
-          set.status = 504;
-          return { message: err.message, code: IMPORT_TIMEOUT_CODE };
+          throw new HttpError(504, err.message, IMPORT_TIMEOUT_CODE);
         }
-        set.status = 400;
-        return { message: err.message ?? "Import failed" };
+        throw badRequest(err.message ?? "Import failed");
       }
     },
     {
@@ -283,7 +276,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
-  .get("/:id", async ({ params, set }) => {
+  .get("/:id", async ({ params }) => {
     const rows = await db
       .select(sourceSelect)
       .from(trainDataSources)
@@ -292,8 +285,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
       .limit(1);
 
     if (rows.length === 0) {
-      set.status = 404;
-      return { message: "Train data source not found" };
+      throw notFound("Train data source not found");
     }
     return mapDataSourceRow(rows[0]);
   })
@@ -302,15 +294,14 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
   // safe cutoff is `latest_activity_date - horizon`.
   .get(
     "/:id/suggested-cutoff",
-    async ({ params, set }) => {
+    async ({ params }) => {
       const [source] = await db
         .select({ id: trainDataSources.id })
         .from(trainDataSources)
         .where(eq(trainDataSources.id, params.id))
         .limit(1);
       if (!source) {
-        set.status = 404;
-        return { message: "Train data source not found" };
+        throw notFound("Train data source not found");
       }
 
       const HORIZON_DAYS = 180;
@@ -319,8 +310,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
         HORIZON_DAYS
       );
       if (!cutoff_date || !latest_data_date) {
-        set.status = 400;
-        return { message: "No clean activity data for this source yet" };
+        throw badRequest("No clean activity data for this source yet");
       }
       return {
         suggested_cutoff: cutoff_date,
@@ -332,7 +322,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
   )
   .delete(
     "/:id",
-    async ({ params, set }) => {
+    async ({ params }) => {
       const [row] = await db
         .select({
           importStatus: trainDataSources.importStatus,
@@ -342,8 +332,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
         .where(eq(trainDataSources.id, params.id))
         .limit(1);
 
-      const denied = requireFoundForRead(row, set, "Train data source not found");
-      if (denied) return denied;
+      if (!row) throw notFound("Train data source not found");
 
       await db.delete(trainDataSources).where(eq(trainDataSources.id, params.id));
       return { deleted: true };

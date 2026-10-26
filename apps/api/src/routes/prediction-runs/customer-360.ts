@@ -3,51 +3,45 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
-import { denyNotFound } from "../../lib/http/access-control";
+import { notFound } from "../../lib/http/errors";
 import {
   createCustomerAiExplanation,
   loadCustomerPayments,
   loadCustomerUsageMonthly,
 } from "../../lib/ai";
-import { fetchRun, mapOutput, requireRunFound } from "../../lib/ml/prediction-runs";
+import { mapOutput, requireRun } from "../../lib/ml/prediction-runs";
 
 export const customer360Routes = new Elysia()
   .use(requireUser)
   .get(
     "/:id/customers/:acc_id/usage-monthly",
-    async ({ params, set }) => {
+    async ({ params }) => {
       const accId = Number(params.acc_id);
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
-      if (!Number.isInteger(accId)) return denyNotFound(set, "Prediction run not found");
-      return loadCustomerUsageMonthly(run!, accId);
+      const run = await requireRun(params.id);
+      if (!Number.isInteger(accId)) throw notFound("Prediction run not found");
+      return loadCustomerUsageMonthly(run, accId);
     },
     { params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }) }
   )
   .get(
     "/:id/customers/:acc_id/payments",
-    async ({ params, set }) => {
+    async ({ params }) => {
       const accId = Number(params.acc_id);
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
-      if (!Number.isInteger(accId)) return denyNotFound(set, "Prediction run not found");
-      return loadCustomerPayments(run!, accId);
+      const run = await requireRun(params.id);
+      if (!Number.isInteger(accId)) throw notFound("Prediction run not found");
+      return loadCustomerPayments(run, accId);
     },
     { params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }) }
   )
   .post(
     "/:id/outputs/:acc_id/ai-explanation",
-    async ({ params, body, set }) => {
+    async ({ params, body }) => {
       const accId = Number(params.acc_id);
       if (!Number.isInteger(accId)) {
-        return denyNotFound(set, "Prediction output not found");
+        throw notFound("Prediction output not found");
       }
 
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
+      const run = await requireRun(params.id);
 
       const [row] = await db
         .select()
@@ -59,18 +53,14 @@ export const customer360Routes = new Elysia()
           )
         )
         .limit(1);
-      if (!row) return denyNotFound(set, "Prediction output not found");
+      if (!row) throw notFound("Prediction output not found");
 
       const result = await createCustomerAiExplanation(
-        run!,
+        run,
         accId,
         mapOutput(row),
         body.force ?? false
       );
-      if ("status" in result) {
-        set.status = result.status;
-        return result.body;
-      }
       return result;
     },
     {

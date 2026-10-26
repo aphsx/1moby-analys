@@ -25,7 +25,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { aiConversations, aiMessages, mlPredictionRuns } from "../db/schema";
 import { requireUser } from "../lib/http/auth-middleware";
-import { denyNotFound } from "../lib/http/access-control";
+import { badRequest, notFound } from "../lib/http/errors";
 import { orchestrate, sseError } from "../lib/ai";
 import { getLLMConfig, isLLMConfigured } from "../lib/ai/llm-config";
 import { DEFAULT_CONVERSATION_TITLE, ERROR_CODE } from "../lib/ai/constants";
@@ -80,7 +80,7 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
       })
       .from(aiConversations)
       .leftJoin(mlPredictionRuns, eq(aiConversations.runId, mlPredictionRuns.id))
-      .where(eq(aiConversations.userId, userId!))
+      .where(eq(aiConversations.userId, userId))
       .orderBy(desc(aiConversations.updatedAt))
       .limit(100);
     return convs;
@@ -89,19 +89,18 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   // ── Create conversation (optionally bound to a run) ──────────────────────────
   .post(
     "/conversations",
-    async ({ body, userId, set }) => {
+    async ({ body, userId }) => {
       let runId: string | null = null;
       if (body.run_id) {
         if (!(await runExists(body.run_id))) {
-          set.status = 404;
-          return { message: "Prediction run not found", code: "run_not_found" };
+          throw notFound("Prediction run not found");
         }
         runId = body.run_id;
       }
       const [conv] = await db
         .insert(aiConversations)
         .values({
-          userId: userId!,
+          userId: userId,
           runId,
           title: body.title?.trim() || DEFAULT_CONVERSATION_TITLE,
         })
@@ -119,9 +118,9 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   // ── Get conversation + messages ──────────────────────────────────────────────
   .get(
     "/conversations/:id",
-    async ({ params, userId, set }) => {
-      const conv = await getConversation(params.id, userId!);
-      if (!conv) return denyNotFound(set, "Conversation not found");
+    async ({ params, userId }) => {
+      const conv = await getConversation(params.id, userId);
+      if (!conv) throw notFound("Conversation not found");
 
       const msgs = await db
         .select({
@@ -145,9 +144,9 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   // ── Rename / archive conversation ────────────────────────────────────────────
   .patch(
     "/conversations/:id",
-    async ({ params, body, userId, set }) => {
-      const conv = await getConversation(params.id, userId!);
-      if (!conv) return denyNotFound(set, "Conversation not found");
+    async ({ params, body, userId }) => {
+      const conv = await getConversation(params.id, userId);
+      if (!conv) throw notFound("Conversation not found");
 
       const updates: { title?: string; archived?: boolean; updatedAt: Date } = {
         updatedAt: new Date(),
@@ -175,8 +174,8 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   .delete(
     "/conversations/:id",
     async ({ params, userId, set }) => {
-      const conv = await getConversation(params.id, userId!);
-      if (!conv) return denyNotFound(set, "Conversation not found");
+      const conv = await getConversation(params.id, userId);
+      if (!conv) throw notFound("Conversation not found");
 
       await db.delete(aiConversations).where(eq(aiConversations.id, params.id));
       set.status = 204;
@@ -188,14 +187,13 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   // ── Send message → SSE stream ────────────────────────────────────────────────
   .post(
     "/conversations/:id/messages",
-    async ({ params, body, userId, set }) => {
-      const conv = await getConversation(params.id, userId!);
-      if (!conv) return denyNotFound(set, "Conversation not found");
+    async ({ params, body, userId }) => {
+      const conv = await getConversation(params.id, userId);
+      if (!conv) throw notFound("Conversation not found");
 
       const userMessage = body.message.trim();
       if (!userMessage) {
-        set.status = 400;
-        return { message: "Message cannot be empty" };
+        throw badRequest("Message cannot be empty");
       }
 
       // First message in a default-titled conversation → generate an auto-title.
@@ -208,7 +206,7 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
 
       const gen = orchestrate({
         conversationId: params.id,
-        userId: userId!,
+        userId: userId,
         userMessage,
         boundRunId: conv.runId ?? null,
         generateTitle,

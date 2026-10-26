@@ -9,6 +9,7 @@
  * can mark the run 'failed' instead of leaving it stuck.
  */
 import { positiveNumberEnv } from "../env";
+import { HttpError } from "../http/errors";
 
 const DEFAULT_ML_INTERNAL_TIMEOUT_MS = 30_000;
 
@@ -56,6 +57,15 @@ function throwMlInternalError(path: string, res: Response, detail: string): neve
     ),
     { upstreamStatus: res.status }
   );
+}
+
+/**
+ * The ML service rejects state errors (a production or in-use version) with 400, which
+ * the API answers as 409 Conflict; anything else is a 502 from the gateway.
+ */
+export function mlErrorToHttp(error: unknown, fallback: string): HttpError {
+  const upstream = (error as { upstreamStatus?: number }).upstreamStatus;
+  return new HttpError(upstream === 400 ? 409 : 502, error instanceof Error ? error.message : fallback);
 }
 
 export async function triggerMlJob(path: string, payload: object): Promise<void> {

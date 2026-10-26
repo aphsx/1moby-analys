@@ -4,11 +4,11 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionRuns, predictDataSources, user } from "../../db/schema";
 import { requireUser } from "../../lib/http/auth-middleware";
+import { badRequest, notFound } from "../../lib/http/errors";
 import { triggerMlJob } from "../../lib/ml/ml-internal";
-import { denyNotFound, requireFoundForRead } from "../../lib/http/access-control";
 import { getPredictCutoffSuggestion } from "../../lib/data-import/clean-cutoff";
 import { DATE_RE, UUID_RE } from "../../lib/constants";
-import { fetchRun, mapRun, requireRunFound, runSelect } from "../../lib/ml/prediction-runs";
+import { fetchRun, mapRun, requireRun, runSelect } from "../../lib/ml/prediction-runs";
 
 export const runsRoutes = new Elysia()
   .use(requireUser)
@@ -24,26 +24,23 @@ export const runsRoutes = new Elysia()
   })
   .post(
     "/",
-    async ({ body, userId, set }) => {
+    async ({ body, userId }) => {
       if (body.cutoff_date !== undefined && !DATE_RE.test(body.cutoff_date)) {
-        set.status = 400;
-        return { message: "cutoff_date must be YYYY-MM-DD" };
+        throw badRequest("cutoff_date must be YYYY-MM-DD");
       }
       const [source] = await db
         .select({ id: predictDataSources.id, importStatus: predictDataSources.importStatus })
         .from(predictDataSources)
         .where(eq(predictDataSources.id, body.predict_source_id))
         .limit(1);
-      if (!source) return denyNotFound(set, "Predict data source not found");
+      if (!source) throw notFound("Predict data source not found");
       if (source.importStatus !== IMPORT_STATUS.READY) {
-        set.status = 400;
-        return { message: "Predict data source must be ready before prediction" };
+        throw badRequest("Predict data source must be ready before prediction");
       }
       const suggested = await getPredictCutoffSuggestion(body.predict_source_id);
       const cutoffDate = body.cutoff_date ?? suggested.cutoff_date;
       if (!cutoffDate) {
-        set.status = 400;
-        return { message: "No clean activity data for this source yet" };
+        throw badRequest("No clean activity data for this source yet");
       }
 
       // Optional per-run model overrides. Only provided, valid-UUID entries are
@@ -53,8 +50,7 @@ export const runsRoutes = new Elysia()
         const versionId = body.model_overrides?.[modelType];
         if (versionId) {
           if (!UUID_RE.test(versionId)) {
-            set.status = 400;
-            return { message: `model_overrides.${modelType} must be a UUID` };
+            throw badRequest(`model_overrides.${modelType} must be a UUID`);
           }
           overrides[modelType] = versionId;
         }
@@ -67,7 +63,7 @@ export const runsRoutes = new Elysia()
           name: body.name,
           cutoffDate,
           status: RUN_STATUS.PENDING,
-          createdBy: userId!,
+          createdBy: userId,
           modelOverridesJson: Object.keys(overrides).length > 0 ? overrides : null,
         })
         .returning({ id: mlPredictionRuns.id });
@@ -81,8 +77,7 @@ export const runsRoutes = new Elysia()
           .where(eq(mlPredictionRuns.id, inserted.id));
       }
 
-      const run = await fetchRun(inserted.id);
-      return mapRun(run!);
+      return mapRun(await requireRun(inserted.id));
     },
     {
       body: t.Object({
@@ -102,24 +97,19 @@ export const runsRoutes = new Elysia()
   )
   .get(
     "/:id",
-    async ({ params, set }) => {
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
-      return mapRun(run!);
+    async ({ params }) => {
+      const run = await requireRun(params.id);
+      return mapRun(run);
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   // Retry mutates the run record — any authenticated user.
   .post(
     "/:id/retry",
-    async ({ params, set }) => {
-      const run = await fetchRun(params.id);
-      const denied = requireFoundForRead(run, set, "Prediction run not found");
-      if (denied) return denied;
-      if (run!.status !== RUN_STATUS.FAILED) {
-        set.status = 400;
-        return { message: "Only failed runs can be retried" };
+    async ({ params }) => {
+      const run = await requireRun(params.id);
+      if (run.status !== RUN_STATUS.FAILED) {
+        throw badRequest("Only failed runs can be retried");
       }
 
       await db
@@ -133,29 +123,27 @@ export const runsRoutes = new Elysia()
           startedAt: null,
           finishedAt: null,
         })
-        .where(eq(mlPredictionRuns.id, run!.id));
+        .where(eq(mlPredictionRuns.id, run.id));
 
       try {
-        await triggerMlJob("/internal/prediction-runs", { prediction_run_id: run!.id });
+        await triggerMlJob("/internal/prediction-runs", { prediction_run_id: run.id });
       } catch (e) {
         await db
           .update(mlPredictionRuns)
           .set({ status: RUN_STATUS.FAILED, errorMessage: (e as Error).message, finishedAt: new Date() })
-          .where(eq(mlPredictionRuns.id, run!.id));
+          .where(eq(mlPredictionRuns.id, run.id));
       }
 
-      const fresh = await fetchRun(run!.id);
+      const fresh = await fetchRun(run.id);
       return mapRun(fresh!);
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   .delete(
     "/:id",
-    async ({ params, set }) => {
-      const run = await fetchRun(params.id);
-      const denied = requireFoundForRead(run, set, "Prediction run not found");
-      if (denied) return denied;
-      await db.delete(mlPredictionRuns).where(eq(mlPredictionRuns.id, run!.id));
+    async ({ params }) => {
+      const run = await requireRun(params.id);
+      await db.delete(mlPredictionRuns).where(eq(mlPredictionRuns.id, run.id));
       return { deleted: true };
     },
     { params: t.Object({ id: t.String({ format: "uuid" }) }) }

@@ -11,6 +11,7 @@ import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
 import { startStaleRunReaper } from "./lib/ml/run-reaper";
 import { maxUploadBytes } from "./lib/constants";
 import { runMigrations } from "./db/migrate";
+import { handleError } from "./lib/http/errors";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -29,6 +30,8 @@ if (appliedMigrations.length > 0) {
 startStaleRunReaper();
 
 const app = new Elysia()
+  // Every error becomes { message, code? } (lib/http/errors.ts); routes throw HttpError.
+  .onError({ as: "global" }, handleError)
   .use(
     cors({
       origin: ALLOWED_ORIGINS,

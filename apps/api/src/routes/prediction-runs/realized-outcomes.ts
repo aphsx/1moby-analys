@@ -15,17 +15,15 @@ import type {
   RealizedOutcome,
   RealizedOutcomesResponse,
 } from "@moby/types";
-import { fetchRun, requireRunFound } from "../../lib/ml/prediction-runs";
+import { requireRun } from "../../lib/ml/prediction-runs";
 
 export const realizedOutcomesRoutes = new Elysia()
   .use(requireUser)
   // Org-wide read: realized metrics are shared evidence, like run outputs.
   .get(
     "/:id/realized-outcomes",
-    async ({ params, set }) => {
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
+    async ({ params }) => {
+      const run = await requireRun(params.id);
 
       const rows = await db
         .select({
@@ -45,7 +43,7 @@ export const realizedOutcomesRoutes = new Elysia()
         .leftJoin(mlModelVersions, eq(mlModelEvaluations.modelVersionId, mlModelVersions.id))
         .where(
           and(
-            eq(mlModelEvaluations.predictionRunId, run!.id),
+            eq(mlModelEvaluations.predictionRunId, run.id),
             eq(mlModelEvaluations.evaluationType, EVALUATION_TYPE.PRODUCTION_HOLDOUT)
           )
         )
@@ -67,8 +65,8 @@ export const realizedOutcomesRoutes = new Elysia()
       }));
 
       const response: RealizedOutcomesResponse = {
-        prediction_run_id: run!.id,
-        cutoff_date: run!.cutoffDate,
+        prediction_run_id: run.id,
+        cutoff_date: run.cutoffDate,
         evaluated: outcomes.length > 0,
         outcomes,
       };

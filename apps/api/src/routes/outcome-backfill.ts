@@ -14,7 +14,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { mlPredictionRuns } from "../db/schema";
 import { requireUser } from "../lib/http/auth-middleware";
-import { denyNotFound } from "../lib/http/access-control";
+import { badRequest, HttpError, notFound } from "../lib/http/errors";
 import { triggerMlJob } from "../lib/ml/ml-internal";
 import type { OutcomeBackfillResponse } from "@moby/types";
 
@@ -22,17 +22,16 @@ export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })
   .use(requireUser)
   .post(
     "/",
-    async ({ body, set }) => {
+    async ({ body }) => {
       if (body.prediction_run_id !== undefined) {
         const [run] = await db
           .select({ id: mlPredictionRuns.id, status: mlPredictionRuns.status })
           .from(mlPredictionRuns)
           .where(eq(mlPredictionRuns.id, body.prediction_run_id))
           .limit(1);
-        if (!run) return denyNotFound(set, "Prediction run not found");
+        if (!run) throw notFound("Prediction run not found");
         if (run.status !== RUN_STATUS.COMPLETED) {
-          set.status = 400;
-          return { message: "Only completed prediction runs can be measured against realized outcomes" };
+          throw badRequest("Only completed prediction runs can be measured against realized outcomes");
         }
       }
 
@@ -44,8 +43,7 @@ export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })
       } catch (e) {
         // No run row owns this job's status — surface the trigger failure to
         // the caller instead of pretending the backfill was accepted.
-        set.status = 502;
-        return { message: (e as Error).message };
+        throw new HttpError(502, (e as Error).message);
       }
 
       const response: OutcomeBackfillResponse = {

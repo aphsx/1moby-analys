@@ -185,6 +185,8 @@ keyed by `prediction_run_id`). Read via `GET /prediction-runs/:id/realized-outco
 - Drizzle: prefer query builder over raw `sql`. Use explicit snake_case column aliases in `select()`.
 - Shared types live in `packages/types` (`@moby/types`). Do not redefine across apps — import from there.
 - Response keys must be snake_case (matches the frontend contract).
+- Errors: throw `HttpError` / `badRequest` / `notFound` / `conflict` (`apps/api/src/lib/http/errors.ts`);
+  the app-level `onError` answers `{ message, code? }`. Routes never set `set.status` for errors.
 - Shared Excel parsing utilities are in `apps/api/src/lib/data-import/excel-core.ts` — do not duplicate in `train-import.ts` / `predict-import.ts`.
 
 Python (ml) style rules live in `apps/ml/AGENTS.md`.

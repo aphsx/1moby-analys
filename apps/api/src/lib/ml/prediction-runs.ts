@@ -22,7 +22,7 @@ import {
   predictDataSources,
   user,
 } from "../../db/schema";
-import { requireFoundForRead } from "../http/access-control";
+import { notFound } from "../http/errors";
 import { EMPTY_MODEL_VERSIONS, num } from "../ml-contract";
 import { UUID_RE } from "../constants";
 
@@ -96,12 +96,11 @@ export async function fetchRun(id: string): Promise<RunRow | null> {
   return rows[0] ?? null;
 }
 
-/** Org-wide read guard — 404 only when the run does not exist. */
-export function requireRunFound(
-  run: RunRow | null,
-  set: { status?: number | string }
-) {
-  return requireFoundForRead(run, set, "Prediction run not found");
+/** fetchRun, or a 404 when the run doesn't exist (runs are readable org-wide). */
+export async function requireRun(id: string): Promise<RunRow> {
+  const run = await fetchRun(id);
+  if (!run) throw notFound("Prediction run not found");
+  return run;
 }
 
 // ── Output row mapping ─────────────────────────────────────────

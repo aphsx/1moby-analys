@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { auth } from "../../auth";
+import { HttpError } from "./errors";
 
 /** Minimal session-user shape we read (Better Auth returns additionalFields). */
 interface SessionUser {
@@ -22,18 +23,16 @@ export const userPlugin = new Elysia({ name: "user-plugin" }).derive(
 );
 
 /**
- * Elysia plugin that guards a route group: responds 401 if no session.
- * Uses `as: "scoped"` so the guard does NOT propagate to the parent app
- * (i.e. /health and other public routes are unaffected).
+ * Elysia plugin that guards a route group: 401 without a session, and `userId` is
+ * typed as a string inside the group. Uses `as: "scoped"` so the guard does NOT
+ * propagate to the parent app (i.e. /health and other public routes are unaffected).
  *
  * Usage:
- *   const myRoutes = new Elysia().use(requireUser).get("/protected", ...)
+ *   const myRoutes = new Elysia().use(requireUser).get("/protected", ({ userId }) => ...)
  */
 export const requireUser = new Elysia({ name: "require-user" })
   .use(userPlugin)
-  .onBeforeHandle({ as: "scoped" }, ({ userId, set }) => {
-    if (!userId) {
-      set.status = 401;
-      return { message: "Not authenticated" };
-    }
+  .resolve({ as: "scoped" }, ({ userId }) => {
+    if (!userId) throw new HttpError(401, "Not authenticated", "UNAUTHENTICATED");
+    return { userId };
   });
