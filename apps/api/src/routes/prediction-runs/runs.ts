@@ -127,7 +127,15 @@ export const runsRoutes = new Elysia()
 
       await db
         .update(mlPredictionRuns)
-        .set({ status: RUN_STATUS.PENDING, errorMessage: null, progressJson: null })
+        // Clear the timestamps too: the runner keeps an existing started_at, and the
+        // stale-run reaper would otherwise kill a retry of a run first started >2h ago.
+        .set({
+          status: RUN_STATUS.PENDING,
+          errorMessage: null,
+          progressJson: null,
+          startedAt: null,
+          finishedAt: null,
+        })
         .where(eq(mlPredictionRuns.id, run!.id));
 
       try {
