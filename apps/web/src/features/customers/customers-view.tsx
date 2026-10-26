@@ -179,7 +179,7 @@ interface CustomersViewProps {
   aiError?: string | null;
 }
 
-function Inner({
+export function CustomersView({
   rows,
   total,
   page,
@@ -270,7 +270,6 @@ function Inner({
   };
 
   const activeFilters = Object.entries(filters).filter(([_, value]) => value).length;
-  const pendingRows = pending;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const startRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const endRow = Math.min(total, (page - 1) * pageSize + rows.length);
@@ -395,10 +394,10 @@ function Inner({
               </div>
 
               <div className="divide-y divide-gray-100">
-                {pendingRows && [...Array(8)].map((_, i) => (
+                {pending && [...Array(8)].map((_, i) => (
                   <div key={i} className="px-5 py-4"><Skeleton className="h-10" /></div>
                 ))}
-                {!pendingRows && rows.map((r) => (
+                {!pending && rows.map((r) => (
                   <CustomerTableRow
                     key={r.acc_id}
                     row={r}
@@ -408,7 +407,7 @@ function Inner({
                     onGenAiClick={(event) => handleGenAiClick(event, r)}
                   />
                 ))}
-                {!pendingRows && rows.length === 0 && (
+                {!pending && rows.length === 0 && (
                   <div className="px-5 py-12 text-center">
                     <p className="text-[15px] font-semibold text-[color:var(--ink-2)]">No customers match this view</p>
                     <p className="mt-1 text-[13px] text-[color:var(--ink-4)]">Reset filters or search another account ID.</p>
@@ -420,7 +419,7 @@ function Inner({
 
           <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="num text-[12px] text-[color:var(--ink-4)]">
-              {pendingRows
+              {pending
                 ? "Loading customers..."
                 : `${startRow.toLocaleString()}-${endRow.toLocaleString()} of ${total.toLocaleString()} matching`}
             </div>
@@ -428,7 +427,7 @@ function Inner({
               <button
                 type="button"
                 onClick={() => onPageChange(page - 1)}
-                disabled={pendingRows || page <= 1}
+                disabled={pending || page <= 1}
                 className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] font-semibold text-[color:var(--ink-4)] hover:bg-gray-50 hover:text-[color:var(--ink-2)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <ChevronLeft size={13} /> Previous
@@ -439,7 +438,7 @@ function Inner({
               <button
                 type="button"
                 onClick={() => onPageChange(page + 1)}
-                disabled={pendingRows || page >= totalPages}
+                disabled={pending || page >= totalPages}
                 className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] font-semibold text-[color:var(--ink-4)] hover:bg-gray-50 hover:text-[color:var(--ink-2)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Next <ChevronRight size={13} />
@@ -592,8 +591,4 @@ function FilterChip({
       {children}
     </button>
   );
-}
-
-export function CustomersView(props: CustomersViewProps) {
-  return <Inner {...props} />;
 }

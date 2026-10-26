@@ -1,11 +1,11 @@
 "use client";
 /**
- * Model training surface (redesigned). Two sections only:
- *   1. TrainPanel       — pick/upload a dataset → Train (cutoff/horizon in Advanced)
- *   2. ModelStatusCards — production champion + latest result + version management
- * This view owns all state: data sources (load/upload/select/delete) and training
- * runs (create/poll/suggested cutoff). The old upload section, dataset table,
- * training-history table, result cards, and version section are gone.
+ * Model Training page:
+ *   1. TrainPanel           — pick/upload a Train Data Source → Train (cutoff/horizon in Advanced)
+ *   2. ModelStatusCards     — each Model Type's Champion, latest result, version management
+ *   3. TrainingHistoryTable — past Training Runs
+ * This view owns all state: Data Sources (load/upload/select/delete) and Training Runs
+ * (create/poll/suggested cutoff).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

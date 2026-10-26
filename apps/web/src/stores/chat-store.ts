@@ -68,7 +68,6 @@ type ChatState = {
 
   send: (text: string) => Promise<void>;
   cancel: () => void;
-  clearMessages: () => void;
 
   // Floating widget
   unread: number;
@@ -361,7 +360,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   cancel: () => controller?.abort(),
 
-  clearMessages: () => set({ messages: [], streaming: null, thinkingStep: null }),
 
   setWidgetOpen: (open: boolean) => set((s) => ({ widgetOpen: open, unread: open ? 0 : s.unread })),
 
@@ -381,4 +379,3 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
 // ── Formatting helpers ─────────────────────────────────────────────────────────
 
-export { formatTime } from "@/lib/format";
