@@ -24,8 +24,9 @@ trigger outcome backfill. Sign-in is Google OAuth. AI chat conversations stay pr
 Text-to-SQL queries are scoped org-wide (deterministic id allowlist in
 `apps/api/src/lib/ai/scope.ts`).
 
-**Deployment target:** Local Docker for dev. CI (`.github/workflows/ci.yml`) deploys `web` / `api` / `ml`
-to Railway on push to `main` (Postgres + Redis are not deployed from CI). The Railway services are
+**Deployment target:** Local Docker for dev. CI (`.github/workflows/ci.yml`) runs checks on every push
+and PR; deploying `web` / `api` / `ml` to Railway is a manual run of that workflow on `main`
+(Postgres + Redis are not deployed from CI). The Railway services are
 currently stopped to save cost; model files live only in the local `./models` volume.
 
 ## Commands
@@ -48,7 +49,7 @@ docker compose up -d --build web     # the web image has no hot reload — `rest
 
 # Run everything in dev via Turbo (web :3000, api :3001)
 bun run dev
-bun run build                        # turbo build (web: next build; api: tsc --noEmit) — this is all CI runs
+bun run build                        # turbo build (web: next build; api: tsc --noEmit)
 bun run typecheck                    # tsc --noEmit in web + api (`lint` is an alias for the same thing)
 
 # Per-app dev (cd into the app)
@@ -61,7 +62,8 @@ ML service commands (CLIs, uvicorn) live in `apps/ml/AGENTS.md`.
 
 ### Tests / verification
 
-There are **no tests**. `bun run test` is wired to `bun test` per app but no test files exist; no pytest. ML correctness is checked by the
+There are **no tests** yet (plan steps 0.5–0.6 add them). CI runs `typecheck`, `build`, a Python
+compile check, and the two database-free contract scripts. ML correctness is checked by the
 `apps/ml/scripts/verify_*.py` "contract" scripts — see `apps/ml/AGENTS.md` for which to run.
 
 ## Documentation
