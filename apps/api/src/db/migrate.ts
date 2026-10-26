@@ -20,6 +20,8 @@ export async function runMigrations(): Promise<string[]> {
 
   return sqlClient.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`;
+    // Idempotent statements (IF NOT EXISTS) raise NOTICEs that postgres.js would print.
+    await tx`SET LOCAL client_min_messages = warning`;
     await tx`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         filename text PRIMARY KEY,
