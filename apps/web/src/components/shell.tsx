@@ -6,25 +6,31 @@ import Sidebar from "./sidebar";
 import AIChatWidget from "./ai-chat-widget";
 import { MobyIntroSplash } from "./moby-intro-splash";
 import { GlobalStatusDialogHost } from "./global-status-dialog-host";
-import RunSelector from "./run-selector";
+import { RunScope } from "./run-selector";
 import { RunUrlSync } from "./run-url-sync";
-import {
-  getRouteTitle,
-  isBareRoute,
-  shouldHideAiWidget,
-  shouldShowRunSelector,
-} from "@/lib/nav";
+import { PageHeader } from "./ui";
+import { getRouteTitle, isAiChatRoute, isBareRoute, shouldShowRunSelector } from "@/lib/nav";
 
+/**
+ * App frame (docs/ui/DESIGN.md §5): no top bar from 860px up; below that a 48px bar with the page
+ * title and a menu button that opens the sidebar as a full-screen sheet.
+ */
 export default function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const bare = isBareRoute(pathname);
 
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
 
-  if (bare) {
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMobileNavOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
+
+  if (isBareRoute(pathname)) {
     return (
       <>
         <MobyIntroSplash />
@@ -34,8 +40,8 @@ export default function Shell({ children }: { children: ReactNode }) {
     );
   }
 
-  const hideWidget = shouldHideAiWidget(pathname);
-  const routeTitle = getRouteTitle(pathname);
+  const aiChat = isAiChatRoute(pathname);
+  const title = getRouteTitle(pathname);
   const showRunSelector = shouldShowRunSelector(pathname);
 
   return (
@@ -47,39 +53,30 @@ export default function Shell({ children }: { children: ReactNode }) {
           <RunUrlSync />
         </Suspense>
       )}
-      <div className="flex h-dvh overflow-hidden md:h-screen">
+      <div className="flex h-dvh overflow-hidden">
         <Sidebar mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-6 lg:h-16 lg:flex-nowrap lg:overflow-hidden lg:px-8 lg:py-0">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setMobileNavOpen(true)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-[color:var(--ink-3)] hover:bg-gray-50 md:hidden"
-                aria-label="เปิดเมนูนำทาง"
-                aria-expanded={mobileNavOpen}
-              >
-                <Menu size={18} />
-              </button>
-              {routeTitle ? (
-                <h1 className="type-display min-w-0 truncate text-[18px] leading-tight sm:text-[20px]">
-                  {routeTitle}
-                </h1>
-              ) : null}
-            </div>
-            {showRunSelector && (
-              <div className="w-full min-w-0 lg:w-auto lg:shrink-0">
-                <RunSelector />
-              </div>
-            )}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-ground px-2 min-[860px]:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-control text-text"
+              aria-label="เปิดเมนู"
+              aria-expanded={mobileNavOpen}
+              aria-controls="app-nav"
+            >
+              <Menu size={18} />
+            </button>
+            {title ? <span className="min-w-0 truncate text-body font-semibold text-text">{title}</span> : null}
           </header>
           <main className="flex-1 overflow-y-auto">
-            <Suspense fallback={<div className="p-8 text-[color:var(--ink-5)]">Loading…</div>}>
-              {children}
-            </Suspense>
+            {!aiChat && title ? (
+              <PageHeader title={title} scope={showRunSelector ? <RunScope /> : undefined} />
+            ) : null}
+            <Suspense fallback={<div className="p-8 text-muted">กำลังโหลด…</div>}>{children}</Suspense>
           </main>
         </div>
-        {!hideWidget && <AIChatWidget />}
+        {!aiChat && <AIChatWidget />}
       </div>
     </>
   );

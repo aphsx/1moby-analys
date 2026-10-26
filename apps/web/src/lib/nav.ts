@@ -1,77 +1,59 @@
 /**
- * Single source of truth for navigation + header metadata.
- * Both the sidebar (items/labels/icons) and the shell header (titles, run
- * selector, AI widget visibility) derive from here, instead of duplicating
- * route lists across sidebar.tsx and shell.tsx.
+ * Single source of truth for navigation and page titles. The sidebar, the page header and the
+ * browser tab (`pageTitle` in each page.tsx) all derive from here. Copy: docs/ui/CONTENT.md §7.
  */
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Users, Database, Activity, MessageSquareMore } from "lucide-react";
+import { BrainCircuit, Database, LayoutDashboard, MessageSquareMore, Target, Users } from "lucide-react";
 
 export interface NavItem {
   href: string;
-  /** Sidebar label. */
+  /** Sidebar label (short). */
   label: string;
-  /** Header title (kept distinct from `label` where the existing text differed). */
+  /** Page title: the h1, the mobile top bar and the browser tab. */
   title: string;
   icon: LucideIcon;
-  badge?: "AI";
 }
 
 export interface NavSection {
-  title: string;
+  /** Group label; the first group has none. */
+  title?: string;
   items: NavItem[];
 }
 
-/** Top sidebar sections. */
-export const PRIMARY_NAV: NavSection[] = [
+export const NAV: NavSection[] = [
   {
-    title: "Operate",
     items: [
-      { href: "/", label: "Dashboard", title: "Dashboard", icon: LayoutDashboard },
-      { href: "/customers", label: "Customers", title: "Customers", icon: Users },
+      { href: "/", label: "ภาพรวม", title: "ภาพรวมลูกค้า", icon: LayoutDashboard },
+      { href: "/customers", label: "ลูกค้า", title: "รายชื่อลูกค้า", icon: Users },
+      { href: "/ai-chat", label: "ผู้ช่วย AI", title: "ผู้ช่วย AI", icon: MessageSquareMore },
     ],
   },
   {
-    title: "Assistant",
+    title: "การทำนาย",
     items: [
-      { href: "/ai-chat", label: "AI Assistant", title: "AI Assistant", icon: MessageSquareMore, badge: "AI" },
-    ],
-  },
-];
-
-/** Bottom sidebar sections. */
-export const FOOTER_NAV: NavSection[] = [
-  {
-    title: "Prediction",
-    items: [
-      { href: "/runs", label: "Prediction Runs", title: "Prediction runs", icon: Database },
-      { href: "/training", label: "Model Training", title: "Model Training", icon: Activity },
-    ],
-  },
-  {
-    title: "Models",
-    items: [
-      { href: "/model-performance", label: "Model Metrics", title: "Model Metrics", icon: Activity },
+      { href: "/runs", label: "รอบทำนาย", title: "รอบทำนาย", icon: Database },
+      { href: "/training", label: "เทรนโมเดล", title: "เทรนโมเดล", icon: BrainCircuit },
+      { href: "/model-performance", label: "ความแม่นยำโมเดล", title: "ความแม่นยำโมเดล", icon: Target },
     ],
   },
 ];
 
-/** Header titles for routes that aren't in the sidebar nav. */
-const EXTRA_TITLES: Record<string, string> = {
-  "/profile": "My Account",
+const TITLES: Record<string, string> = {
+  ...Object.fromEntries(NAV.flatMap((s) => s.items.map((i) => [i.href, i.title]))),
+  "/profile": "บัญชีของฉัน",
 };
 
-const EXACT_TITLES: Record<string, string> = {
-  ...Object.fromEntries(
-    [...PRIMARY_NAV, ...FOOTER_NAV].flatMap((s) => s.items.map((i) => [i.href, i.title]))
-  ),
-  ...EXTRA_TITLES,
-};
-
-/** Header title for a pathname (handles the dynamic /customers/:id detail page). */
+/** Page title for a pathname (handles the dynamic /customers/:id page). */
 export function getRouteTitle(pathname: string): string | undefined {
-  if (pathname.startsWith("/customers/")) return "Customer detail";
-  return EXACT_TITLES[pathname];
+  const detail = /^\/customers\/([^/]+)/.exec(pathname);
+  if (detail) return `บัญชี #${decodeURIComponent(detail[1])}`;
+  return TITLES[pathname];
+}
+
+/** Browser-tab title for a page.tsx `metadata`. */
+export function pageTitle(pathname: string): string {
+  const title = getRouteTitle(pathname);
+  return title ? `${title} · 1Moby Intelligence` : "1Moby Intelligence";
 }
 
 /** Routes rendered without the app chrome (sidebar/header). */
@@ -86,7 +68,7 @@ export function shouldShowRunSelector(pathname: string): boolean {
   return pathname === "/" || pathname === "/customers" || pathname.startsWith("/customers/");
 }
 
-/** The floating AI widget is hidden on the full AI chat page. */
-export function shouldHideAiWidget(pathname: string): boolean {
+/** The AI chat page fills the canvas height itself, so it gets no page header or floating widget. */
+export function isAiChatRoute(pathname: string): boolean {
   return pathname.startsWith("/ai-chat");
 }

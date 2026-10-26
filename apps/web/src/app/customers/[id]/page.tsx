@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
+import { pageTitle } from "@/lib/nav";
 import { CustomerDetailClient } from "@/features/customers/customer-detail-client";
 
-export const metadata: Metadata = { title: "Customer 360 · 1Moby Intelligence" };
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return { title: pageTitle(`/customers/${id}`) };
+}
 
 type CustomerDetailSearchParams = {
   run?: string | string[];

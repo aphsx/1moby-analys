@@ -3,7 +3,7 @@
 import { type ModelPerfEntry } from "@moby/types";
 import { useCallback, useEffect, useState } from "react";
 import { Activity, CircleHelp } from "lucide-react";
-import { EmptyState, PageHeader, Skeleton } from "@/components/ui";
+import { EmptyState, Skeleton } from "@/components/ui";
 import { fetchModelPerformance } from "@/lib/ml-api";
 import { ModelPerformanceCard } from "./model-performance-card";
 
@@ -25,8 +25,6 @@ export function ModelPerformanceView() {
 
   return (
     <main className="pb-12">
-      <PageHeader title="Model Accuracy" />
-
       <div className="mt-5 space-y-4 px-4 sm:px-6 lg:px-8">
         <p className="max-w-3xl text-[12.5px] leading-5 text-[color:var(--ink-5)]">
           Production champion · test holdout ·{" "}

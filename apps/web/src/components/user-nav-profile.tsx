@@ -34,12 +34,12 @@ export default function UserNavProfile() {
 
   if (isPending) {
     return (
-      <div className="border-t border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-gray-100" />
+      <div className="border-t border-border px-3 py-3">
+        <div className="flex items-center gap-2.5 px-2">
+          <div className="h-8 w-8 shrink-0 rounded-full bg-raised" />
           <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="h-3.5 w-24 animate-pulse rounded bg-gray-100" />
-            <div className="h-3 w-32 animate-pulse rounded bg-gray-100" />
+            <div className="h-3.5 w-24 rounded bg-raised" />
+            <div className="h-3 w-32 rounded bg-raised" />
           </div>
         </div>
       </div>
@@ -52,34 +52,33 @@ export default function UserNavProfile() {
 
   return (
     <>
-      <div className="border-t border-gray-200 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="border-t border-border px-3 py-3">
+        <div className="flex min-w-0 items-center gap-1">
           <Link
             href="/profile"
-            title="จัดการบัญชี"
-            className="flex min-w-0 flex-1 items-center gap-3 rounded-lg -mx-1 px-1 py-1 transition-colors hover:bg-gray-50"
+                        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 py-1.5 transition-colors duration-150 hover:bg-raised"
           >
             {user.image ? (
               <img
                 src={user.image}
                 alt=""
                 referrerPolicy="no-referrer"
-                className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
+                className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border"
               />
             ) : (
               <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color:var(--moby-600)] text-xs font-semibold text-white"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-micro font-semibold text-accent-ink"
                 aria-hidden
               >
                 {initials(displayName)}
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium text-[color:var(--ink-1)]">
+              <p className="truncate text-body font-medium text-text">
                 {displayName}
               </p>
               {user.email && (
-                <p className="truncate text-[11.5px] text-[color:var(--ink-4)]">
+                <p className="truncate text-micro text-muted">
                   {user.email}
                 </p>
               )}
@@ -89,9 +88,9 @@ export default function UserNavProfile() {
             type="button"
             onClick={() => setConfirmLogout(true)}
             disabled={loggingOut}
-            title="Sign out"
-            aria-label="Sign out"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[color:var(--ink-4)] transition-colors hover:bg-gray-100 hover:text-[color:var(--ink-2)] disabled:cursor-not-allowed disabled:opacity-50"
+            title="ออกจากระบบ"
+            aria-label="ออกจากระบบ"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors duration-150 hover:bg-raised hover:text-text disabled:cursor-not-allowed disabled:opacity-50 min-[860px]:h-8 min-[860px]:w-8"
           >
             <LogOut size={16} strokeWidth={1.9} />
           </button>

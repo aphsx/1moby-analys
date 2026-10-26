@@ -6,16 +6,32 @@ import { formatPercent, formatSignedPercent } from "@/lib/format";
 /* Primitives from docs/ui/DESIGN.md §6. Colours come from tokens only. */
 
 /* ────────────────────────────────────────── */
-/*  PageHeader (in-page sub header)          */
+/*  PageHeader (§6.1): noun title, one-sentence finding, one primary action, scope row */
 /* ────────────────────────────────────────── */
-export function PageHeader({ title, actions }: { title: ReactNode; actions?: ReactNode }) {
+export function PageHeader({
+  title,
+  finding,
+  action,
+  scope,
+}: {
+  title: ReactNode;
+  /** what the data says, not how to use the screen (CONTENT.md §1) */
+  finding?: ReactNode;
+  action?: ReactNode;
+  /** run selector + freshness stamp */
+  scope?: ReactNode;
+}) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4 px-4 pb-2 pt-5 sm:px-6 sm:pt-6 lg:px-8">
-      <div>
-        <h2 className="type-display text-[24px] leading-tight">{title}</h2>
+    <header className="px-4 pt-5 sm:px-6 lg:px-8 min-[860px]:pt-8">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h1 className="text-[24px] font-semibold leading-[1.25] text-text min-[860px]:text-title">{title}</h1>
+          {finding ? <p className="mt-1 max-w-[64ch] text-body text-muted">{finding}</p> : null}
+        </div>
+        {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </div>
-      <div className="flex items-center gap-2">{actions}</div>
-    </div>
+      {scope ? <div className="mt-4">{scope}</div> : null}
+    </header>
   );
 }
 
