@@ -17,7 +17,7 @@
 
 import { db } from "../../db/client";
 import { aiConversations, aiMessages, mlPredictionRuns } from "../../db/schema";
-import { and, eq, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { complete, stream, LLMError, type ChatMessage } from "./llm-client";
 import { getLLMConfig, isLLMConfigured } from "./llm-config";
 import { checkUserQuestionSafety } from "./safety";
@@ -84,18 +84,17 @@ export type OrchestratorOptions = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Resolve a run the user owns into the agent's BoundRun, or null if foreign. */
-async function resolveBoundRun(runId: string | null, userId: string): Promise<BoundRun | null> {
+/** Resolve a run into the agent's BoundRun, or null if it doesn't exist. Runs are org-shared. */
+async function resolveBoundRun(runId: string | null): Promise<BoundRun | null> {
   if (!runId) return null;
   const [row] = await db
     .select({
       id: mlPredictionRuns.id,
       name: mlPredictionRuns.name,
       cutoffDate: mlPredictionRuns.cutoffDate,
-      createdBy: mlPredictionRuns.createdBy,
     })
     .from(mlPredictionRuns)
-    .where(and(eq(mlPredictionRuns.id, runId), eq(mlPredictionRuns.createdBy, userId)))
+    .where(eq(mlPredictionRuns.id, runId))
     .limit(1);
   if (!row) return null;
   return { id: row.id, name: row.name, cutoffDate: row.cutoffDate };
@@ -211,7 +210,7 @@ export async function* orchestrate(opts: OrchestratorOptions): AsyncGenerator<st
     : null;
 
   // Resolve + ownership-check the bound run.
-  const boundRun = await resolveBoundRun(opts.boundRunId, opts.userId);
+  const boundRun = await resolveBoundRun(opts.boundRunId);
   const role = getAiUserRole();
   const scope = await loadUserScope(opts.userId);
 
