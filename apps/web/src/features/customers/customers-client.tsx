@@ -15,7 +15,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useActiveRun } from "@/stores/run-store";
 import { BUTTON, EmptyState, Skeleton } from "@/components/ui";
-import { fetchRunOutputs, fetchRunSummary, generateCustomerAiExplanation } from "@/lib/ml-api";
+import { fetchRunOutputs, fetchRunSummary } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { useAsync } from "@/lib/use-async";
 import {
@@ -108,7 +108,6 @@ function CustomersClientInner() {
   const [page, setPage] = useState<OutputsPage | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
   // Tab and preset counts; the list still renders if this fails
   const summary = useAsync(() => fetchRunSummary(effectiveRunId), [effectiveRunId], Boolean(effectiveRunId)).data ?? null;
 
@@ -277,27 +276,6 @@ function CustomersClientInner() {
     );
   }
 
-  const handleGenerateAi = async (accId: number, options?: { force?: boolean }) => {
-    if (!effectiveRunId) return;
-    setAiError(null);
-    try {
-      const result = await generateCustomerAiExplanation(effectiveRunId, accId, options);
-      setPage((current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          data: current.data.map((row) =>
-            row.acc_id === accId
-              ? { ...row, ai_status: result.ai_status, ai_explanation: result.ai_explanation }
-              : row
-          ),
-        };
-      });
-    } catch (e: unknown) {
-      setAiError(getDisplayError(e, "สร้างสรุปจาก AI ไม่สำเร็จ"));
-    }
-  };
-
   return (
     <CustomersView
       rows={page.data}
@@ -314,8 +292,6 @@ function CustomersClientInner() {
       onSortChange={updateSort}
       onPresetApply={applyPreset}
       onPageChange={updatePage}
-      onGenerateAi={handleGenerateAi}
-      aiError={aiError}
     />
   );
 }

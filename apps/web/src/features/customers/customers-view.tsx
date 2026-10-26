@@ -4,17 +4,14 @@
  * heading that states the filtered total, and a table that turns into two-line rows on phones.
  */
 import { type OutputsQuery, type PredictionOutput, type RunSummary } from "@moby/types";
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Download, X } from "lucide-react";
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
-import { StatusDialog } from "@/components/status-dialog";
 import { BUTTON, InfoTip, Skeleton, StatusPill, type PillTone } from "@/components/ui";
 import { formatBaht, formatBahtCompact, formatCount, formatDaysAgo, formatDaysAhead, formatPercent } from "@/lib/format";
 import { LIFECYCLE_HELP, LIFECYCLE_LABEL, RISK_LABEL, URGENCY_LABEL, VALUE_TIER_LABEL } from "@/lib/labels";
-import { shouldConfirmAiOverwrite } from "./customer-ai";
 import { EXPORT_ROW_CAP, exportOutputsCsv } from "./export-csv";
-import { GenAiButton } from "./gen-ai-button";
 import { humanizeFeature } from "./reasoning";
 
 export type CustomerRow = Pick<
@@ -28,8 +25,6 @@ export type CustomerRow = Pick<
   | "revenue_at_risk"
   | "estimated_days_until_topup"
   | "days_since_last_activity"
-  | "ai_status"
-  | "ai_explanation"
 >;
 
 export type CustomerSortKey =
@@ -169,8 +164,6 @@ interface CustomersViewProps {
   /** Applies filters + sort atomically (one URL update) — used by presets. */
   onPresetApply: (filters: CustomerFilters, sort: CustomerSort | null) => void;
   onPageChange: (page: number) => void;
-  onGenerateAi: (accId: number, options?: { force?: boolean }) => Promise<void>;
-  aiError?: string | null;
 }
 
 export function CustomersView({
@@ -188,11 +181,7 @@ export function CustomersView({
   onSortChange,
   onPresetApply,
   onPageChange,
-  onGenerateAi,
-  aiError = null,
 }: CustomersViewProps) {
-  const [generatingAccIds, setGeneratingAccIds] = useState<Set<number>>(() => new Set());
-  const [pendingOverwriteAccId, setPendingOverwriteAccId] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ loaded: number; total: number } | null>(null);
 
@@ -202,28 +191,6 @@ export function CustomersView({
     if (!sort || sort.key !== key) return onSortChange({ key, direction: "desc" });
     if (sort.direction === "desc") return onSortChange({ key, direction: "asc" });
     onSortChange(null);
-  };
-
-  const runAiGeneration = async (accId: number, force = false) => {
-    setGeneratingAccIds((current) => new Set(current).add(accId));
-    try {
-      await onGenerateAi(accId, { force });
-    } finally {
-      setGeneratingAccIds((current) => {
-        const next = new Set(current);
-        next.delete(accId);
-        return next;
-      });
-    }
-  };
-
-  const handleGenAiClick = (event: MouseEvent<HTMLButtonElement>, row: CustomerRow) => {
-    event.stopPropagation();
-    if (shouldConfirmAiOverwrite(row)) {
-      setPendingOverwriteAccId(row.acc_id);
-      return;
-    }
-    void runAiGeneration(row.acc_id);
   };
 
   const handleExport = async () => {
@@ -277,8 +244,6 @@ export function CustomersView({
 
   return (
     <div className="space-y-5 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
-      {aiError ? <p className="rounded-card border border-border bg-surface px-4 py-3 text-body text-negative">{aiError}</p> : null}
-
       {/* Lifecycle tabs: the tab says the stage, so the table has no status column */}
       <nav aria-label="สถานะลูกค้า" className="-mx-1 overflow-x-auto border-b border-border">
         <ul className="flex min-w-max gap-5 px-1">
@@ -397,16 +362,13 @@ export function CustomersView({
                     <SortHeader label="รายได้ที่เสี่ยงหาย" sortKey="revenue_at_risk" sort={sort} onSort={cycleSort} right />
                     <SortHeader label="ใช้งานล่าสุด" sortKey="days_since_last_activity" sort={sort} onSort={cycleSort} right />
                     <SortHeader label="เติมครั้งถัดไป" sortKey="estimated_days_until_topup" sort={sort} onSort={cycleSort} right />
-                    <th className="w-[1%]">
-                      <span className="sr-only">สรุปจาก AI</span>
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {pending
                     ? Array.from({ length: 8 }, (_, i) => (
                         <tr key={i}>
-                          <td colSpan={6}>
+                          <td colSpan={5}>
                             <Skeleton className="h-5" />
                           </td>
                         </tr>
@@ -426,9 +388,6 @@ export function CustomersView({
                           <td className="num text-right">{r.days_since_last_activity != null ? formatDaysAgo(r.days_since_last_activity) : <Dash />}</td>
                           <td className="num text-right">
                             <TopUp days={r.estimated_days_until_topup} />
-                          </td>
-                          <td className="text-right">
-                            <GenAiButton ai={r} inFlight={generatingAccIds.has(r.acc_id)} onClick={(e) => handleGenAiClick(e, r)} />
                           </td>
                         </tr>
                       ))}
@@ -456,12 +415,9 @@ export function CustomersView({
                         <span className="min-w-0 truncate text-small text-muted">{reason(r)}</span>
                         <Churn row={r} />
                       </div>
-                      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-small text-muted">
-                        <span className="num">
-                          ใช้งานล่าสุด {formatDaysAgo(r.days_since_last_activity)} · เติมครั้งถัดไป <TopUp days={r.estimated_days_until_topup} />
-                        </span>
-                        <GenAiButton ai={r} inFlight={generatingAccIds.has(r.acc_id)} onClick={(e) => handleGenAiClick(e, r)} />
-                      </div>
+                      <p className="num mt-1 text-small text-muted">
+                        ใช้งานล่าสุด {formatDaysAgo(r.days_since_last_activity)} · เติมครั้งถัดไป <TopUp days={r.estimated_days_until_topup} />
+                      </p>
                     </li>
                   ))}
             </ul>
@@ -483,21 +439,6 @@ export function CustomersView({
         </footer>
       </section>
 
-      {pendingOverwriteAccId != null && (
-        <StatusDialog
-          open
-          tone="warning"
-          title="มีสรุปจาก AI อยู่แล้ว"
-          message={`บัญชี #${pendingOverwriteAccId} มีสรุปจาก AI อยู่แล้ว ต้องการสร้างใหม่และเขียนทับของเดิมไหม`}
-          confirmLabel="เขียนทับ"
-          cancelLabel="ยกเลิก"
-          onCancel={() => setPendingOverwriteAccId(null)}
-          onConfirm={() => {
-            void runAiGeneration(pendingOverwriteAccId, true);
-            setPendingOverwriteAccId(null);
-          }}
-        />
-      )}
     </div>
   );
 }

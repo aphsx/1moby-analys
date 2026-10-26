@@ -12,12 +12,11 @@ import {
   YAxis,
 } from "recharts";
 import { formatBaht, formatBahtCompact, formatCount, formatCredits, formatMonth } from "@/lib/format";
-import { MOBY_BRAND } from "@/lib/login-brand-colors";
 
 const DEFAULT_VISIBLE = 12;
 const MIN_VISIBLE = 1;
 const CHART_HEIGHT = 220;
-const Y_AXIS_WIDTH = 40;
+const Y_AXIS_WIDTH = 56;
 
 type MonthlyPayment = {
   month: string;
@@ -141,9 +140,7 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
 
   if (payments.length === 0) {
     return (
-      <div className="rounded-[24px] border border-gray-200 bg-white p-6 text-center text-[13px] text-[color:var(--ink-4)]">
-        ไม่มีประวัติการชำระเงินสำหรับ account นี้
-      </div>
+      <p className="text-body text-muted">ไม่มีประวัติการชำระเงิน</p>
     );
   }
 
@@ -244,15 +241,15 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
     <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex items-center justify-between gap-2 px-1">
-          <p className="text-[11.5px] font-medium text-[color:var(--ink-4)]">{rangeLabel}</p>
+          <p className="num text-small text-muted">{rangeLabel}</p>
           {canNavigate ? (
-            <p className="text-[10.5px] text-[color:var(--ink-5)]">ลากเลื่อน · scroll ปรับ scale</p>
+            <p className="text-micro text-muted">ลากเพื่อเลื่อน · เลื่อนล้อเมาส์เพื่อซูม</p>
           ) : null}
         </div>
 
         <div
           ref={chartAreaRef}
-          className={`overflow-hidden rounded-[24px] border border-gray-200 bg-white p-4 touch-none select-none ${
+          className={`overflow-hidden rounded-card border border-border bg-surface p-4 touch-none select-none ${
             canNavigate ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
           }`}
           onPointerDown={onChartPointerDown}
@@ -274,8 +271,8 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
                   tickLine={false}
                   width={Y_AXIS_WIDTH}
                   tickFormatter={(v: number) => formatBahtCompact(v)}
-                  stroke="#999999"
-                  fontSize={10}
+                  stroke="var(--axis-ink)"
+                  fontSize={12}
                   tickCount={5}
                 />
               </BarChart>
@@ -296,7 +293,7 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
                     data={[...monthly]}
                     margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
                   >
-                    <CartesianGrid vertical={false} stroke="#f3f4f6" />
+                    <CartesianGrid vertical={false} stroke="var(--grid)" />
                     <XAxis
                       dataKey="month"
                       axisLine={false}
@@ -304,8 +301,8 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
                       tickMargin={8}
                       interval={0}
                       tickFormatter={(m: string) => formatMonth(m)}
-                      stroke="#999999"
-                      fontSize={10}
+                      stroke="var(--axis-ink)"
+                      fontSize={12}
                     />
                     <YAxis hide domain={[0, yMax]} />
                     <Tooltip
@@ -314,25 +311,28 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
                       formatter={(value: number, _name, item) => {
                         const row = item?.payload as MonthlyPayment | undefined;
                         return [
-                          `${formatBaht(value)} · ${formatCount(row?.count ?? 0)} payments · ${formatCredits(row?.credit_add ?? 0)}`,
-                          "Paid",
+                          `${formatBaht(value)} · ${formatCount(row?.count ?? 0)} ครั้ง · ${formatCredits(row?.credit_add ?? 0)}`,
+                          "ชำระ",
                         ];
                       }}
                       contentStyle={{
-                        borderRadius: 12,
-                        border: "1px solid #e5e7eb",
+                        borderRadius: 6,
+                        border: "none",
+                        background: "var(--tip-bg)",
+                        color: "var(--tip-ink)",
                         fontSize: 12,
-                        boxShadow: "var(--shadow-1)",
+                        boxShadow: "var(--shadow-float)",
                       }}
+                      itemStyle={{ color: "var(--tip-ink)" }}
                     />
                     <Bar
                       dataKey="amount"
-                      radius={[6, 6, 0, 0]}
+                      radius={[2, 2, 0, 0]}
                       maxBarSize={Math.max(10, slotWidth * 0.62)}
                       isAnimationActive={false}
                     >
                       {monthly.map((row) => (
-                        <Cell key={row.month} fill={MOBY_BRAND.blue} />
+                        <Cell key={row.month} fill="var(--chart-1)" />
                       ))}
                     </Bar>
                   </BarChart>
@@ -344,7 +344,7 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
 
         {canNavigate ? (
           <div
-            className="relative h-6 rounded-lg border border-gray-200 bg-gray-50 px-0.5 touch-none select-none"
+            className="relative h-6 rounded-control border border-border bg-raised px-0.5 touch-none select-none"
             onPointerMove={onNavigatorPointerMove}
             onPointerUp={endNavigatorDrag}
             onPointerCancel={endNavigatorDrag}
@@ -379,9 +379,9 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
       </div>
 
       <div className="grid shrink-0 grid-cols-3 gap-2 lg:grid-cols-1 lg:w-[148px]">
-        <PaymentStat label="Total paid" value={formatBahtCompact(totalPaid)} hint={`${payments.length} payments`} />
-        <PaymentStat label="Avg ticket" value={formatBahtCompact(avgTicket)} hint="per payment" />
-        <PaymentStat label="Credits bought" value={formatCount(totalCredits)} hint="total top-up" />
+        <PaymentStat label="ชำระรวม" value={formatBahtCompact(totalPaid)} hint={`${formatCount(payments.length)} ครั้ง`} />
+        <PaymentStat label="เฉลี่ยต่อครั้ง" value={formatBahtCompact(avgTicket)} hint="ต่อการชำระ 1 ครั้ง" />
+        <PaymentStat label="เครดิตที่เติม" value={formatCount(totalCredits)} hint="รวมทุกครั้ง" />
       </div>
     </div>
   );
@@ -389,12 +389,10 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
 
 function PaymentStat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 lg:p-4">
-      <p className="text-[10px] font-semibold text-[color:var(--ink-5)] lg:text-[10.5px]">
-        {label}
-      </p>
-      <p className="num mt-1 text-[17px] font-semibold lg:text-[20px]">{value}</p>
-      <p className="mt-0.5 text-[10.5px] text-[color:var(--ink-4)] lg:mt-1 lg:text-[11.5px]">{hint}</p>
+    <div className="rounded-control bg-raised p-3">
+      <p className="text-micro text-muted">{label}</p>
+      <p className="num mt-1 text-section font-semibold text-text">{value}</p>
+      <p className="mt-0.5 text-micro text-muted">{hint}</p>
     </div>
   );
 }

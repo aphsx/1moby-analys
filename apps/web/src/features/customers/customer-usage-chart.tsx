@@ -10,15 +10,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatCount, formatCountCompact, formatMonth } from "@/lib/format";
-import { MOBY_BRAND } from "@/lib/login-brand-colors";
-import { Panel } from "./customer-detail-primitives";
+import { formatCount, formatCountCompact, formatDaysAgo, formatMonth } from "@/lib/format";
+import { EmptyState, Panel } from "@/components/ui";
 
 export type UsageTrendPoint = MonthlyUsagePoint;
 
 const DEFAULT_VISIBLE = 6;
 const MIN_VISIBLE = 1;
-const Y_AXIS_WIDTH = 40;
+const Y_AXIS_WIDTH = 56;
 
 type SeriesKey = "total" | "sms" | "email" | "bc" | "api" | "otp";
 
@@ -35,12 +34,13 @@ interface SeriesDef {
 }
 
 const SERIES: SeriesDef[] = [
-  { key: "total", label: "รวม", color: MOBY_BRAND.blue, group: "total" },
-  { key: "sms", label: "SMS", color: MOBY_BRAND.orange, group: "channel" },
-  { key: "email", label: "Email", color: "#10b981", group: "channel" },
-  { key: "bc", label: "BC", color: "#8b5cf6", group: "source" },
-  { key: "api", label: "API", color: "#06b6d4", group: "source" },
-  { key: "otp", label: "OTP", color: MOBY_BRAND.orangeWarm, group: "source" },
+  // total is the main series; the breakdowns stay on one hue ladder (DESIGN.md §7)
+  { key: "total", label: "รวม", color: "var(--chart-1)", group: "total" },
+  { key: "sms", label: "SMS", color: "var(--risk-high)", group: "channel" },
+  { key: "email", label: "Email", color: "var(--axis-ink)", group: "channel" },
+  { key: "bc", label: "SMS ส่งเอง", color: "var(--risk-critical)", group: "source" },
+  { key: "api", label: "SMS API", color: "var(--risk-medium)", group: "source" },
+  { key: "otp", label: "OTP", color: "var(--accent-ink)", group: "source" },
 ];
 
 function clampViewport(start: number, count: number, total: number): Viewport {
@@ -115,21 +115,16 @@ export function UsageSeriesToggles({
         const showDivider = index > 0 && SERIES[index - 1].group !== s.group;
         return (
           <span key={s.key} className="flex items-center gap-1">
-            {showDivider ? <span className="mx-0.5 h-3.5 w-px bg-gray-200" aria-hidden /> : null}
+            {showDivider ? <span className="mx-0.5 h-3.5 w-px bg-border" aria-hidden /> : null}
             <button
               type="button"
+              aria-pressed={isActive}
               onClick={() => onToggle(s.key)}
-              className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[10.5px] font-semibold transition-colors ${
-                isActive
-                  ? "border-transparent text-white"
-                  : "border-gray-200 bg-white text-[color:var(--ink-4)] hover:bg-gray-50"
+              className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-micro transition-colors duration-150 max-[859px]:h-11 ${
+                isActive ? "bg-accent-soft font-medium text-accent-ink" : "text-muted hover:bg-raised"
               }`}
-              style={isActive ? { backgroundColor: s.color } : undefined}
             >
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: isActive ? "rgba(255,255,255,0.9)" : s.color }}
-              />
+              <span aria-hidden className="inline-block h-0.5 w-3" style={{ backgroundColor: s.color }} />
               {s.label}
             </button>
           </span>
@@ -141,29 +136,44 @@ export function UsageSeriesToggles({
 
 export function UsageCreditPanel({
   data,
-  children,
+  daysSinceActivity,
 }: {
   data: readonly UsageTrendPoint[];
-  children: ReactNode;
+  daysSinceActivity: number | null;
 }) {
   const { active, toggle } = useUsageSeries();
+  const latest = data.at(-1);
+  const peak = data.length > 0 ? Math.max(...data.map((p) => p.total)) : null;
 
   return (
     <Panel
-      title="การใช้งาน Credit"
-      headerRight={<UsageSeriesToggles active={active} onToggle={toggle} />}
+      title="การใช้งาน"
+      meta="จำนวนข้อความต่อเดือน แยกตามช่องทาง"
+      right={<div className="flex flex-wrap items-center gap-1"><UsageSeriesToggles active={active} onToggle={toggle} /></div>}
     >
       <div className="space-y-4">
         {data.length > 0 ? (
           <UsageLineChart data={data} active={active} compact />
         ) : (
-          <div className="rounded-[24px] border border-gray-200 bg-white p-6 text-center text-[13px] text-[color:var(--ink-4)]">
-            ไม่มีข้อมูล usage สำหรับ account นี้
-          </div>
+          <EmptyState title="ไม่มีข้อมูลการใช้งานของลูกค้ารายนี้" />
         )}
-        {children}
+        <dl className="grid grid-cols-3 gap-3 border-t border-rule pt-3">
+          <MiniStat label="เดือนล่าสุด" value={latest ? formatCount(latest.total) : "—"} hint={latest ? formatMonth(latest.month, true) : undefined} />
+          <MiniStat label="สูงสุด" value={peak != null ? formatCount(peak) : "—"} hint="ในช่วงที่แสดง" />
+          <MiniStat label="ใช้งานล่าสุด" value={formatDaysAgo(daysSinceActivity)} />
+        </dl>
       </div>
     </Panel>
+  );
+}
+
+function MiniStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-micro text-muted">{label}</dt>
+      <dd className="num mt-0.5 text-body font-medium text-text">{value}</dd>
+      {hint ? <dd className="text-micro text-muted">{hint}</dd> : null}
+    </div>
   );
 }
 
@@ -333,15 +343,15 @@ export function UsageLineChart({
   return (
     <div className="space-y-2">
         <div className="flex items-center justify-between gap-2 px-1">
-          <p className="text-[11.5px] font-medium text-[color:var(--ink-4)]">{rangeLabel}</p>
+          <p className="num text-small text-muted">{rangeLabel}</p>
           {canNavigate ? (
-            <p className="text-[10.5px] text-[color:var(--ink-5)]">ลากเลื่อน · scroll ปรับ scale</p>
+            <p className="text-micro text-muted">ลากเพื่อเลื่อน · เลื่อนล้อเมาส์เพื่อซูม</p>
           ) : null}
         </div>
 
         <div
           ref={chartAreaRef}
-          className={`overflow-hidden rounded-[24px] border border-gray-200 bg-white p-4 touch-none select-none ${
+          className={`overflow-hidden rounded-card border border-border bg-surface p-4 touch-none select-none ${
             canNavigate ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
           }`}
           onPointerDown={onChartPointerDown}
@@ -363,8 +373,8 @@ export function UsageLineChart({
                   tickLine={false}
                   width={Y_AXIS_WIDTH}
                   tickFormatter={formatCountCompact}
-                  stroke="#999999"
-                  fontSize={10}
+                  stroke="var(--axis-ink)"
+                  fontSize={12}
                   tickCount={5}
                 />
               </LineChart>
@@ -385,7 +395,7 @@ export function UsageLineChart({
                     data={[...data]}
                     margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
                   >
-                    <CartesianGrid vertical={false} stroke="#f3f4f6" />
+                    <CartesianGrid vertical={false} stroke="var(--grid)" />
                     <XAxis
                       dataKey="month"
                       axisLine={false}
@@ -393,30 +403,33 @@ export function UsageLineChart({
                       tickMargin={8}
                       interval={0}
                       tickFormatter={(m: string) => formatMonth(m)}
-                      stroke="#999999"
-                      fontSize={10}
+                      stroke="var(--axis-ink)"
+                      fontSize={12}
                     />
                     <YAxis hide domain={[0, yMax]} />
                     <Tooltip
                       labelFormatter={(label: string) => formatMonth(label)}
                       formatter={(value: number, name: string) => [formatCount(value), name]}
                       contentStyle={{
-                        borderRadius: 12,
-                        border: "1px solid #e5e7eb",
+                        borderRadius: 6,
+                        border: "none",
+                        background: "var(--tip-bg)",
+                        color: "var(--tip-ink)",
                         fontSize: 12,
-                        boxShadow: "var(--shadow-1)",
+                        boxShadow: "var(--shadow-float)",
                       }}
+                      itemStyle={{ color: "var(--tip-ink)" }}
                     />
                     {activeSeries.map((s) => (
                       <Line
                         key={s.key}
-                        type="monotone"
+                        type="linear"
                         dataKey={s.key}
                         name={s.label}
                         stroke={s.color}
-                        strokeWidth={s.key === "total" ? 4 : 2.5}
-                        dot={{ r: 3, strokeWidth: 2, fill: "white" }}
-                        activeDot={{ r: 5 }}
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 4 }}
                         isAnimationActive={false}
                       />
                     ))}
@@ -429,7 +442,7 @@ export function UsageLineChart({
 
         {canNavigate ? (
           <div
-            className="relative h-6 rounded-lg border border-gray-200 bg-gray-50 px-0.5 touch-none select-none"
+            className="relative h-6 rounded-control border border-border bg-raised px-0.5 touch-none select-none"
             onPointerMove={onNavigatorPointerMove}
             onPointerUp={endNavigatorDrag}
             onPointerCancel={endNavigatorDrag}

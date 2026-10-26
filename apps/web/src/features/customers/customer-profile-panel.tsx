@@ -1,133 +1,118 @@
 "use client";
+/** Left panel of the customer page: who they are, how they use the service, how they pay. */
+import { type PaymentEvent, type PredictionOutput } from "@moby/types";
+import { type ReactNode } from "react";
+import { StatusPill } from "@/components/ui";
+import { formatBaht, formatCount, formatCredits, formatDate, formatDaysAgo, formatPercent } from "@/lib/format";
+import { CHANNEL_LABEL, LIFECYCLE_LABEL, SEGMENT_LABEL, VALUE_TIER_LABEL } from "@/lib/labels";
 
-import { type ProfileSnapshot } from "@moby/types";
-import { formatCount, formatCredits, formatDate, formatDaysAgo, formatPercent } from "@/lib/format";
-import { MOBY_BRAND } from "@/lib/login-brand-colors";
-
-
-function daysAgo(value: string | null): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  const diff = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  if (diff < 0) return null;
-  return formatDaysAgo(diff);
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  PAID: MOBY_BRAND.blue,
-  TRIAL: "#9ca3af",
-};
-
-const CHANNEL_SHARES = [
-  { key: "bc_usage_share", label: "BC", color: "#8b5cf6" },
-  { key: "api_usage_share", label: "API", color: "#06b6d4" },
-  { key: "otp_usage_share", label: "OTP", color: MOBY_BRAND.orangeWarm },
+// ShareBar parts take the one-hue risk ladder, darkest first (DESIGN.md §4, §7)
+const CHANNELS = [
+  { key: "bc_usage_share", label: CHANNEL_LABEL.bc, color: "var(--risk-critical)" },
+  { key: "api_usage_share", label: CHANNEL_LABEL.api, color: "var(--risk-high)" },
+  { key: "otp_usage_share", label: CHANNEL_LABEL.otp, color: "var(--risk-medium)" },
+  { key: "email_usage_share", label: CHANNEL_LABEL.email, color: "var(--risk-low)" },
 ] as const;
 
-export function CustomerProfilePanel({ snapshot }: { snapshot: ProfileSnapshot }) {
-  return (
-    <div className="space-y-4">
-      {/* Service status */}
-      <div className="grid grid-cols-2 gap-3">
-        <ServiceCard
-          label="SMS"
-          status={snapshot.status_sms}
-          credit={snapshot.credit_sms}
-          expire={snapshot.expire_sms}
-        />
-        <ServiceCard
-          label="Email"
-          status={snapshot.status_email}
-          credit={snapshot.credit_email}
-          expire={snapshot.expire_email}
-        />
-      </div>
-
-      {/* Lifecycle dates */}
-      <div className="grid grid-cols-3 gap-3">
-        <DateFact label="Joined" value={formatDate(snapshot.join_date)} hint={`${formatCount(snapshot.customer_age_days)} วัน`} />
-        <DateFact label="Last access" value={formatDate(snapshot.last_access)} hint={daysAgo(snapshot.last_access) ?? "—"} />
-        <DateFact label="Last send" value={formatDate(snapshot.last_send)} hint={daysAgo(snapshot.last_send) ?? "—"} />
-      </div>
-
-      {/* Channel usage share (last 180d) */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-[11px] font-semibold text-[color:var(--ink-5)]">
-            Usage share · 180d
-          </p>
-          <span className="num text-[11.5px] text-[color:var(--ink-4)]">
-            {formatCredits(snapshot.usage_total_180d)}
-          </span>
-        </div>
-        <div className="space-y-2.5">
-          {CHANNEL_SHARES.map((c) => {
-            const share = snapshot[c.key] ?? 0;
-            return (
-              <div key={c.key} className="flex items-center gap-3">
-                <span className="w-9 shrink-0 text-[11px] font-semibold text-[color:var(--ink-4)]">{c.label}</span>
-                <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-[rgba(13,17,35,0.06)]">
-                  <div
-                    className="h-full rounded-full transition-[width] duration-300"
-                    style={{ width: `${Math.max(0, Math.min(100, share * 100))}%`, backgroundColor: c.color }}
-                  />
-                </div>
-                <span className="num w-10 shrink-0 text-right text-[11.5px] font-semibold text-[color:var(--ink-2)]">
-                  {formatPercent(share)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
 }
 
-function ServiceCard({
-  label,
-  status,
-  credit,
-  expire,
-}: {
-  label: string;
-  status: string | null;
-  credit: number;
-  expire: string | null;
-}) {
-  const color = status ? STATUS_COLOR[status] ?? "#9ca3af" : "#9ca3af";
+export function CustomerProfilePanel({ customer: c, payments }: { customer: PredictionOutput; payments: PaymentEvent[] }) {
+  const s = c.profile_snapshot;
+  const lastPayment = payments.reduce<string | null>((a, p) => (!a || p.payment_date > a ? p.payment_date : a), null);
+  const shares = CHANNELS.map((ch) => ({ ...ch, share: Math.max(0, s[ch.key] ?? 0) }));
+  const used = shares.filter((ch) => ch.share > 0);
+
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold text-[color:var(--ink-5)]">
-          {label}
-        </span>
-        {status ? (
-          <span
-            className="inline-flex h-[20px] items-center rounded-full px-2 text-[10px] font-semibold text-white"
-            style={{ backgroundColor: color }}
-          >
-            {status}
-          </span>
+    <aside className="surface h-fit space-y-5 rounded-card p-5 max-[1179px]:order-last" aria-label="ข้อมูลลูกค้า">
+      <div className="flex flex-wrap gap-2">
+        <StatusPill tone={c.customer_value_tier === "high" ? "accent" : "neutral"}>{VALUE_TIER_LABEL[c.customer_value_tier]}</StatusPill>
+        <StatusPill>{LIFECYCLE_LABEL[c.lifecycle_stage]}</StatusPill>
+        {c.segment && c.segment in SEGMENT_LABEL ? (
+          <StatusPill>{SEGMENT_LABEL[c.segment as keyof typeof SEGMENT_LABEL]}</StatusPill>
         ) : null}
       </div>
-      <p className="num mt-2 text-[18px] font-semibold text-[color:var(--ink-1)]">
-        {formatCount(credit)}
-      </p>
-      <p className="text-[10.5px] text-[color:var(--ink-5)]">credits · หมดอายุ {formatDate(expire)}</p>
-    </div>
+
+      <Facts>
+        <Fact label="ลูกค้าตั้งแต่" value={formatDate(s.join_date)} hint={`${formatCount(s.customer_age_days)} วัน`} />
+        <Fact label="ใช้งานล่าสุด" value={formatDaysAgo(c.days_since_last_activity)} />
+        <Fact label="เข้าระบบล่าสุด" value={formatDate(s.last_access)} hint={formatDaysAgo(daysSince(s.last_access))} />
+        <Fact label="ส่งข้อความล่าสุด" value={formatDate(s.last_send)} hint={formatDaysAgo(daysSince(s.last_send))} />
+      </Facts>
+
+      <Group title="ช่องทางที่ใช้ · 180 วัน" right={formatCredits(s.usage_total_180d)}>
+        {used.length === 0 ? (
+          <p className="text-small text-muted">ไม่มีการใช้งานใน 180 วัน</p>
+        ) : (
+          <>
+            {/* one 100% bar split by 2px gaps (ShareBar) */}
+            <div className="flex h-2 gap-0.5 overflow-hidden rounded-full" role="img" aria-label={used.map((ch) => `${ch.label} ${formatPercent(ch.share)}`).join(", ")}>
+              {used.map((ch) => (
+                <span key={ch.key} style={{ flexGrow: ch.share, background: ch.color }} />
+              ))}
+            </div>
+            <ul className="mt-2 space-y-1">
+              {shares.map((ch) => (
+                <li key={ch.key} className="flex items-center justify-between gap-3 text-small">
+                  <span className="flex items-center gap-2 text-text">
+                    <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: ch.color }} />
+                    {ch.label}
+                  </span>
+                  <span className="num text-muted">{formatPercent(ch.share)}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Group>
+
+      <Group title="เครดิตคงเหลือ">
+        <Facts>
+          <Fact label="SMS" value={formatCredits(s.credit_sms)} hint={s.expire_sms ? `หมดอายุ ${formatDate(s.expire_sms)}` : undefined} tag={s.status_sms} />
+          <Fact label="Email" value={formatCredits(s.credit_email)} hint={s.expire_email ? `หมดอายุ ${formatDate(s.expire_email)}` : undefined} tag={s.status_email} />
+        </Facts>
+      </Group>
+
+      <Group title="การชำระเงิน">
+        <Facts>
+          <Fact label="ยอดชำระรวม" value={formatBaht(c.total_revenue)} />
+          <Fact label="จำนวนครั้งที่ชำระ" value={`${formatCount(c.n_purchases)} ครั้ง`} />
+          <Fact label="ยอดเฉลี่ยต่อครั้ง" value={c.avg_transaction_value != null ? formatBaht(c.avg_transaction_value) : "—"} />
+          <Fact label="ชำระครั้งล่าสุด" value={formatDate(lastPayment)} />
+        </Facts>
+      </Group>
+    </aside>
   );
 }
 
-function DateFact({ label, value, hint }: { label: string; value: string; hint: string }) {
+function Group({ title, right, children }: { title: string; right?: string; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-      <p className="text-[10.5px] font-semibold text-[color:var(--ink-5)]">
-        {label}
-      </p>
-      <p className="num mt-1 text-[12.5px] font-semibold text-[color:var(--ink-1)]">{value}</p>
-      <p className="mt-0.5 text-[11px] text-[color:var(--ink-4)]">{hint}</p>
+    <section className="border-t border-rule pt-4">
+      <h2 className="mb-2 flex items-baseline justify-between gap-3 text-small font-semibold text-text">
+        {title}
+        {right ? <span className="num font-normal text-muted">{right}</span> : null}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function Facts({ children }: { children: ReactNode }) {
+  return <dl className="space-y-2">{children}</dl>;
+}
+
+function Fact({ label, value, hint, tag }: { label: string; value: string; hint?: string; tag?: string | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-small text-muted">{label}</dt>
+      <dd className="num min-w-0 text-right text-small text-text">
+        {tag ? <span className="mr-1.5 align-middle"><StatusPill>{tag}</StatusPill></span> : null}
+        {value}
+        {hint ? <span className="block text-micro text-muted">{hint}</span> : null}
+      </dd>
     </div>
   );
 }
