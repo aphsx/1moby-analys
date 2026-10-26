@@ -21,6 +21,7 @@ import {
 import { createTrainingRun, fetchTrainingRuns, fetchTrainSuggestedCutoff } from "@/lib/ml-api";
 import { isActiveRunStatus, RUN_POLL_MS } from "@/lib/run-status";
 import { getDisplayError, getImportErrorMessage } from "@/lib/ui-error";
+import { useAsync } from "@/lib/use-async";
 import { ModelStatusCards } from "./model-status-cards";
 import { TrainPanel } from "./train-panel";
 import { TrainingHistoryTable } from "./training-history-table";
@@ -89,8 +90,6 @@ export function TrainingView() {
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [creating, setCreating] = useState(false);
   const [trainError, setTrainError] = useState<string | null>(null);
-  const [suggestedCutoff, setSuggestedCutoff] = useState<string | null>(null);
-  const [latestDataDate, setLatestDataDate] = useState<string | null>(null);
   const knownStatusesRef = useRef<Map<string, RunStatus>>(new Map());
 
   const loadSources = useCallback(async () => {
@@ -137,26 +136,15 @@ export function TrainingView() {
     setSelectedSourceId(sortedReady[0]?.id ?? null);
   }, [selectedSourceId, sortedReady]);
 
-  // Suggested cutoff for the selected dataset.
-  const selectedSourceId2 = selectedSource?.id ?? null;
-  useEffect(() => {
-    setSuggestedCutoff(null);
-    setLatestDataDate(null);
-    if (!selectedSourceId2) return;
-    let alive = true;
-    fetchTrainSuggestedCutoff(selectedSourceId2)
-      .then(({ suggested_cutoff, latest_data_date }) => {
-        if (!alive) return;
-        setSuggestedCutoff(suggested_cutoff);
-        setLatestDataDate(latest_data_date);
-      })
-      .catch(() => {
-        // TrainPanel falls back to its local default when no suggestion is available.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [selectedSourceId2]);
+  // Suggested cutoff for the selected source. Without one, TrainPanel falls back to its local default.
+  const activeSourceId = selectedSource?.id ?? null;
+  const suggestion = useAsync(
+    () => fetchTrainSuggestedCutoff(activeSourceId!),
+    [activeSourceId],
+    Boolean(activeSourceId)
+  );
+  const suggestedCutoff = suggestion.data?.suggested_cutoff ?? null;
+  const latestDataDate = suggestion.data?.latest_data_date ?? null;
 
   // Training runs — load + poll while active.
   const loadRuns = useCallback(async () => {

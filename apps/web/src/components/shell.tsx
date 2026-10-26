@@ -7,7 +7,7 @@ import AIChatWidget from "./ai-chat-widget";
 import { MobyIntroSplash } from "./moby-intro-splash";
 import { GlobalStatusDialogHost } from "./global-status-dialog-host";
 import RunSelector from "./run-selector";
-import { RunUrlSync } from "@/stores/run-url-sync";
+import { RunUrlSync } from "./run-url-sync";
 import {
   getRouteTitle,
   isBareRoute,

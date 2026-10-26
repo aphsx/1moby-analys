@@ -4,32 +4,19 @@
  * run selector → fetchRunSummary → DashboardView. Owns loading/empty/error
  * states per spec §5 — never falls back to fake numbers silently.
  */
-import { type RunSummary } from "@moby/types";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Database } from "lucide-react";
-import { useActiveRun } from "@/components/run-selector";
+import { useActiveRun } from "@/stores/run-store";
 import { EmptyState, Skeleton } from "@/components/ui";
 import { fetchRunSummary } from "@/lib/ml-api";
+import { useAsync } from "@/lib/use-async";
 import { DashboardView } from "./dashboard-view";
 
 export function DashboardClient() {
   const { run, runId, loading: runsLoading } = useActiveRun();
-  const [summary, setSummary] = useState<RunSummary | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!runId) return;
-    let alive = true;
-    setSummary(null);
-    setError(null);
-    fetchRunSummary(runId)
-      .then((s) => alive && setSummary(s))
-      .catch((e: unknown) => alive && setError(e instanceof Error ? e.message : "โหลดข้อมูลไม่สำเร็จ"));
-    return () => {
-      alive = false;
-    };
-  }, [runId]);
+  const loaded = useAsync(() => fetchRunSummary(runId), [runId], Boolean(runId));
+  const summary = loaded.data ?? null;
+  const error = loaded.error ? (loaded.error instanceof Error ? loaded.error.message : "โหลดข้อมูลไม่สำเร็จ") : null;
 
   if (!runsLoading && !run) {
     return (

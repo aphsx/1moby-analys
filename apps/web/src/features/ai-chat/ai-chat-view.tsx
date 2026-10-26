@@ -13,9 +13,9 @@ import {
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { TypingDots } from "@/components/chat/typing-dots";
 import { Select } from "@/components/select";
-import { fetchPredictionRuns } from "@/lib/ml-api";
 import { formatTime } from "@/lib/format";
 import { useChatStore, type ChatEvidence, type Conversation } from "@/stores/chat-store";
+import { useActiveRun } from "@/stores/run-store";
 
 const VIEWPORT = "h-full";
 
@@ -399,19 +399,11 @@ export function AIChatView() {
 
   const [input, setInput] = useState("");
   const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
-  const [runs, setRuns] = useState<PredictionRun[]>([]);
+  const { runs } = useActiveRun();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
-
-  useEffect(() => {
-    let alive = true;
-    fetchPredictionRuns()
-      .then((all) => alive && setRuns(all.filter((r) => r.status === "completed")))
-      .catch(() => null);
-    return () => { alive = false; };
-  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;

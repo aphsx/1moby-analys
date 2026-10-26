@@ -3,42 +3,10 @@
  * Run selector (spec §2.0) — binds /, /customers, /customers/[id] to one
  * completed prediction run. Defaults to the latest completed run.
  */
-import { type PredictionRun } from "@moby/types";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Calendar } from "lucide-react";
 import { Select } from "@/components/select";
-import { useRunStore } from "@/stores/run-store";
-import { fetchPredictionRuns } from "@/lib/ml-api";
-
-export function useActiveRun() {
-  const { runId, setRunId } = useRunStore();
-  const [runs, setRuns] = useState<PredictionRun[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    fetchPredictionRuns()
-      .then((all) => {
-        if (!alive) return;
-        const completed = all.filter((r) => r.status === "completed");
-        setRuns(completed);
-        if (completed.length === 0) {
-          if (runId) setRunId("");
-        } else if (!runId || !completed.some((r) => r.id === runId)) {
-          setRunId(completed[0].id);
-        }
-      })
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const run = runs.find((r) => r.id === runId) ?? null;
-  return { run, runs, runId: run?.id ?? "", setRunId, loading };
-}
+import { useActiveRun } from "@/stores/run-store";
 
 export default function RunSelector() {
   const { run, runs, runId, setRunId, loading } = useActiveRun();

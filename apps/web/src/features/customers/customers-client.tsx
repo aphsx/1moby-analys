@@ -14,7 +14,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { Database } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useActiveRun } from "@/components/run-selector";
+import { useActiveRun } from "@/stores/run-store";
 import { EmptyState, Skeleton } from "@/components/ui";
 import { fetchRunOutputs, generateCustomerAiExplanation } from "@/lib/ml-api";
 import {
@@ -203,13 +203,6 @@ function CustomersClientInner() {
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
-
-  useEffect(() => {
-    if (!requestedRunId || runsLoading) return;
-    if (runs.some((candidate) => candidate.id === requestedRunId)) {
-      setRunId(requestedRunId);
-    }
-  }, [requestedRunId, runs, runsLoading, setRunId]);
 
   useEffect(() => {
     if (!effectiveRunId) return;

@@ -4,30 +4,21 @@
  * Self-contained: fetches the cached summary, lets the user generate/regenerate.
  * Descriptive only — it never prescribes actions (the human decides).
  */
-import { type RunInsight } from "@moby/types";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { AiBadge } from "@/components/ai-badge";
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { fetchRunInsight, generateRunInsight } from "@/lib/ml-api";
+import { useAsync } from "@/lib/use-async";
 import { TEXT_SAFE } from "./palette";
 
 export function RunInsightCard({ runId }: { runId: string }) {
-  const [insight, setInsight] = useState<RunInsight | null>(null);
+  // A failed load just shows the empty card with its generate button.
+  const loaded = useAsync(() => fetchRunInsight(runId), [runId]);
+  const insight = loaded.data ?? null;
+  const setInsight = loaded.setData;
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    setInsight(null);
-    setError(null);
-    fetchRunInsight(runId)
-      .then((r) => alive && setInsight(r))
-      .catch(() => alive && setInsight(null));
-    return () => {
-      alive = false;
-    };
-  }, [runId]);
 
   const ready = insight?.ai_status === "completed" && Boolean(insight.ai_summary?.trim());
 

@@ -4,18 +4,13 @@
  * run selector → fetchRunOutput + fetchCustomerUsageMonthly →
  * CustomerDetailView. No mock fallback — empty state links to /runs.
  */
-import { type PaymentEvent } from "@moby/types";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Database } from "lucide-react";
-import { useActiveRun } from "@/components/run-selector";
+import { useActiveRun } from "@/stores/run-store";
+import { useAsync } from "@/lib/use-async";
 import { EmptyState, Skeleton } from "@/components/ui";
 import { fetchCustomerPayments, fetchCustomerUsageMonthly, fetchRunOutput } from "@/lib/ml-api";
-import {
-  CustomerDetailView,
-  type CustomerDetail,
-  type UsageTrendPoint,
-} from "./customer-detail-view";
+import { CustomerDetailView } from "./customer-detail-view";
 
 export function CustomerDetailClient({
   accId,
@@ -26,48 +21,23 @@ export function CustomerDetailClient({
   requestedRunId: string;
   customersHref: string;
 }) {
-  const { run, runId, runs, setRunId, loading: runsLoading } = useActiveRun();
+  const { run, runId, runs, loading: runsLoading } = useActiveRun();
   const effectiveRunId =
     requestedRunId && runs.some((candidate) => candidate.id === requestedRunId)
       ? requestedRunId
       : runId;
-  const [customer, setCustomer] = useState<CustomerDetail | null>(null);
-  const [usageTrend, setUsageTrend] = useState<UsageTrendPoint[]>([]);
-  const [payments, setPayments] = useState<PaymentEvent[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!requestedRunId || runsLoading) return;
-    if (runs.some((candidate) => candidate.id === requestedRunId)) {
-      setRunId(requestedRunId);
-    }
-  }, [requestedRunId, runs, runsLoading, setRunId]);
-
-  useEffect(() => {
-    if (!effectiveRunId) return;
-    let alive = true;
-    setCustomer(null);
-    setUsageTrend([]);
-    setPayments([]);
-    setError(null);
-    Promise.all([
-      fetchRunOutput(effectiveRunId, accId),
-      fetchCustomerUsageMonthly(effectiveRunId, accId),
-      fetchCustomerPayments(effectiveRunId, accId),
-    ])
-      .then(([output, usage, paymentEvents]) => {
-        if (!alive) return;
-        setCustomer(output);
-        setUsageTrend(usage);
-        setPayments(paymentEvents);
-      })
-      .catch((e: unknown) =>
-        alive && setError(e instanceof Error ? e.message : "โหลดข้อมูลลูกค้าไม่สำเร็จ")
-      );
-    return () => {
-      alive = false;
-    };
-  }, [effectiveRunId, accId]);
+  const detail = useAsync(
+    () =>
+      Promise.all([
+        fetchRunOutput(effectiveRunId, accId),
+        fetchCustomerUsageMonthly(effectiveRunId, accId),
+        fetchCustomerPayments(effectiveRunId, accId),
+      ]),
+    [effectiveRunId, accId],
+    Boolean(effectiveRunId)
+  );
+  const [customer, usageTrend, payments] = detail.data ?? [null, [], []];
+  const error = detail.error ? (detail.error instanceof Error ? detail.error.message : "โหลดข้อมูลลูกค้าไม่สำเร็จ") : null;
 
   const effectiveRun = runs.find((candidate) => candidate.id === effectiveRunId) ?? run;
 
