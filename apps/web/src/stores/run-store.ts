@@ -6,7 +6,7 @@ interface RunState {
   setRunId: (runId: string) => void;
 }
 
-/** Active run id, persisted to localStorage. URL sync lives in RunUrlSync.tsx. */
+/** Active run id, persisted to localStorage. URL sync lives in run-url-sync.tsx. */
 export const useRunStore = create<RunState>()(
   persist(
     (set) => ({

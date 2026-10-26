@@ -13,9 +13,8 @@ import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { TypingDots } from "@/components/chat/typing-dots";
 import { Select } from "@/components/select";
 import { fetchPredictionRuns, type PredictionRun } from "@/lib/ml-api";
-import {
-  useChatStore, formatTime, type ChatEvidence, type Conversation,
-} from "@/stores/chat-store";
+import { formatTime } from "@/lib/format";
+import { useChatStore, type ChatEvidence, type Conversation } from "@/stores/chat-store";
 
 const VIEWPORT = "h-full";
 

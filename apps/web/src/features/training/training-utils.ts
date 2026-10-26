@@ -25,18 +25,7 @@ export function getCleanCounts(source: TrainDataSource | null): CleanCounts | nu
   };
 }
 
-export function statusLabel(status: string): string {
-  if (status === "ready") return "Ready";
-  if (status === "failed") return "Failed";
-  if (status === "cleaning") return "Cleaning";
-  if (status === "importing") return "Importing";
-  return "No dataset";
-}
 
-export function formatDate(value?: string | null): string {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("th-TH");
-}
 
 export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;

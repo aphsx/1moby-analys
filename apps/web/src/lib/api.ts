@@ -1,9 +1,6 @@
 /**
- * API client for routes that are actually mounted by the Elysia API.
- *
- * Legacy `/runs`, `/predictions`, `/model-versions`, `/model-metrics`,
- * `/training-log`, chat, and explanation endpoints were removed with the old
- * ML runtime. Add new wrappers here only after the matching Elysia route exists.
+ * API client for the Data Source routes (train + predict import, list, delete).
+ * ML run routes live in ml-api.ts; chat lives in stores/chat-store.ts.
  */
 
 import type { TrainDataSource, PredictDataSource } from "@moby/types";
@@ -29,9 +26,7 @@ async function parseJson(res: Response): Promise<unknown> {
   }
 }
 
-// Train raw data import
-// train_data_sources + train_raw_sheet_*. NOT uploadFile (/runs).
-// See docs/DATA-PIPELINE-MIGRATION.md
+// Train Data Sources
 
 export async function fetchTrainDataSources(): Promise<TrainDataSource[]> {
   const res = await apiFetch("/api/train-data-sources");
