@@ -5,6 +5,13 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { formatCount, formatDate } from "@/lib/format";
 import { MetricLabel } from "./metric-help";
+
+const MODEL_TITLE: Record<string, string> = {
+  lifecycle: "สถานะลูกค้า",
+  churn: "โอกาสเลิกใช้",
+  clv: "มูลค่า 6 เดือน",
+  credit: "การเติมและใช้เครดิต",
+};
 import {
   formatBaselineName,
   metricInfo,
@@ -30,25 +37,25 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
   return (
     <article className="surface flex flex-col overflow-visible p-4 sm:p-5">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="text-[12px] font-semibold text-[color:var(--ink-2)]">
-          {entry.model_type}
+        <h2 className="text-section font-semibold text-text">
+          {MODEL_TITLE[entry.model_type] ?? entry.model_type}
         </h2>
         {entry.version ? (
-          <span className="truncate text-[11px] text-[color:var(--ink-5)]">{entry.version}</span>
+          <span className="truncate text-micro text-faint">{entry.version}</span>
         ) : null}
       </header>
       {isMl && entry.algorithm ? (
-        <p className="mt-0.5 text-[11px] text-[color:var(--ink-5)]">{entry.algorithm}</p>
+        <p className="mt-0.5 text-micro text-faint">{entry.algorithm}</p>
       ) : null}
 
       <section className="mt-4">
-        <div className="flex items-center gap-1 text-[11px] text-[color:var(--ink-5)]">
+        <div className="flex items-center gap-1 text-micro text-faint">
           <MetricLabel info={primaryInfo} />
-          <span>· test holdout</span>
+          <span>· ชุดทดสอบ</span>
         </div>
         <p className="num mt-1 text-[32px] font-semibold leading-none ">{primaryValue}</p>
         {isMl && primary.baseline !== undefined && primary.baseline > 0 && (
-          <p className="num mt-1.5 text-[11px] text-[color:var(--ink-5)]">
+          <p className="num mt-1.5 text-micro text-faint">
             baseline {formatBaselineName(primary.baseline_name ?? "baseline")}{" "}
             {typeof primary.baseline === "number"
               ? primaryInfo.fmt(primary.baseline)
@@ -58,22 +65,22 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
       </section>
 
       {isMl && entry.splits.length > 0 ? (
-        <section className="mt-4 border-t border-gray-100 pt-4">
+        <section className="mt-4 border-t border-rule pt-4">
           <SplitStrip entry={entry} primaryInfo={primaryInfo} />
         </section>
       ) : null}
 
       {secondary.length > 0 ? (
-        <section className="mt-4 border-t border-gray-100 pt-4">
+        <section className="mt-4 border-t border-rule pt-4">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5">
             {secondary.map(({ key, value }) => {
               const info = metricInfo(key);
               return (
                 <div key={key} className="min-w-0 overflow-visible">
-                  <dt className="text-[10.5px] text-[color:var(--ink-5)]">
+                  <dt className="text-micro text-faint">
                     <MetricLabel info={info} />
                   </dt>
-                  <dd className="num text-[14px] font-semibold leading-snug">{info.fmt(value)}</dd>
+                  <dd className="num text-body font-semibold leading-snug">{info.fmt(value)}</dd>
                 </div>
               );
             })}
@@ -82,21 +89,21 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
       ) : null}
 
       {entry.competition && entry.competition.length > 0 ? (
-        <section className="mt-4 border-t border-gray-100 pt-3">
+        <section className="mt-4 border-t border-rule pt-3">
           <CandidateCompetition competition={entry.competition} />
         </section>
       ) : null}
 
       {isMl ? (
-        <section className="mt-4 border-t border-gray-100 pt-3">
+        <section className="mt-4 border-t border-rule pt-3">
           <RealizedStrip entry={entry} primaryInfo={primaryInfo} />
         </section>
       ) : null}
 
-      <footer className="mt-4 border-t border-gray-100 pt-3 text-[10.5px] leading-5 text-[color:var(--ink-5)]">
-        {entry.trained_at ? <p>trained {formatDate(entry.trained_at)}</p> : null}
-        {entry.dataset_rows != null ? <p>{formatCount(entry.dataset_rows)} rows</p> : null}
-        {entry.notes ? <p className="mt-1 text-[color:var(--ink-4)]">{entry.notes}</p> : null}
+      <footer className="mt-4 border-t border-rule pt-3 text-micro leading-5 text-faint">
+        {entry.trained_at ? <p>เทรนเมื่อ {formatDate(entry.trained_at)}</p> : null}
+        {entry.dataset_rows != null ? <p>{formatCount(entry.dataset_rows)} แถว</p> : null}
+        {entry.notes ? <p className="mt-1 text-muted">{entry.notes}</p> : null}
       </footer>
     </article>
   );
@@ -122,16 +129,16 @@ function SplitStrip({
   if (cells.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-3 gap-1 rounded-lg bg-gray-50/80 p-2">
+    <div className="grid grid-cols-3 gap-1 rounded-lg bg-raised/80 p-2">
       {cells.map(({ splitKey, value }) => (
         <div
           key={splitKey}
           className={`rounded-md px-2 py-1.5 text-center ${
-            splitKey === "test" ? "bg-white shadow-sm ring-1 ring-gray-100" : ""
+            splitKey === "test" ? "bg-surface ring-1 ring-rule" : ""
           }`}
         >
-          <p className="text-[10px] text-[color:var(--ink-5)]">{SPLIT_LABELS[splitKey]}</p>
-          <p className="num mt-0.5 text-[13px] font-semibold">{primaryInfo.fmt(value)}</p>
+          <p className="text-micro text-faint">{SPLIT_LABELS[splitKey]}</p>
+          <p className="num mt-0.5 text-small font-semibold">{primaryInfo.fmt(value)}</p>
         </div>
       ))}
     </div>
@@ -149,8 +156,8 @@ function RealizedStrip({
 
   if (!realized || realized.primary_value == null) {
     return (
-      <p className="text-[11px] text-[color:var(--ink-5)]">
-        <span className="font-medium text-[color:var(--ink-4)]">Realized</span>
+      <p className="text-micro text-faint">
+        <span className="font-medium text-muted">ผลจริง</span>
         {" — "}
         ยังไม่มี (รอ backfill ที่หน้า Runs)
       </p>
@@ -161,15 +168,15 @@ function RealizedStrip({
 
   return (
     <div>
-      <p className="text-[11px] text-[color:var(--ink-5)]">
-        <span className="font-medium text-[color:var(--ink-4)]">Realized</span>
+      <p className="text-micro text-faint">
+        <span className="font-medium text-muted">ผลจริง</span>
         {" · "}
-        <span className="num font-semibold text-[color:var(--ink-2)]">
+        <span className="num font-semibold text-text">
           {primaryInfo.fmt(realized.primary_value)}
         </span>
       </p>
       {(run || realized.cutoff_date) && (
-        <p className="mt-0.5 truncate text-[10.5px] text-[color:var(--ink-5)]">
+        <p className="mt-0.5 truncate text-micro text-faint">
           {[run, realized.cutoff_date, formatDate(realized.measured_at)].filter(Boolean).join(" · ")}
         </p>
       )}
@@ -191,13 +198,13 @@ function CandidateCompetition({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 text-left text-[11px] text-[color:var(--ink-5)]"
+        className="flex w-full items-center gap-1.5 text-left text-micro text-faint"
         aria-expanded={open}
       >
         <ChevronDown
           className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />
-        <span className="font-medium text-[color:var(--ink-4)]">Candidates</span>
+        <span className="font-medium text-muted">โมเดลที่แข่งกัน</span>
         {!open && champion ? (
           <span className="truncate">
             · {champion.algorithm}
@@ -212,15 +219,15 @@ function CandidateCompetition({
           {competition.map((c) => (
             <li
               key={c.algorithm}
-              className="flex items-center justify-between gap-2 text-[11px]"
+              className="flex items-center justify-between gap-2 text-micro"
             >
-              <span className="truncate text-[color:var(--ink-3)]">
+              <span className="truncate text-text">
                 {c.algorithm}
                 {c.is_champion ? (
-                  <span className="ml-1.5 text-[10px] font-medium text-emerald-700">prod</span>
+                  <span className="ml-1.5 text-micro font-medium text-positive">prod</span>
                 ) : null}
               </span>
-              <span className="num shrink-0 text-[color:var(--ink-4)]">
+              <span className="num shrink-0 text-muted">
                 {c.cv_score != null ? `CV ${c.cv_score.toFixed(3)}` : ""}
                 {hasTest ? (c.test_score != null ? ` / ${c.test_score.toFixed(3)}` : " / —") : ""}
               </span>

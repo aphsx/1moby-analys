@@ -13,7 +13,7 @@
 - [x] เฟส 2 — หน้าภาพรวม
 - [x] เฟส 3 — รายชื่อลูกค้า
 - [x] เฟส 4 — หน้าลูกค้า
-- [ ] เฟส 5 — หน้าที่เหลือ
+- [x] เฟส 5 — หน้าที่เหลือ
 - [ ] เฟส 6 — เก็บงาน
 
 ---
@@ -123,6 +123,8 @@
 ### เฟส 5 — หน้าที่เหลือ (ปรับ token อย่างเดียว ไม่ redesign)
 
 `/runs`, `/training`, `/model-performance`, `/ai-chat`, `/profile`: ใช้ `Panel`, ตาราง, pill, ปุ่ม, ตัวเลขตาม format ใหม่ ข้อความใน `features/model-performance/metric-info.ts` ตรวจคำตาม `CONTENT.md`
+
+ที่ทำจริง (2026-10-26): แทน class สีเดิมทั้งหมดด้วย token (`git grep "\[color:var(--"` ว่างแล้ว ซึ่งเป็นเกณฑ์ข้อหนึ่งของเฟส 6), สี Tailwind เดิม (gray/red/amber…) เป็น token, ขนาดตัวอักษรเข้า scale 12/13/14, ตัด gradient/glow/pulse ในหน้าเหล่านี้ และแปลคำที่เหลือเป็นไทย ชื่อ metric (Precision, Recall, Brier, Spearman ฯลฯ) ในหน้าความแม่นยำโมเดลยังเป็นอังกฤษ เพราะเป็นหน้าของทีม Data/ML และมีคำอธิบายไทยใน ⓘ อยู่แล้ว gradient ที่เหลือมีแค่ใน `intro.module.css` (splash ของหน้า login ซึ่งไม่อยู่ในขอบเขตแผนนี้)
 
 ### เฟส 6 — เก็บงาน
 

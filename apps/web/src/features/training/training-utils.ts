@@ -1,10 +1,4 @@
 import { type TrainDataSource } from "@moby/types";
-import { MOBY_BRAND } from "@/lib/login-brand-colors";
-
-export const IMPORT_PROGRESS_BG = `linear-gradient(90deg, ${MOBY_BRAND.blueLight} 0%, ${MOBY_BRAND.blue} 100%)`;
-
-export const PRIMARY_BUTTON_CLS =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 text-[13px] font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50";
 
 export type CleanCounts = {
   customers: number;

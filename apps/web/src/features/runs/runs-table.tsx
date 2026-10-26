@@ -11,8 +11,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, ChevronRight, ListChecks, RefreshCw, Trash2 } from "lucide-react";
 import { StatusDialog } from "@/components/status-dialog";
 import {
-  EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill,
-} from "@/components/ui";
+  EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill, BUTTON } from "@/components/ui";
 import { deletePredictionRun, retryPredictionRun } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { formatCount } from "@/lib/format";
@@ -30,15 +29,14 @@ function AutoRunBadge() {
   return (
     <span
       title="run นี้ถูกสร้างอัตโนมัติหลัง import ข้อมูล predict"
-      className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-[color:var(--moby-50)] px-1.5 text-[10px] font-semibold text-[color:var(--moby-600)]"
+      className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-accent-soft px-1.5 text-micro font-semibold text-accent"
     >
-      Auto
+      อัตโนมัติ
     </span>
   );
 }
 
-const actionBtnCls =
-  "inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-[12px] font-semibold text-[color:var(--moby-600)] hover:bg-gray-50 disabled:opacity-40";
+const actionBtnCls = `${BUTTON.secondary} text-small`;
 
 export function RunsTable({
   runs,
@@ -91,12 +89,11 @@ export function RunsTable({
   return (
     <>
       <SectionCard
-        eyebrow="Run history"
-        title="run ล่าสุด"
-        hint="หนึ่งแถวต่อหนึ่งรอบทำนาย — เปิด run ที่ completed เพื่อดู dashboard"
+                title="รอบทำนายล่าสุด"
+        hint="หนึ่งแถวต่อหนึ่งรอบทำนาย เปิดรอบที่เสร็จแล้วเพื่อดูภาพรวม"
       >
         {error && (
-          <div className="mb-4 rounded-2xl border border-[color:var(--danger)] bg-[color:var(--danger-bg)] px-4 py-3 text-[13px] text-[color:var(--danger)]">
+          <div className="mb-4 rounded-card border border-negative bg-[var(--pill-negative-bg)] px-4 py-3 text-small text-negative">
             {error}
           </div>
         )}
@@ -109,17 +106,17 @@ export function RunsTable({
           </div>
         ) : runs.length === 0 ? (
           <EmptyState
-            title="ยังไม่มี prediction run — import ข้อมูลและสร้าง run แรก"
+            title="ยังไม่มีรอบทำนาย · นำเข้าข้อมูลแล้วสร้างรอบแรก"
             hint="เลือก predict source ที่ ready แล้วกด รัน ด้านบน"
           />
         ) : (
-          <div className="overflow-x-auto rounded-[22px] border border-gray-200">
+          <div className="overflow-x-auto rounded-card border border-border">
             <table className="data-table min-w-[640px]">
               <thead>
                 <tr>
-                  <th>Run</th>
-                  <th>Status</th>
-                  <th className="text-right">Customers</th>
+                  <th>รอบทำนาย</th>
+                  <th>สถานะ</th>
+                  <th className="text-right">ลูกค้า</th>
                   <th>เมื่อไหร่</th>
                   <th></th>
                 </tr>
@@ -177,11 +174,11 @@ function RunRow({
   return (
     <tr>
       <td>
-        <div className="flex items-center gap-1.5 font-medium text-[color:var(--ink-1)]">
-          <span className="min-w-0 truncate">{run.name}</span>
+        <div className="flex max-w-[340px] items-center gap-1.5 font-medium text-text">
+          <span className="min-w-0 truncate" title={run.name}>{run.name}</span>
           {isAutoRun(run) && <AutoRunBadge />}
         </div>
-        <div className="text-[11.5px] text-[color:var(--ink-5)]">
+        <div className="max-w-[340px] truncate text-micro text-faint">
           {run.predict_source_name}
           {run.created_by_name ? ` · โดย ${run.created_by_name}` : ""}
         </div>
@@ -194,7 +191,7 @@ function RunRow({
             </StatusPill>
             {run.status === "failed" && run.error_message && (
               <span
-                className="max-w-[220px] truncate text-[11px] text-[color:var(--danger)]"
+                className="max-w-[180px] truncate text-micro text-negative"
                 title={run.error_message}
               >
                 {run.error_message}
@@ -202,7 +199,7 @@ function RunRow({
             )}
             {run.status === "completed" && run.warnings.length > 0 && (
               <span
-                className="flex max-w-[220px] items-center gap-1 truncate text-[11px] text-amber-700"
+                className="flex max-w-[220px] items-center gap-1 truncate text-micro text-warning"
                 title={run.warnings.join("\n")}
               >
                 <AlertTriangle size={11} className="shrink-0" />
@@ -218,7 +215,7 @@ function RunRow({
         </div>
       </td>
       <td className="text-right num">{run.total_customers != null ? formatCount(run.total_customers) : "—"}</td>
-      <td className="text-[color:var(--ink-3)]">
+      <td className="whitespace-nowrap text-text">
         {formatRelative(run.finished_at ?? run.created_at)}
       </td>
       <td className="text-right">
@@ -243,7 +240,7 @@ function RunRow({
             type="button"
             onClick={onDelete}
             disabled={deleting}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[color:var(--ink-4)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-[var(--pill-negative-bg)] hover:text-negative disabled:cursor-not-allowed disabled:opacity-40"
             title="ลบ run"
           >
             {deleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}

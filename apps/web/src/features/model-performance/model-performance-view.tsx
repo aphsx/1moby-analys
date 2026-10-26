@@ -26,10 +26,9 @@ export function ModelPerformanceView() {
   return (
     <main className="pb-12">
       <div className="mt-5 space-y-4 px-4 sm:px-6 lg:px-8">
-        <p className="max-w-3xl text-[12.5px] leading-5 text-[color:var(--ink-5)]">
-          Production champion · test holdout ·{" "}
-          <CircleHelp className="inline h-3.5 w-3.5 align-[-2px]" /> อธิบาย metric · จัดการเวอร์ชันที่
-          Training
+        <p className="max-w-3xl text-small leading-5 text-faint">
+          ตัวเลขของโมเดลที่ใช้งานอยู่ วัดบนชุดทดสอบ ·{" "}
+          <CircleHelp className="inline h-3.5 w-3.5 align-[-2px]" /> อธิบายแต่ละตัวชี้วัด · จัดการเวอร์ชันได้ที่หน้าเทรนโมเดล
         </p>
 
         {error && <EmptyState title="โหลดไม่สำเร็จ" hint={error} />}
@@ -37,7 +36,7 @@ export function ModelPerformanceView() {
         {!error && entries === null && (
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-64 rounded-2xl" />
+              <Skeleton key={i} className="h-64 rounded-card" />
             ))}
           </section>
         )}

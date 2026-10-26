@@ -13,6 +13,7 @@ import {
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { TypingDots } from "@/components/chat/typing-dots";
 import { Select } from "@/components/select";
+import { BUTTON } from "@/components/ui";
 import { formatTime } from "@/lib/format";
 import { useChatStore, type ChatEvidence, type Conversation } from "@/stores/chat-store";
 import { useActiveRun } from "@/stores/run-store";
@@ -24,7 +25,7 @@ function RunBadge({ name }: { name: string }) {
   return (
     <span
       title={`ผูกกับ run: ${name}`}
-      className="inline-flex max-w-[120px] items-center gap-1 truncate rounded-full bg-[color:var(--moby-50)] px-1.5 py-0.5 text-[9.5px] font-medium text-[color:var(--moby-700)]"
+      className="inline-flex max-w-[120px] items-center gap-1 truncate rounded-full bg-accent-soft px-1.5 py-0.5 text-micro font-medium text-accent"
     >
       <Target size={9} className="shrink-0" />
       <span className="truncate">{name}</span>
@@ -60,15 +61,15 @@ function ConversationItem({
   return (
     <div
       className={[
-        "group flex min-w-0 cursor-pointer flex-col gap-1 rounded-xl px-3 py-2.5 transition-colors",
+        "group flex min-w-0 cursor-pointer flex-col gap-1 rounded-control px-3 py-2.5 transition-colors",
         active
-          ? "bg-[color:var(--moby-50)] text-[color:var(--moby-700)]"
-          : "text-[color:var(--ink-3)] hover:bg-gray-100",
+          ? "bg-accent-soft text-accent"
+          : "text-text hover:bg-raised",
       ].join(" ")}
       onClick={editing ? undefined : onSelect}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <MessageSquare size={13} className={active ? "shrink-0 text-[color:var(--moby-500)]" : "shrink-0 opacity-50"} />
+        <MessageSquare size={13} className={active ? "shrink-0 text-accent" : "shrink-0 opacity-50"} />
         {editing ? (
           <input
             ref={inputRef}
@@ -79,30 +80,30 @@ function ConversationItem({
               if (e.key === "Escape") setEditing(false);
             }}
             onBlur={commitRename}
-            className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none"
+            className="min-w-0 flex-1 bg-transparent text-small outline-none"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="min-w-0 flex-1 truncate text-[12.5px]">{conv.title}</span>
+          <span className="min-w-0 flex-1 truncate text-small">{conv.title}</span>
         )}
         {!editing && (
           <div className="hidden shrink-0 items-center gap-1 group-hover:flex">
             <button
               onClick={(e) => { e.stopPropagation(); setEditing(true); setDraft(conv.title); }}
-              className="rounded p-0.5 hover:bg-gray-200" title="เปลี่ยนชื่อ"
+              className="rounded p-0.5 hover:bg-raised" title="เปลี่ยนชื่อ"
             >
               <Edit3 size={11} />
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onArchive(); }}
-              className="rounded p-0.5 hover:bg-gray-200"
-              title={conv.archived ? "เลิก archive" : "Archive"}
+              className="rounded p-0.5 hover:bg-raised"
+              title={conv.archived ? "เลิกเก็บ" : "เก็บ"}
             >
               {conv.archived ? <ArchiveRestore size={11} /> : <Archive size={11} />}
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="rounded p-0.5 text-red-400 hover:bg-red-50" title="ลบ"
+              className="rounded p-0.5 text-negative hover:bg-[var(--pill-negative-bg)]" title="ลบ"
             >
               <Trash2 size={11} />
             </button>
@@ -146,7 +147,7 @@ function Sidebar({
   }, [conversations, showArchived, query]);
 
   return (
-    <aside className={`absolute inset-y-0 left-0 z-40 flex h-full w-[min(86vw,280px)] shrink-0 flex-col border-r border-gray-200 bg-[#fafafa] shadow-2xl transition-transform duration-200 md:static md:z-auto md:w-[240px] md:translate-x-0 md:shadow-none ${
+    <aside className={`absolute inset-y-0 left-0 z-40 flex h-full w-[min(86vw,280px)] shrink-0 flex-col border-r border-border bg-ground transition-transform duration-200 md:static md:z-auto md:w-[240px] md:translate-x-0 md:shadow-none ${
       mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
     }`}>
       <div className="space-y-2 p-3">
@@ -157,9 +158,9 @@ function Sidebar({
           size="sm"
           title="ขอบเขตข้อมูลของแชทใหม่"
           aria-label="ขอบเขตข้อมูลของแชทใหม่"
-          placeholder="ทุก run (global)"
+          placeholder="ทุกรอบทำนาย"
           options={[
-            { value: "", label: "ทุก run (global)" },
+            { value: "", label: "ทุกรอบทำนาย" },
             ...runs.map((r) => ({
               value: r.id,
               label: `${r.name} · ${r.cutoff_date}`,
@@ -172,25 +173,25 @@ function Sidebar({
             createConversation();
             onClose?.();
           }}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[color:var(--moby-600)] px-3 py-2.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-[color:var(--moby-700)] active:scale-[0.98]"
+          className="flex w-full items-center justify-center gap-2 rounded-control bg-accent px-3 py-2.5 text-small font-semibold text-white transition-colors hover:bg-accent active:scale-[0.98]"
         >
-          <Plus size={14} /> New Chat
+          <Plus size={14} /> แชทใหม่
         </button>
 
         <div className="relative">
-          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--ink-5)]" />
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ค้นหาแชท…"
-            className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-[11.5px] text-[color:var(--ink-2)] outline-none placeholder:text-[color:var(--ink-5)] focus:border-[color:var(--moby-200)]"
+            className="h-8 w-full rounded-lg border border-border bg-surface pl-7 pr-2 text-micro text-text outline-none placeholder:text-faint focus:border-accent-track"
           />
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {visible.length === 0 ? (
-          <p className="px-3 py-6 text-center text-[11px] text-[color:var(--ink-5)]">
+          <p className="px-3 py-6 text-center text-micro text-faint">
             {showArchived ? "ไม่มีแชทที่ archive" : "ยังไม่มีการสนทนา"}
           </p>
         ) : (
@@ -213,15 +214,15 @@ function Sidebar({
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-gray-200 px-3 py-2.5">
+      <div className="flex items-center justify-between border-t border-border px-3 py-2.5">
         <button
           onClick={() => setShowArchived(!showArchived)}
-          className="flex items-center gap-1.5 text-[10.5px] text-[color:var(--ink-4)] hover:text-[color:var(--moby-600)]"
+          className="flex items-center gap-1.5 text-micro text-muted hover:text-accent"
         >
           {showArchived ? <ArchiveRestore size={11} /> : <Archive size={11} />}
-          {showArchived ? "แชทใช้งาน" : "Archived"}
+          {showArchived ? "แชทที่ใช้อยู่" : "แชทที่เก็บไว้"}
         </button>
-        <span className="text-[10px] text-[color:var(--ink-5)]">Text-to-SQL + Gen AI</span>
+        <span className="text-micro text-faint">Text-to-SQL + Gen AI</span>
       </div>
     </aside>
   );
@@ -234,56 +235,56 @@ function EvidencePanel({ evidence }: { evidence: ChatEvidence }) {
   if (!hasData) return null;
 
   return (
-    <div className="mt-2 overflow-hidden rounded-xl border border-gray-200 bg-[#f8fafc]">
+    <div className="mt-2 overflow-hidden rounded-control border border-border bg-[#f8fafc]">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-[11px] text-[color:var(--ink-4)] transition-colors hover:bg-gray-100"
+        className="flex w-full items-center gap-2 px-3 py-2 text-micro text-muted transition-colors hover:bg-raised"
       >
-        <Database size={11} className="shrink-0 text-[color:var(--moby-500)]" />
+        <Database size={11} className="shrink-0 text-accent" />
         <span className="flex-1 text-left font-medium">
           {evidence.mode === "text_to_sql"
             ? `SQL · ${evidence.row_count} row${evidence.row_count !== 1 ? "s" : ""}`
-            : "Direct answer"}
+            : "ตอบโดยตรง"}
         </span>
         {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
       </button>
       {open && (
-        <div className="space-y-2 border-t border-gray-200 p-3">
+        <div className="space-y-2 border-t border-border p-3">
           {evidence.sql && (
             <div>
-              <p className="mb-1 text-[10px] font-semibold text-[color:var(--ink-5)]">SQL</p>
-              <pre className="overflow-x-auto rounded-lg bg-gray-900 p-3 text-[11px] leading-relaxed text-green-300">
+              <p className="mb-1 text-micro font-semibold text-faint">SQL</p>
+              <pre className="overflow-x-auto rounded-control bg-raised p-3 text-micro leading-relaxed text-text">
                 <code>{evidence.sql}</code>
               </pre>
             </div>
           )}
           {evidence.warnings.length > 0 && (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-              <AlertCircle size={12} className="mt-0.5 shrink-0 text-amber-500" />
-              <p className="text-[11px] text-amber-700">{evidence.warnings.join(" · ")}</p>
+            <div className="flex items-start gap-2 rounded-lg border border-border bg-[var(--pill-warning-bg)] px-3 py-2">
+              <AlertCircle size={12} className="mt-0.5 shrink-0 text-warning" />
+              <p className="text-micro text-warning">{evidence.warnings.join(" · ")}</p>
             </div>
           )}
           {evidence.row_count > 0 && evidence.columns.length > 0 && (
             <div>
-              <p className="mb-1 text-[10px] font-semibold text-[color:var(--ink-5)]">
+              <p className="mb-1 text-micro font-semibold text-faint">
                 Result · {evidence.row_count} rows
               </p>
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="min-w-full text-[11px]">
-                  <thead className="bg-gray-50">
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="min-w-full text-micro">
+                  <thead className="bg-raised">
                     <tr>
                       {evidence.columns.map((col) => (
-                        <th key={col} className="border-b border-gray-200 px-2 py-1.5 text-left font-semibold text-[color:var(--ink-3)]">
+                        <th key={col} className="border-b border-border px-2 py-1.5 text-left font-semibold text-text">
                           {col}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-rule">
                     {(evidence.rows as Record<string, unknown>[]).slice(0, 20).map((row, ri) => (
-                      <tr key={ri} className="hover:bg-gray-50">
+                      <tr key={ri} className="hover:bg-raised">
                         {evidence.columns.map((col) => (
-                          <td key={col} className="px-2 py-1.5 text-[color:var(--ink-4)]">
+                          <td key={col} className="px-2 py-1.5 text-muted">
                             {String(row[col] ?? "")}
                           </td>
                         ))}
@@ -292,7 +293,7 @@ function EvidencePanel({ evidence }: { evidence: ChatEvidence }) {
                   </tbody>
                 </table>
                 {evidence.row_count > 20 && (
-                  <p className="px-3 py-1.5 text-[10px] text-[color:var(--ink-5)]">
+                  <p className="px-3 py-1.5 text-micro text-faint">
                     + {evidence.row_count - 20} more rows
                   </p>
                 )}
@@ -308,7 +309,7 @@ function EvidencePanel({ evidence }: { evidence: ChatEvidence }) {
 // ── Thinking + bubbles ─────────────────────────────────────────────────────────
 function AssistantAvatar() {
   return (
-    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[color:var(--moby-600)] to-[color:var(--moby-800)] shadow-sm">
+    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent">
       <Bot size={13} className="text-white" />
     </div>
   );
@@ -317,11 +318,11 @@ function AssistantAvatar() {
 function ThinkingBubble({ message }: { message: string }) {
   return (
     <div className="flex min-w-0 gap-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[color:var(--moby-600)] to-[color:var(--moby-800)] shadow-md">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent">
         <Loader2 size={15} className="animate-spin text-white" />
       </div>
-      <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-4 py-3 shadow-sm">
-        <span className="text-[12px] text-[color:var(--ink-4)]">{message}</span>
+      <div className="flex items-center gap-2 rounded-card rounded-tl-sm border border-border bg-surface px-4 py-3">
+        <span className="text-micro text-muted">{message}</span>
         <TypingDots />
       </div>
     </div>
@@ -348,12 +349,12 @@ function EmptyState({ onPrompt, runName }: { onPrompt: (p: string) => void; runN
       ];
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[color:var(--moby-500)] to-[color:var(--moby-700)] shadow-lg">
+      <div className="flex h-16 w-16 items-center justify-center rounded-card bg-accent">
         <Bot size={28} className="text-white" />
       </div>
       <div className="text-center">
-        <h2 className="text-[17px] font-semibold text-[color:var(--ink-1)]">Moby AI</h2>
-        <p className="mt-1 text-[13px] text-[color:var(--ink-4)]">
+        <h2 className="text-[17px] font-semibold text-text">Moby AI</h2>
+        <p className="mt-1 text-small text-muted">
           {runName ? `ถามข้อมูลของ run “${runName}” ได้เลย` : "ถามข้อมูล analytics จากฐานข้อมูลได้เลย"}
         </p>
       </div>
@@ -362,7 +363,7 @@ function EmptyState({ onPrompt, runName }: { onPrompt: (p: string) => void; runN
           <button
             key={p}
             onClick={() => onPrompt(p)}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-[12px] text-[color:var(--ink-3)] transition-colors hover:border-[color:var(--moby-300)] hover:bg-[color:var(--moby-50)] hover:text-[color:var(--moby-700)]"
+            className="rounded-control border border-border bg-surface px-3 py-2.5 text-left text-micro text-text transition-colors hover:border-accent-track hover:bg-accent-soft hover:text-accent"
           >
             {p}
           </button>
@@ -375,16 +376,14 @@ function EmptyState({ onPrompt, runName }: { onPrompt: (p: string) => void; runN
 function NoConversation({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4">
-      <MessageSquare size={36} className="text-gray-300" />
+      <MessageSquare size={36} className="text-faint" />
       <div className="text-center">
-        <p className="text-[14px] font-medium text-[color:var(--ink-3)]">ยังไม่มีการสนทนา</p>
-        <p className="mt-1 text-[12px] text-[color:var(--ink-5)]">สร้าง New Chat เพื่อเริ่มต้น</p>
+        <p className="text-body font-medium text-text">ยังไม่มีการสนทนา</p>
+        <p className="mt-1 text-micro text-faint">สร้างแชทใหม่เพื่อเริ่มต้น</p>
       </div>
-      <button
-        onClick={onCreate}
-        className="flex items-center gap-2 rounded-xl bg-[color:var(--moby-600)] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[color:var(--moby-700)]"
-      >
-        <Plus size={14} /> New Chat
+      {/* the sidebar's button is the page's one primary action */}
+      <button type="button" onClick={onCreate} className={BUTTON.secondary}>
+        <Plus size={14} /> แชทใหม่
       </button>
     </div>
   );
@@ -447,43 +446,43 @@ export function AIChatView() {
       : "ตั้งค่า LLM ก่อนใช้งาน";
 
   return (
-    <div className={`relative flex min-h-0 overflow-hidden bg-[color:var(--bg)] ${VIEWPORT}`}>
+    <div className={`relative flex min-h-0 overflow-hidden bg-ground ${VIEWPORT}`}>
       {chatSidebarOpen && (
         <button
           type="button"
-          className="absolute inset-0 z-30 bg-slate-950/30 md:hidden"
+          className="absolute inset-0 z-30 bg-black/30 md:hidden"
           onClick={() => setChatSidebarOpen(false)}
           aria-label="ปิดรายการสนทนา"
         />
       )}
       <Sidebar runs={runs} mobileOpen={chatSidebarOpen} onClose={() => setChatSidebarOpen(false)} />
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-5 py-3">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface">
+        <header className="flex shrink-0 items-center gap-3 border-b border-border bg-surface px-5 py-3">
           <button
             type="button"
             onClick={() => setChatSidebarOpen(true)}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-[color:var(--ink-3)] hover:bg-gray-50 md:hidden"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-text hover:bg-raised md:hidden"
             aria-label="เปิดรายการสนทนา"
             aria-expanded={chatSidebarOpen}
           >
             <Menu size={16} />
           </button>
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[color:var(--moby-500)] to-[color:var(--moby-700)]">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent">
               <Bot size={14} className="text-white" />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate text-[14px] font-semibold text-[color:var(--ink-1)]">
+              <h2 className="truncate text-body font-semibold text-text">
                 {activeConv?.title ?? "Moby AI"}
               </h2>
-              <p className="truncate text-[11px] text-[color:var(--ink-5)]">{statusLine}</p>
+              <p className="truncate text-micro text-faint">{statusLine}</p>
             </div>
           </div>
           {sending && (
             <button
               onClick={cancel}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-[color:var(--ink-3)] hover:bg-gray-50"
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-micro text-text hover:bg-raised"
             >
               <X size={12} /> หยุด
             </button>
@@ -503,28 +502,28 @@ export function AIChatView() {
                     {msg.role === "assistant" ? (
                       <AssistantAvatar />
                     ) : (
-                      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white shadow-sm">
-                        <User size={13} className="text-[color:var(--ink-4)]" />
+                      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-control border border-border bg-surface">
+                        <User size={13} className="text-muted" />
                       </div>
                     )}
                     <div className={["flex min-w-0 flex-col gap-1 max-w-[min(80%,48rem)]", msg.role === "user" ? "items-end" : "items-start"].join(" ")}>
-                      <span className="px-1 text-[10.5px] text-[color:var(--ink-5)]">
-                        {msg.role === "assistant" ? "Moby AI" : "You"} · {formatTime(msg.ts)}
+                      <span className="px-1 text-micro text-faint">
+                        {msg.role === "assistant" ? "Moby AI" : "คุณ"} · {formatTime(msg.ts)}
                       </span>
                       <div
                         className={[
-                          "min-w-0 rounded-2xl px-4 py-3 text-[13px] leading-relaxed",
+                          "min-w-0 rounded-card px-4 py-3 text-small leading-relaxed",
                           msg.role === "user"
-                            ? "rounded-tr-sm bg-gradient-to-br from-[color:var(--moby-600)] to-[color:var(--moby-700)] text-white"
+                            ? "rounded-tr-sm bg-accent text-white"
                             : msg.error
-                              ? "rounded-tl-sm border border-red-200 bg-red-50 text-red-700"
-                              : "rounded-tl-sm border border-gray-200 bg-white text-[color:var(--ink-2)] shadow-sm",
+                              ? "rounded-tl-sm border border-border bg-[var(--pill-negative-bg)] text-negative"
+                              : "rounded-tl-sm border border-border bg-surface text-text",
                         ].join(" ")}
                       >
                         {msg.role === "user" ? (
                           <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{msg.content}</p>
                         ) : (
-                          <MarkdownLite text={msg.content || "​"} strongClassName="font-semibold text-[color:var(--ink-1)]" />
+                          <MarkdownLite text={msg.content || "​"} strongClassName="font-semibold text-text" />
                         )}
                       </div>
                       {msg.role === "assistant" && !msg.error && msg.evidence && (
@@ -541,10 +540,10 @@ export function AIChatView() {
                   <div className="flex min-w-0 gap-3">
                     <AssistantAvatar />
                     <div className="flex min-w-0 max-w-[min(80%,48rem)] flex-col items-start gap-1">
-                      <span className="px-1 text-[10.5px] text-[color:var(--ink-5)]">Moby AI</span>
-                      <div className="min-w-0 rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-4 py-3 text-[13px] leading-relaxed text-[color:var(--ink-2)] shadow-sm">
-                        <MarkdownLite text={streaming.content} strongClassName="font-semibold text-[color:var(--ink-1)]" />
-                        <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse rounded-full bg-[color:var(--moby-500)]" />
+                      <span className="px-1 text-micro text-faint">Moby AI</span>
+                      <div className="min-w-0 rounded-card rounded-tl-sm border border-border bg-surface px-4 py-3 text-small leading-relaxed text-text">
+                        <MarkdownLite text={streaming.content} strongClassName="font-semibold text-text" />
+                        <span className="ml-0.5 inline-block h-3.5 w-0.5 rounded-full bg-accent" />
                       </div>
                     </div>
                   </div>
@@ -558,9 +557,9 @@ export function AIChatView() {
           </div>
         </div>
 
-        <footer className="shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+        <footer className="shrink-0 border-t border-border bg-surface px-4 py-3">
           <div className="mx-auto w-full max-w-3xl">
-            <div className="flex items-end gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-1 focus-within:ring-[color:var(--moby-300)]">
+            <div className="flex items-end gap-3 rounded-card border border-border bg-surface px-4 py-3 transition-colors focus-within:ring-1 focus-within:ring-accent-track">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -568,24 +567,24 @@ export function AIChatView() {
                 onKeyDown={handleKey}
                 rows={1}
                 disabled={sending}
-                placeholder={activeId ? "ถามข้อมูล analytics… (Enter ส่ง, Shift+Enter ขึ้นบรรทัด)" : "สร้าง New Chat ก่อนเริ่มสนทนา"}
-                className="max-h-[160px] min-h-[28px] flex-1 resize-none bg-transparent text-[13.5px] leading-relaxed text-[color:var(--ink-2)] outline-none placeholder:text-[color:var(--ink-5)]"
+                placeholder={activeId ? "ถามเรื่องข้อมูลลูกค้า… (Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่)" : "สร้างแชทใหม่ก่อนเริ่มสนทนา"}
+                className="max-h-[160px] min-h-[28px] flex-1 resize-none bg-transparent text-small leading-relaxed text-text outline-none placeholder:text-faint"
                 style={{ overflowY: "auto" }}
               />
               <button
                 onClick={() => handleSend()}
                 disabled={!input.trim() || sending}
                 className={[
-                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all",
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-control transition-[background-color,transform]",
                   input.trim() && !sending
-                    ? "bg-[color:var(--moby-600)] text-white shadow-sm hover:bg-[color:var(--moby-700)] active:scale-95"
-                    : "cursor-not-allowed bg-gray-100 text-[color:var(--ink-5)]",
+                    ? "bg-accent text-white hover:bg-accent active:scale-95"
+                    : "cursor-not-allowed bg-raised text-faint",
                 ].join(" ")}
               >
                 <Send size={14} />
               </button>
             </div>
-            <p className="mt-1.5 text-center text-[10.5px] text-[color:var(--ink-6)]">
+            <p className="mt-1.5 text-center text-micro text-faint">
               Moby AI อาจผิดพลาด — ตรวจสอบข้อมูลสำคัญเสมอ
             </p>
           </div>

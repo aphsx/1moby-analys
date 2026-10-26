@@ -22,12 +22,13 @@ import {
 import { SectionCard } from "@/components/ui";
 import { Select } from "@/components/select";
 import { ProgressCard } from "./progress-card";
-import { formatFileSize, getCleanCounts, PRIMARY_BUTTON_CLS } from "./training-utils";
+import { BUTTON } from "@/components/ui";
+import { formatFileSize, getCleanCounts } from "./training-utils";
 import { DEFAULT_HORIZON_DAYS } from "./training-run-utils";
 import { formatCount } from "@/lib/format";
 
 const fieldCls =
-  "mt-1.5 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3.5 text-[13px] text-[color:var(--ink-2)] shadow-[var(--shadow-1)] outline-none transition-colors focus:border-[color:var(--moby-500)] disabled:opacity-50";
+  "mt-1.5 h-11 w-full rounded-card border border-border bg-surface px-3.5 text-small text-text shadow-[var(--shadow-1)] outline-none transition-colors focus:border-accent disabled:opacity-50";
 
 export function TrainPanel({
   readySources,
@@ -86,7 +87,7 @@ export function TrainPanel({
 
   return (
     <SectionCard
-      eyebrow="Training"
+      eyebrow="เทรนโมเดล"
       title="เริ่มเทรน"
       hint="เลือก dataset แล้วกดเทรน — ระบบจัดการ cutoff, leakage และเลือกโมเดลที่ดีที่สุดให้อัตโนมัติ"
       right={
@@ -94,7 +95,7 @@ export function TrainPanel({
           type="button"
           disabled={!canTrain}
           onClick={() => onTrain({ cutoff_date: cutoffDate, horizon_days: horizonDays })}
-          className={`${PRIMARY_BUTTON_CLS} w-full sm:w-auto sm:min-w-[140px]`}
+          className={`${BUTTON.primary} w-full sm:w-auto sm:min-w-[140px]`}
         >
           {trainBusy ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
           {creating ? "กำลังเริ่ม…" : trainingInProgress ? "กำลังเทรน…" : "เทรน"}
@@ -102,7 +103,7 @@ export function TrainPanel({
       }
     >
       <div>
-        <span className="type-label">dataset</span>
+        <span className="type-label">ชุดข้อมูล</span>
         <div className="mt-1.5 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           <Select
             value={selectedSource?.id ?? ""}
@@ -111,7 +112,7 @@ export function TrainPanel({
             size="lg"
             className="min-w-0 flex-1"
             placeholder="ยังไม่มี dataset ที่ ready"
-            aria-label="Training dataset"
+            aria-label="ชุดข้อมูลสำหรับเทรน"
             options={readySources.map((s) => ({
               value: s.id,
               label: s.client_label ? `${s.name} · ${s.client_label}` : s.name,
@@ -121,7 +122,7 @@ export function TrainPanel({
             <button
               type="button"
               onClick={() => onDeleteSource(selectedSource)}
-              className="inline-flex h-11 w-full shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[color:var(--ink-4)] shadow-[var(--shadow-1)] hover:border-[color:var(--danger)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-45 sm:w-11"
+              className="inline-flex h-11 w-full shrink-0 items-center justify-center rounded-card border border-border bg-surface text-muted shadow-[var(--shadow-1)] hover:border-negative hover:bg-[var(--pill-negative-bg)] hover:text-negative disabled:cursor-not-allowed disabled:opacity-45 sm:w-11"
               title="ลบ dataset นี้"
             >
               <Trash2 size={15} />
@@ -130,14 +131,14 @@ export function TrainPanel({
           <button
             type="button"
             onClick={() => setShowUpload((v) => !v)}
-            className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45 sm:justify-start"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-card border border-border bg-surface px-3.5 text-small font-semibold text-accent shadow-[var(--shadow-1)] hover:bg-raised disabled:cursor-not-allowed disabled:opacity-45 sm:justify-start"
           >
             <UploadCloud size={14} />
-            upload ใหม่
+            อัปโหลดใหม่
           </button>
         </div>
 
-        <p className="mt-2 text-[12px] text-[color:var(--ink-5)]">
+        <p className="mt-2 text-micro text-faint">
           {selectedSource
             ? `${counts ? `${formatCount(counts.customers)} แถว · ` : ""}${
                 selectedSource.created_by_name ? `นำเข้าโดย ${selectedSource.created_by_name} · ` : ""
@@ -170,11 +171,11 @@ export function TrainPanel({
         <ProgressCard training progress={100} step="" phase={null} />
       )}
 
-      <div className="mt-4 border-t border-gray-100 pt-4">
+      <div className="mt-4 border-t border-rule pt-4">
         <button
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[color:var(--ink-3)] hover:text-[color:var(--moby-600)]"
+          className="inline-flex items-center gap-2 text-small font-medium text-text hover:text-accent"
         >
           <ChevronDown
             size={14}
@@ -195,11 +196,11 @@ export function TrainPanel({
                 onChange={(e) => setHorizonDays(Number.parseInt(e.target.value, 10))}
                 className={`${fieldCls} max-w-[200px]`}
               />
-              <span className="mt-1.5 block text-[12px] leading-5 text-[color:var(--ink-4)]">
+              <span className="mt-1.5 block text-micro leading-5 text-muted">
                 default {DEFAULT_HORIZON_DAYS} วัน — เปลี่ยนเฉพาะเมื่อรู้ว่าทำอะไรอยู่
               </span>
               {!horizonValid && (
-                <span className="mt-1 block text-[12px] text-[color:var(--danger)]">
+                <span className="mt-1 block text-micro text-negative">
                   Horizon ต้องเป็นจำนวนวันที่มากกว่า 0
                 </span>
               )}
@@ -225,13 +226,13 @@ function UploadForm({
   const [file, setFile] = useState<File | null>(null);
 
   return (
-    <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-[var(--shadow-1)]">
+    <div className="mt-3 rounded-card border border-border bg-surface p-4 shadow-[var(--shadow-1)]">
       <div className="flex items-center justify-between">
         <span className="type-label">นำเข้า dataset ใหม่ (.xlsx 8 sheets)</span>
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[color:var(--ink-5)] hover:bg-gray-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-faint hover:bg-raised"
           aria-label="ปิด"
         >
           <X size={14} />
@@ -251,12 +252,12 @@ function UploadForm({
           type="button"
           onClick={() => uploadRef.current?.click()}
           disabled={importing}
-          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:opacity-40"
+          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-card border border-border bg-surface px-3.5 text-small font-semibold text-accent shadow-[var(--shadow-1)] hover:bg-raised disabled:opacity-40"
         >
           <FileSpreadsheet size={14} />
           เลือกไฟล์
         </button>
-        <span className="min-w-0 flex-1 truncate text-[12px] text-[color:var(--ink-4)]" title={file?.name}>
+        <span className="min-w-0 flex-1 truncate text-micro text-muted" title={file?.name}>
           {file ? `${file.name} · ${formatFileSize(file.size)}` : "ยังไม่ได้เลือกไฟล์"}
         </span>
         <button
@@ -268,7 +269,7 @@ function UploadForm({
             onClose();
           }}
           disabled={importing || !file}
-          className={PRIMARY_BUTTON_CLS}
+          className={BUTTON.primary}
         >
           <UploadCloud size={16} />
           Upload and clean

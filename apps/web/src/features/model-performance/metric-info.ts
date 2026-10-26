@@ -317,8 +317,8 @@ export const PRIMARY_METRIC_KEY: Record<string, string> = {
 export const SPLIT_ORDER = ["validation", "test", "backtest_avg"] as const;
 
 export const SPLIT_LABELS: Record<(typeof SPLIT_ORDER)[number], string> = {
-  validation: "Val",
-  test: "Test",
-  backtest_avg: "BT avg",
+  validation: "ชุดตรวจสอบ",
+  test: "ชุดทดสอบ",
+  backtest_avg: "ย้อนทดสอบเฉลี่ย",
 };
 

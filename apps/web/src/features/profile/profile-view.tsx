@@ -38,7 +38,7 @@ export function ProfileView() {
 
   if (isPending) {
     return (
-      <div className="grid min-h-[40vh] place-items-center text-[color:var(--ink-5)]">
+      <div className="grid min-h-[40vh] place-items-center text-faint">
         <Loader2 className="animate-spin" size={22} />
       </div>
     );
@@ -46,11 +46,11 @@ export function ProfileView() {
 
   if (!user) {
     return (
-      <div className="p-8 text-[color:var(--ink-4)]">ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่</div>
+      <div className="p-8 text-muted">ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่</div>
     );
   }
 
-  const displayName = name.trim() || user.email?.split("@")[0] || "User";
+  const displayName = name.trim() || user.email?.split("@")[0] || "ผู้ใช้";
   const dirty = name.trim() !== (user.name ?? "").trim() || image.trim() !== (user.image ?? "").trim();
   const createdAt = formatDate(user.createdAt);
 
@@ -60,7 +60,7 @@ export function ProfileView() {
     setError(null);
     try {
       const res = await updateUser({ name: name.trim(), image: image.trim() || undefined });
-      if (res.error) throw new Error(res.error.message || "Update failed");
+      if (res.error) throw new Error(res.error.message || "บันทึกไม่สำเร็จ");
       await refetch();
       setSavedTick(true);
       setTimeout(() => setSavedTick(false), 2000);
@@ -76,7 +76,7 @@ export function ProfileView() {
     setError(null);
     try {
       const res = await deleteUser();
-      if (res.error) throw new Error(res.error.message || "Delete failed");
+      if (res.error) throw new Error(res.error.message || "ลบบัญชีไม่สำเร็จ");
       router.push("/login");
       router.refresh();
     } catch (e: any) {
@@ -89,37 +89,37 @@ export function ProfileView() {
   return (
     <div className="mx-auto max-w-[720px] px-4 py-6 sm:px-6 sm:py-8">
       {/* Identity card */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-6">
+      <section className="rounded-card border border-border bg-surface p-6">
         <div className="flex items-start gap-4 sm:items-center">
           {image.trim() ? (
             <img
               src={image.trim()}
               alt=""
               referrerPolicy="no-referrer"
-              className="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
+              className="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-border"
             />
           ) : (
-            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[color:var(--moby-600)] text-lg font-semibold text-white">
+            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-accent text-lg font-semibold text-white">
               {initials(displayName)}
             </span>
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="min-w-0 truncate text-[18px] font-semibold text-[color:var(--ink-1)]">{displayName}</h2>
+              <h2 className="min-w-0 truncate text-[18px] font-semibold text-text">{displayName}</h2>
               {user.emailVerified && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--moby-50)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--moby-600)]">
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-micro font-medium text-accent">
                   <BadgeCheck size={13} /> ยืนยันแล้ว
                 </span>
               )}
             </div>
-            <p className="truncate text-[13px] text-[color:var(--ink-4)]">{user.email}</p>
+            <p className="truncate text-small text-muted">{user.email}</p>
           </div>
         </div>
       </section>
 
       {/* Editable fields */}
-      <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
-        <h3 className="mb-4 text-[13px] font-semibold text-[color:var(--ink-5)]">
+      <section className="mt-6 rounded-card border border-border bg-surface p-6">
+        <h3 className="mb-4 text-small font-semibold text-faint">
           ข้อมูลส่วนตัว
         </h3>
 
@@ -128,7 +128,7 @@ export function ProfileView() {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-[14px] outline-none focus:border-[color:var(--moby-600)]"
+              className="h-11 w-full rounded-control border border-border bg-surface px-3 text-body outline-none focus:border-accent"
               placeholder="ชื่อที่แสดง"
             />
           </Field>
@@ -137,7 +137,7 @@ export function ProfileView() {
             <input
               value={image}
               onChange={(e) => setImage(e.target.value)}
-              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-[14px] outline-none focus:border-[color:var(--moby-600)]"
+              className="h-11 w-full rounded-control border border-border bg-surface px-3 text-body outline-none focus:border-accent"
               placeholder="https://…"
             />
           </Field>
@@ -153,18 +153,18 @@ export function ProfileView() {
         </div>
 
         {error && (
-          <div className="mt-4 rounded-xl border border-[color:var(--danger)]/30 bg-red-50 px-4 py-3 text-[13px] text-[color:var(--danger)]">
+          <div className="mt-4 rounded-control border border-negative bg-[var(--pill-negative-bg)] px-4 py-3 text-small text-negative">
             {error}
           </div>
         )}
 
         <div className="mt-6 flex flex-col-reverse items-stretch justify-end gap-3 sm:flex-row sm:items-center">
-          {savedTick && <span className="text-[13px] text-[color:var(--moby-600)]">บันทึกแล้ว ✓</span>}
+          {savedTick && <span className="text-small text-positive">บันทึกแล้ว</span>}
           <button
             type="button"
             onClick={() => void handleSave()}
             disabled={!dirty || !name.trim() || saving}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[color:var(--moby-600)] px-5 text-[14px] font-medium text-white transition-colors hover:bg-[color:var(--moby-700)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-control bg-accent px-5 text-body font-medium text-white transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving && <Loader2 className="animate-spin" size={15} />}
             บันทึกการเปลี่ยนแปลง
@@ -173,18 +173,18 @@ export function ProfileView() {
       </section>
 
       {/* Danger zone */}
-      <section className="mt-6 rounded-2xl border border-[color:var(--danger)]/30 bg-white p-6">
-        <h3 className="text-[13px] font-semibold text-[color:var(--danger)]">
+      <section className="mt-6 rounded-card border border-negative bg-surface p-6">
+        <h3 className="text-small font-semibold text-negative">
           ลบบัญชี
         </h3>
-        <p className="mt-2 text-[13px] leading-6 text-[color:var(--ink-4)]">
+        <p className="mt-2 text-small leading-6 text-muted">
           การลบบัญชีจะลบข้อมูลผู้ใช้ของคุณและออกจากทุกอุปกรณ์อย่างถาวร ไม่สามารถกู้คืนได้
         </p>
         <div className="mt-4">
           <button
             type="button"
             onClick={() => setConfirmDelete(true)}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-[color:var(--danger)]/40 px-5 text-[14px] font-medium text-[color:var(--danger)] transition-colors hover:bg-red-50"
+            className="inline-flex h-11 items-center gap-2 rounded-control border border-negative px-5 text-body font-medium text-negative transition-colors hover:bg-[var(--pill-negative-bg)]"
           >
             <Trash2 size={15} /> ลบบัญชีของฉัน
           </button>
@@ -211,7 +211,7 @@ export function ProfileView() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[12px] font-medium text-[color:var(--ink-3)]">{label}</span>
+      <span className="mb-1.5 block text-micro font-medium text-text">{label}</span>
       {children}
     </label>
   );
@@ -220,8 +220,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function ReadOnly({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <span className="mb-1.5 block text-[12px] font-medium text-[color:var(--ink-3)]">{label}</span>
-      <div className="flex h-11 items-center rounded-xl bg-gray-50 px-3 text-[14px] text-[color:var(--ink-2)]">
+      <span className="mb-1.5 block text-micro font-medium text-text">{label}</span>
+      <div className="flex h-11 items-center rounded-control bg-raised px-3 text-body text-text">
         {value?.trim() || "—"}
       </div>
     </div>

@@ -354,23 +354,23 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
               {monthly.map((row) => (
                 <div
                   key={row.month}
-                  className="min-w-0 flex-1 rounded-sm bg-[color:var(--moby-200)]"
+                  className="min-w-0 flex-1 rounded-sm bg-accent-track"
                   style={{ height: `${Math.max(10, (row.amount / maxAmount) * 100)}%`, opacity: 0.55 }}
                 />
               ))}
             </div>
 
             <div
-              className="absolute inset-y-0.5 rounded-md border border-[color:var(--moby-500)] bg-[color:var(--moby-500)]/10"
+              className="absolute inset-y-0.5 rounded-md border border-accent bg-accent-soft"
               style={{ left: `${thumbLeftPct}%`, width: `${thumbWidthPct}%` }}
               onPointerDown={(event) => onNavigatorPointerDown(event, "move")}
             >
               <div
-                className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize rounded-l-md bg-[color:var(--moby-500)]/25"
+                className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize rounded-l-md bg-accent-track"
                 onPointerDown={(event) => onNavigatorPointerDown(event, "resize-left")}
               />
               <div
-                className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-md bg-[color:var(--moby-500)]/25"
+                className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-md bg-accent-track"
                 onPointerDown={(event) => onNavigatorPointerDown(event, "resize-right")}
               />
             </div>

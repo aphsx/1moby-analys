@@ -41,7 +41,7 @@ function GateResultCell({ run }: { run: TrainingRun }) {
   if (run.status === "failed") {
     return (
       <span
-        className="block max-w-[260px] truncate text-[11.5px] text-[color:var(--danger)]"
+        className="block max-w-[260px] truncate text-micro text-negative"
         title={run.error_message ?? undefined}
       >
         {run.error_message ?? "ล้มเหลว"}
@@ -49,17 +49,17 @@ function GateResultCell({ run }: { run: TrainingRun }) {
     );
   }
   if (run.status !== "completed") {
-    return <span className="text-[color:var(--ink-5)]">—</span>;
+    return <span className="text-faint">—</span>;
   }
   const promoted = promotedSummary(run.results);
   const primary = primaryResultSummary(run.results);
   if (!promoted && !primary) {
-    return <span className="text-[color:var(--ink-5)]">ไม่มีผลลัพธ์</span>;
+    return <span className="text-faint">ไม่มีผลลัพธ์</span>;
   }
   return (
     <div className="min-w-0">
-      {promoted && <div className="font-medium text-[color:var(--ink-2)]">{promoted}</div>}
-      {primary && <div className="text-[11.5px] text-[color:var(--ink-5)]">{primary}</div>}
+      {promoted && <div className="font-medium text-text">{promoted}</div>}
+      {primary && <div className="text-micro text-faint">{primary}</div>}
     </div>
   );
 }
@@ -112,17 +112,17 @@ export function TrainingHistoryTable({
   return (
     <>
       <SectionCard
-        eyebrow="Training history"
+        eyebrow="ประวัติการเทรน"
         title="ประวัติการเทรนทั้งหมด"
         hint="หนึ่งแถวต่อหนึ่งรอบเทรน — ใหม่สุดอยู่บน · ลบได้ถ้าไม่มี prediction ที่ใช้โมเดลจากรอบนั้น (production จะสลับอัตโนมัติถ้ามีเวอร์ชันอื่น)"
       >
         {notice && (
-          <div className="mb-3 rounded-xl border border-[color:var(--ok)] bg-[color:var(--ok-bg)] px-3 py-2 text-[12.5px] text-[color:var(--ok)]">
+          <div className="mb-3 rounded-control border border-positive bg-[var(--pill-positive-bg)] px-3 py-2 text-small text-positive">
             {notice}
           </div>
         )}
         {error && (
-          <div className="mb-3 rounded-xl border border-[color:var(--danger)] bg-[color:var(--danger-bg)] px-3 py-2 text-[12.5px] text-[color:var(--danger)]">
+          <div className="mb-3 rounded-control border border-negative bg-[var(--pill-negative-bg)] px-3 py-2 text-small text-negative">
             {error}
           </div>
         )}
@@ -139,17 +139,17 @@ export function TrainingHistoryTable({
             hint="เลือก dataset ที่ Ready แล้วกด เทรน ด้านบน"
           />
         ) : (
-          <div className="overflow-x-auto rounded-[22px] border border-gray-200">
+          <div className="overflow-x-auto rounded-card border border-border">
             <table className="data-table min-w-[860px]">
               <thead>
                 <tr>
-                  <th>Dataset</th>
-                  <th>Status</th>
+                  <th>ชุดข้อมูล</th>
+                  <th>สถานะ</th>
                   <th>โดย</th>
-                  <th>Cutoff</th>
+                  <th>วันตัดข้อมูล</th>
                   <th>เมื่อไหร่</th>
                   <th className="text-right">ใช้เวลา</th>
-                  <th>ผล gate</th>
+                  <th>ผลเกณฑ์ปล่อยใช้</th>
                   <th></th>
                 </tr>
               </thead>
@@ -160,8 +160,8 @@ export function TrainingHistoryTable({
                   return (
                     <tr key={run.id}>
                       <td>
-                        <div className="font-medium text-[color:var(--ink-1)]">{run.dataset_name}</div>
-                        <div className="text-[11.5px] text-[color:var(--ink-5)]">
+                        <div className="font-medium text-text">{run.dataset_name}</div>
+                        <div className="text-micro text-faint">
                           horizon {run.horizon_days} วัน
                         </div>
                       </td>
@@ -177,10 +177,10 @@ export function TrainingHistoryTable({
                           )}
                         </div>
                       </td>
-                      <td className="text-[color:var(--ink-3)]">{run.created_by_name ?? "—"}</td>
-                      <td className="num text-[color:var(--ink-3)]">{run.cutoff_date}</td>
-                      <td className="text-[color:var(--ink-3)]">{formatRelative(run.started_at)}</td>
-                      <td className="num text-right text-[color:var(--ink-3)]">
+                      <td className="text-text">{run.created_by_name ?? "—"}</td>
+                      <td className="num text-text">{run.cutoff_date}</td>
+                      <td className="whitespace-nowrap text-text">{formatRelative(run.started_at)}</td>
+                      <td className="num text-right text-text">
                         {formatDuration(run.started_at, run.finished_at)}
                       </td>
                       <td>
@@ -191,7 +191,7 @@ export function TrainingHistoryTable({
                           type="button"
                           onClick={() => setPendingDelete(run)}
                           disabled={deletingId === run.id || !canDelete}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[color:var(--ink-4)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-[var(--pill-negative-bg)] hover:text-negative disabled:cursor-not-allowed disabled:opacity-40"
                           title={
                             inProgress
                               ? "รอให้เทรนจบก่อน"

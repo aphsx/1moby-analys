@@ -89,14 +89,14 @@ export function MetricHelp({ info, placement = "bottom" }: MetricHelpProps) {
               left: panelStyle.left,
               width: Math.min(PANEL_WIDTH, window.innerWidth - 32),
             }}
-            className="z-[200] rounded-xl border border-gray-200 bg-white p-3 shadow-lg"
+            className="z-[200] rounded-control border border-border bg-surface p-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-[12px] font-semibold text-[color:var(--ink-2)]">{info.label}</p>
-            <p className="mt-1.5 text-[11.5px] leading-[1.55] text-[color:var(--ink-4)]">{body}</p>
+            <p className="text-micro font-semibold text-text">{info.label}</p>
+            <p className="mt-1.5 text-micro leading-[1.55] text-muted">{body}</p>
             {info.goodRange ? (
-              <p className="mt-2 border-t border-gray-100 pt-2 text-[11px] leading-[1.45] text-[color:var(--ink-5)]">
-                <span className="font-semibold text-[color:var(--ink-3)]">ค่าที่ใช้งานได้: </span>
+              <p className="mt-2 border-t border-rule pt-2 text-micro leading-[1.45] text-faint">
+                <span className="font-semibold text-text">ค่าที่ใช้งานได้: </span>
                 {info.goodRange}
               </p>
             ) : null}
@@ -114,7 +114,7 @@ export function MetricHelp({ info, placement = "bottom" }: MetricHelpProps) {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={toggle}
-        className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[color:var(--ink-5)] transition-colors hover:bg-gray-100 hover:text-[color:var(--ink-3)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[color:var(--ink-3)]"
+        className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-faint transition-colors hover:bg-raised hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-text"
       >
         <CircleHelp className="h-3.5 w-3.5" strokeWidth={2.25} />
       </button>

@@ -39,7 +39,7 @@ const MODEL_TYPES = ["churn", "clv", "credit"] as const;
 type ModelType = (typeof MODEL_TYPES)[number];
 
 const fieldCls =
-  "mt-1.5 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3.5 text-[13px] text-[color:var(--ink-2)] shadow-[var(--shadow-1)] outline-none transition-colors focus:border-[color:var(--moby-500)] disabled:opacity-50";
+  "mt-1.5 h-11 w-full rounded-card border border-border bg-surface px-3.5 text-small text-text shadow-[var(--shadow-1)] outline-none transition-colors focus:border-accent disabled:opacity-50";
 
 export function CreateRunPanel({
   sources,
@@ -131,7 +131,7 @@ export function CreateRunPanel({
       setName(selected ? defaultRunName(selected.name) : "");
       await onRefresh();
     } catch (e) {
-      setError(getDisplayError(e, "สร้าง prediction run ไม่สำเร็จ") ?? "สร้าง prediction run ไม่สำเร็จ");
+      setError(getDisplayError(e, "สร้างรอบทำนายไม่สำเร็จ") ?? "สร้างรอบทำนายไม่สำเร็จ");
     } finally {
       setCreating(false);
     }
@@ -141,15 +141,15 @@ export function CreateRunPanel({
 
   return (
     <SectionCard
-      eyebrow="Prediction runs"
-      title="สร้าง prediction run"
+      eyebrow="รอบทำนาย"
+      title="สร้างรอบทำนาย"
       hint="เลือกข้อมูล ตั้งชื่อ แล้วกดรัน — ระบบจัดการ cutoff และรัน lifecycle / churn / CLV / credit ให้ทุกลูกค้า"
       right={
         <button
           type="button"
           onClick={() => void create()}
           disabled={!canCreate}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 text-[13px] font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50 sm:w-auto sm:min-w-[140px]"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-card bg-accent px-4 text-small font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-accent-ink disabled:opacity-50 sm:w-auto sm:min-w-[140px]"
         >
           {creating ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
           {creating ? "กำลังรัน…" : "รัน"}
@@ -167,7 +167,7 @@ export function CreateRunPanel({
               size="lg"
               className="min-w-0 flex-1"
               placeholder="ยังไม่มี source ที่ ready"
-              aria-label="Predict data source"
+              aria-label="ข้อมูลสำหรับทำนาย"
               options={readySources.map((s) => ({
                 value: s.id,
                 label: s.client_label ? `${s.name} · ${s.client_label}` : s.name,
@@ -176,14 +176,14 @@ export function CreateRunPanel({
             <button
               type="button"
               onClick={() => setShowImport((v) => !v)}
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 sm:justify-start"
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-card border border-border bg-surface px-3.5 text-small font-semibold text-accent shadow-[var(--shadow-1)] hover:bg-raised sm:justify-start"
             >
               <Plus size={14} />
-              import ใหม่
+              นำเข้าใหม่
             </button>
           </div>
           {selected && (
-            <p className="mt-2 text-[12px] text-[color:var(--ink-5)]">
+            <p className="mt-2 text-micro text-faint">
               {counts ? `${formatCount(counts.customers)} ลูกค้า · ` : ""}
               นำเข้า {formatRelative(selected.imported_at)}
               {selected.created_by_name ? ` โดย ${selected.created_by_name}` : ""}
@@ -193,14 +193,14 @@ export function CreateRunPanel({
         </div>
 
         <label className="block">
-          <span className="type-label">ชื่อ run</span>
+          <span className="type-label">ชื่อรอบทำนาย</span>
           <input
             value={name}
             onChange={(e) => {
               setName(e.target.value);
               setNameTouched(true);
             }}
-            placeholder="ชื่อ run"
+            placeholder="ชื่อรอบทำนาย"
             disabled={creating || readySources.length === 0}
             className={fieldCls}
           />
@@ -217,11 +217,11 @@ export function CreateRunPanel({
         />
       )}
 
-      <div className="mt-4 border-t border-gray-100 pt-4">
+      <div className="mt-4 border-t border-rule pt-4">
         <button
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[color:var(--ink-3)] hover:text-[color:var(--moby-600)]"
+          className="inline-flex items-center gap-2 text-small font-medium text-text hover:text-accent"
         >
           <ChevronDown
             size={14}
@@ -234,13 +234,13 @@ export function CreateRunPanel({
           <div className="mt-3 space-y-4">
             <div>
               <span className="type-label">เลือกโมเดลต่อ run</span>
-              <p className="mt-1 mb-2 text-[12px] leading-5 text-[color:var(--ink-4)]">
+              <p className="mt-1 mb-2 text-micro leading-5 text-muted">
                 ปล่อยเป็น &quot;Production (ปัจจุบัน)&quot; เพื่อใช้ champion — หรือเลือกเวอร์ชันเจาะจงสำหรับ run นี้
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {MODEL_TYPES.map((modelType) => (
                   <label key={modelType} className="block">
-                    <span className="text-[11px] font-semibold text-[color:var(--ink-5)]">
+                    <span className="text-micro font-semibold text-faint">
                       {modelType}
                     </span>
                     <Select
@@ -269,7 +269,7 @@ export function CreateRunPanel({
       </div>
 
       {error && (
-        <div className="mt-4 rounded-2xl border border-[color:var(--danger)] bg-[color:var(--danger-bg)] px-4 py-3 text-[13px] text-[color:var(--danger)]">
+        <div className="mt-4 rounded-card border border-negative bg-[var(--pill-negative-bg)] px-4 py-3 text-small text-negative">
           {error}
         </div>
       )}
@@ -305,7 +305,7 @@ function InlineImportForm({
         notifyStatusDialog({
           tone: "success",
           title: "นำเข้าข้อมูลสำเร็จ",
-          message: `ระบบเริ่ม prediction run ให้อัตโนมัติแล้ว (Auto — ${datasetName}) — ติดตามสถานะได้จากตาราง run ด้านล่าง`,
+          message: `ระบบเริ่มรอบทำนายให้อัตโนมัติแล้ว (Auto — ${datasetName}) ติดตามสถานะได้จากตารางด้านล่าง`,
         });
       }
     } catch (e) {
@@ -316,13 +316,13 @@ function InlineImportForm({
   };
 
   return (
-    <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[var(--shadow-1)]">
+    <div className="mt-4 rounded-card border border-border bg-surface p-4 shadow-[var(--shadow-1)]">
       <div className="flex items-center justify-between">
         <span className="type-label">นำเข้า predict data ใหม่ (.xlsx 8 sheets)</span>
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[color:var(--ink-5)] hover:bg-gray-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-faint hover:bg-raised"
           aria-label="ปิด"
         >
           <X size={14} />
@@ -337,12 +337,12 @@ function InlineImportForm({
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={busy}
-              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3.5 text-[12.5px] font-semibold text-[color:var(--moby-600)] shadow-[var(--shadow-1)] hover:bg-gray-50 disabled:opacity-40"
+              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-card border border-border bg-surface px-3.5 text-small font-semibold text-accent shadow-[var(--shadow-1)] hover:bg-raised disabled:opacity-40"
             >
               <FileSpreadsheet size={14} />
               เลือกไฟล์
             </button>
-            <span className="min-w-0 truncate text-[12px] text-[color:var(--ink-4)]" title={file?.name}>
+            <span className="min-w-0 truncate text-micro text-muted" title={file?.name}>
               {file ? file.name : "ยังไม่ได้เลือก"}
             </span>
             <input
@@ -374,7 +374,7 @@ function InlineImportForm({
           <input
             value={clientLabel}
             onChange={(e) => setClientLabel(e.target.value)}
-            placeholder="optional"
+            placeholder="ไม่บังคับ"
             disabled={busy}
             className={fieldCls}
           />
@@ -384,15 +384,15 @@ function InlineImportForm({
           type="button"
           onClick={() => void doImport()}
           disabled={busy || !file}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[color:var(--moby-600)] px-4 text-[13px] font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-[color:var(--moby-800)] disabled:opacity-50 sm:w-auto"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-card bg-accent px-4 text-small font-semibold text-white shadow-[0_16px_34px_rgba(0,107,255,0.14)] hover:bg-accent-ink disabled:opacity-50 sm:w-auto"
         >
           {busy ? <RefreshCw size={16} className="animate-spin" /> : <UploadCloud size={16} />}
-          {busy ? "กำลังนำเข้า…" : "Import"}
+          {busy ? "กำลังนำเข้า…" : "นำเข้า"}
         </button>
       </div>
 
       {error && (
-        <div className="mt-3 rounded-xl border border-[color:var(--danger)] bg-[color:var(--danger-bg)] px-3 py-2 text-[12px] text-[color:var(--danger)]">
+        <div className="mt-3 rounded-control border border-negative bg-[var(--pill-negative-bg)] px-3 py-2 text-micro text-negative">
           {error}
         </div>
       )}

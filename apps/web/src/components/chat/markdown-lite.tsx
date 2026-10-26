@@ -30,7 +30,7 @@ function Inline({ text, className }: InlineProps) {
       tokens.push(<strong key={key++} className={className}>{m.slice(2, -2)}</strong>);
     } else if (m.startsWith("`")) {
       tokens.push(
-        <code key={key++} className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[12px] text-[color:var(--ink-1)]">
+        <code key={key++} className="rounded bg-raised px-1 py-0.5 font-mono text-micro text-text">
           {m.slice(1, -1)}
         </code>
       );
@@ -211,15 +211,15 @@ function renderBlock(block: Block, idx: number, strongClass?: string): React.Rea
       return <div key={idx} className="h-2" aria-hidden />;
 
     case "hr":
-      return <hr key={idx} className="my-3 border-gray-200" />;
+      return <hr key={idx} className="my-3 border-border" />;
 
     case "heading": {
       const hClass = [
-        "font-semibold text-[color:var(--ink-1)]",
-        block.level === 1 ? "mt-4 text-[15px]" :
-        block.level === 2 ? "mt-3 text-[14px]" :
-        block.level === 3 ? "mt-2.5 text-[13px]" :
-                            "mt-2 text-[12px]",
+        "font-semibold text-text",
+        block.level === 1 ? "mt-4 text-body" :
+        block.level === 2 ? "mt-3 text-body" :
+        block.level === 3 ? "mt-2.5 text-small" :
+                            "mt-2 text-micro",
       ].join(" ");
       const inner = <Inline text={block.text} className={strongClass} />;
       if (block.level === 1) return <h1 key={idx} className={hClass}>{inner}</h1>;
@@ -242,13 +242,13 @@ function renderBlock(block: Block, idx: number, strongClass?: string): React.Rea
 
     case "code":
       return (
-        <div key={idx} className="my-2 overflow-x-auto rounded-lg border border-gray-200 bg-gray-50">
+        <div key={idx} className="my-2 overflow-x-auto rounded-lg border border-border bg-raised">
           {block.lang && (
-            <div className="border-b border-gray-200 px-3 py-1 text-[10px] font-medium text-[color:var(--ink-5)]">
+            <div className="border-b border-border px-3 py-1 text-micro font-medium text-faint">
               {block.lang}
             </div>
           )}
-          <pre className="overflow-x-auto p-3 text-[12px] leading-relaxed text-[color:var(--ink-2)]">
+          <pre className="overflow-x-auto p-3 text-micro leading-relaxed text-text">
             <code>{block.lines.join("\n")}</code>
           </pre>
         </div>
@@ -256,7 +256,7 @@ function renderBlock(block: Block, idx: number, strongClass?: string): React.Rea
 
     case "blockquote":
       return (
-        <blockquote key={idx} className="my-2 border-l-4 border-[color:var(--moby-400)] pl-3 text-[color:var(--ink-3)]">
+        <blockquote key={idx} className="my-2 border-l-4 border-accent pl-3 text-text">
           {block.lines.map((line, li) => (
             <p key={li} className="leading-relaxed">
               <Inline text={line} className={strongClass} />
@@ -270,7 +270,7 @@ function renderBlock(block: Block, idx: number, strongClass?: string): React.Rea
         <ul key={idx} className="my-1 space-y-0.5 pl-4">
           {block.items.map((item, ii) => (
             <li key={ii} className="flex gap-2 leading-relaxed">
-              <span className="mt-[0.45em] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--moby-500)]" />
+              <span className="mt-[0.45em] h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
               <span>
                 {item.map((line, li) => (
                   <React.Fragment key={li}>
@@ -289,7 +289,7 @@ function renderBlock(block: Block, idx: number, strongClass?: string): React.Rea
         <ol key={idx} className="my-1 space-y-0.5 pl-4">
           {block.items.map((item, ii) => (
             <li key={ii} className="flex gap-2 leading-relaxed">
-              <span className="shrink-0 font-semibold text-[color:var(--moby-600)]">{ii + 1}.</span>
+              <span className="shrink-0 font-semibold text-accent">{ii + 1}.</span>
               <span>
                 {item.map((line, li) => (
                   <React.Fragment key={li}>
@@ -305,27 +305,27 @@ function renderBlock(block: Block, idx: number, strongClass?: string): React.Rea
 
     case "table":
       return (
-        <div key={idx} className="my-2 overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full text-[12px]">
-            <thead className="bg-gray-50">
+        <div key={idx} className="my-2 overflow-x-auto rounded-lg border border-border">
+          <table className="min-w-full text-micro">
+            <thead className="bg-raised">
               <tr>
                 {block.header.map((h, hi) => (
                   <th
                     key={hi}
-                    className={`border-b border-gray-200 px-3 py-2 font-semibold text-[color:var(--ink-2)] text-${block.align[hi] ?? "left"}`}
+                    className={`border-b border-border px-3 py-2 font-semibold text-text text-${block.align[hi] ?? "left"}`}
                   >
                     <Inline text={h} className={strongClass} />
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-rule bg-surface">
               {block.rows.map((row, ri) => (
-                <tr key={ri} className="hover:bg-gray-50 transition-colors">
+                <tr key={ri} className="hover:bg-raised transition-colors">
                   {row.map((cell, ci) => (
                     <td
                       key={ci}
-                      className={`px-3 py-2 text-[color:var(--ink-3)] text-${block.align[ci] ?? "left"}`}
+                      className={`px-3 py-2 text-text text-${block.align[ci] ?? "left"}`}
                     >
                       <Inline text={cell} className={strongClass} />
                     </td>

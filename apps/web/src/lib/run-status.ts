@@ -26,8 +26,8 @@ export function isActiveRunStatus(status: RunStatus): boolean {
 export const RUN_POLL_MS = 3_000;
 
 export function runStatusLabel(status: RunStatus): string {
-  if (status === "completed") return "Completed";
-  if (status === "failed") return "Failed";
-  if (status === "in_progress") return "In progress";
-  return "Pending";
+  if (status === "completed") return "เสร็จแล้ว";
+  if (status === "failed") return "ไม่สำเร็จ";
+  if (status === "in_progress") return "กำลังทำงาน";
+  return "รอคิว";
 }

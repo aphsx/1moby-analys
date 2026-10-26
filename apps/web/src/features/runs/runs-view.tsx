@@ -29,7 +29,7 @@ export function RunsView() {
       setSources(nextSources);
       setRuns(nextRuns);
     } catch (e) {
-      setError(getDisplayError(e, "โหลด prediction runs ไม่สำเร็จ") ?? "โหลด prediction runs ไม่สำเร็จ");
+      setError(getDisplayError(e, "โหลดรอบทำนายไม่สำเร็จ") ?? "โหลดรอบทำนายไม่สำเร็จ");
     } finally {
       setRunsLoading(false);
     }
@@ -49,7 +49,7 @@ export function RunsView() {
     <main className="min-w-0 px-4 py-6 pb-12 sm:px-6 lg:px-8">
       <div className="space-y-6">
         {error && (
-          <div className="rounded-2xl border border-[color:var(--danger)] bg-[color:var(--danger-bg)] px-4 py-3 text-[13px] text-[color:var(--danger)]">
+          <div className="rounded-card border border-negative bg-[var(--pill-negative-bg)] px-4 py-3 text-small text-negative">
             {error}
           </div>
         )}

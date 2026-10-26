@@ -99,7 +99,7 @@ export function TrainingView() {
       setTrainSources(Array.isArray(sources) ? sources : []);
     } catch (e) {
       setTrainSources([]);
-      setLoadError(getDisplayError(e, "Failed to load training workspace"));
+      setLoadError(getDisplayError(e, "โหลดหน้าเทรนโมเดลไม่สำเร็จ"));
     } finally {
       setLoading(false);
     }
@@ -188,7 +188,7 @@ export function TrainingView() {
         undefined
       );
       setImportProgress(100);
-      setImportStep("Import complete");
+      setImportStep("นำเข้าเสร็จแล้ว");
       await wait(450);
       await loadSources();
       notifyStatusDialog({
@@ -219,8 +219,8 @@ export function TrainingView() {
     } catch (e) {
       notifyStatusDialog({
         tone: "error",
-        title: "ลบ dataset ไม่สำเร็จ",
-        message: getDisplayError(e, "ลบ dataset ไม่สำเร็จ") ?? "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+        title: "ลบชุดข้อมูลไม่สำเร็จ",
+        message: getDisplayError(e, "ลบชุดข้อมูลไม่สำเร็จ") ?? "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
       });
     } finally {
       setDeletingId(null);
@@ -265,7 +265,7 @@ export function TrainingView() {
     <main className="min-w-0 px-4 py-6 pb-12 sm:px-6 lg:px-8">
       <div className="space-y-6">
         {(loadError || trainError) && (
-          <div className="rounded-2xl border border-[color:var(--danger)] bg-[color:var(--danger-bg)] px-4 py-3 text-[13px] text-[color:var(--danger)]">
+          <div className="rounded-card border border-negative bg-[var(--pill-negative-bg)] px-4 py-3 text-small text-negative">
             {loadError ?? trainError}
           </div>
         )}

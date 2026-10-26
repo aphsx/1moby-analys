@@ -40,13 +40,13 @@ export function ModelStatusCards({ latestRun }: { latestRun: TrainingRun | null 
 
   return (
     <SectionCard
-      eyebrow="Models"
+      eyebrow="โมเดล"
       title="โมเดลที่ใช้งานอยู่"
       hint="champion ปัจจุบัน + ผลเทรนล่าสุด — กด เวอร์ชัน เพื่อสลับ production หรือลบเวอร์ชันเก่า"
       right={
         <Link
           href="/model-performance"
-          className="inline-flex items-center gap-1 text-[12.5px] font-medium text-[color:var(--ink-3)] hover:text-[color:var(--moby-600)] hover:underline underline-offset-2"
+          className="inline-flex items-center gap-1 text-small font-medium text-text hover:text-accent hover:underline underline-offset-2"
         >
           ดู metric เต็ม
           <ArrowRight size={12} />
@@ -122,10 +122,10 @@ function ModelStatusCard({
   const Icon = TYPE_ICON[modelType];
 
   return (
-    <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-[var(--shadow-1)]">
+    <div className="rounded-card border border-border bg-surface p-4 shadow-[var(--shadow-1)]">
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 text-[14px] font-semibold text-[color:var(--ink-1)]">
-          <Icon size={15} className="text-[color:var(--moby-600)]" />
+        <span className="inline-flex items-center gap-2 text-body font-semibold text-text">
+          <Icon size={15} className="text-accent" />
           {MODEL_TYPE_LABELS[modelType]}
         </span>
         {active ? (
@@ -154,15 +154,15 @@ function ModelStatusCard({
       {/* Headline metric — the production champion. */}
       {active ? (
         <>
-          <p className="num mt-3 text-[24px] font-semibold text-[color:var(--ink-1)]">
+          <p className="num mt-3 text-[24px] font-semibold text-text">
             {active.primary_metric_value != null ? formatMetric(active.primary_metric_value) : "—"}
           </p>
-          <p className="text-[12px] text-[color:var(--ink-4)]">
+          <p className="text-micro text-muted">
             {active.primary_metric_name}
             {latestResult && (
               <>
                 {" · "}
-                <span className={beatsBaseline(latestResult) ? "text-[color:var(--moby-600)]" : "text-[color:var(--danger)]"}>
+                <span className={beatsBaseline(latestResult) ? "text-accent" : "text-negative"}>
                   {beatsBaseline(latestResult) ? "ชนะ" : "แพ้"} baseline {formatMetric(latestResult.baseline_value)}
                 </span>
               </>
@@ -170,52 +170,52 @@ function ModelStatusCard({
           </p>
         </>
       ) : (
-        <p className="mt-3 text-[13px] text-[color:var(--ink-4)]">
+        <p className="mt-3 text-small text-muted">
           {versions === null ? "กำลังโหลด…" : "ยังไม่มีเวอร์ชัน production"}
         </p>
       )}
 
-      <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 text-[12px] text-[color:var(--ink-5)]">
+      <div className="mt-3 flex items-center justify-between border-t border-rule pt-3 text-micro text-faint">
         <span className="truncate">
           {active ? `${active.version} · ${active.algorithm || "—"}` : "—"}
         </span>
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex shrink-0 items-center gap-1 font-medium text-[color:var(--ink-3)] hover:text-[color:var(--moby-600)]"
+          className="inline-flex shrink-0 items-center gap-1 font-medium text-text hover:text-accent"
         >
           เวอร์ชัน
           <ChevronDown size={13} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
       </div>
 
-      {error && <p className="mt-2 text-[11px] text-[color:var(--danger)]">{error}</p>}
+      {error && <p className="mt-2 text-micro text-negative">{error}</p>}
 
       {expanded && (
         <div className="mt-2 space-y-1.5">
           {versions === null && !error && (
-            <p className="text-[11px] text-[color:var(--ink-5)]">กำลังโหลด…</p>
+            <p className="text-micro text-faint">กำลังโหลด…</p>
           )}
           {versions?.length === 0 && (
-            <p className="text-[11px] text-[color:var(--ink-5)]">ยังไม่มีเวอร์ชัน</p>
+            <p className="text-micro text-faint">ยังไม่มีเวอร์ชัน</p>
           )}
           {versions?.map((v) => {
             return (
             <div
               key={v.id}
-              className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-1.5"
+              className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg bg-raised px-2.5 py-1.5"
             >
               <div className="min-w-0">
-                <p className="truncate text-[11.5px] font-medium text-[color:var(--ink-2)]">
+                <p className="truncate text-micro font-medium text-text">
                   {v.version} · {v.algorithm || "—"}
                 </p>
-                <p className="text-[10.5px] text-[color:var(--ink-5)]">
+                <p className="text-micro text-faint">
                   {v.primary_metric_name}:{" "}
                   {v.primary_metric_value != null ? v.primary_metric_value.toFixed(4) : "—"}
                 </p>
               </div>
               {v.is_active ? (
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                <span className="rounded-full bg-[var(--pill-positive-bg)] px-2 py-0.5 text-micro font-semibold text-positive">
                   production
                 </span>
               ) : (
@@ -224,7 +224,7 @@ function ModelStatusCard({
                     type="button"
                     disabled={busy}
                     onClick={() => activate(v.id)}
-                    className="rounded-full bg-gray-900 px-2.5 py-1 text-[10.5px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-full bg-primary px-2.5 py-1 text-micro font-semibold text-primary-ink disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {busyId === v.id ? "กำลังเปลี่ยน…" : "ใช้ตัวนี้"}
                   </button>
@@ -233,7 +233,7 @@ function ModelStatusCard({
                     disabled={busy}
                     onClick={() => setPendingDelete(v)}
                     title="ลบเวอร์ชันนี้ (ต้องไม่มี prediction ที่ใช้เวอร์ชันนี้)"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--ink-5)] hover:bg-[color:var(--danger-bg)] hover:text-[color:var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-faint hover:bg-[var(--pill-negative-bg)] hover:text-negative disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Trash2 size={12} />
                   </button>
