@@ -280,6 +280,9 @@ function Inner({
       const trimmed = value.trim();
       if (trimmed) params.set(key, trimmed);
     });
+    // Carried through so the detail page's back link returns to this exact list view.
+    if (sort) params.set("sort", `${sort.key}:${sort.direction}`);
+    if (page > 1) params.set("page", String(page));
     return `/customers/${accId}?${params.toString()}`;
   };
 
