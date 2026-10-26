@@ -27,8 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          # Matches oven/bun:1-alpine in the Dockerfiles. NOT package.json's
-          # packageManager (bun@1.0.0) — that predates the bun.lock text format.
+          # Matches oven/bun:1-alpine in the Dockerfiles and package.json's packageManager.
           bun-version: "1.4.0"
       - run: bun install --frozen-lockfile
       - run: bun run typecheck

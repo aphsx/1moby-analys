@@ -31,8 +31,8 @@ currently stopped to save cost; model files live only in the local `./models` vo
 
 ## Commands
 
-Package manager is **Bun** — Dockerfiles and CI use Bun 1.4 (`packageManager: bun@1.0.0` in `package.json`
-is stale; older Bun can't read the text `bun.lock`). The monorepo is driven by **Turborepo**.
+Package manager is **Bun 1.4** (`packageManager` in `package.json`, the Dockerfiles and CI agree; older
+Bun can't read the text `bun.lock`). The monorepo is driven by **Turborepo**.
 Run from repo root unless noted.
 
 ```bash
