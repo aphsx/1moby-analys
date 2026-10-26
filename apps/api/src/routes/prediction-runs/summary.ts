@@ -113,7 +113,7 @@ async function buildSummary(run: RunRow): Promise<RunSummary> {
       clv_sum: row.clv_sum,
       revenue_at_risk: row.revenue_at_risk,
     })),
-    usage_trend: agg.usage_trend,
+    usage_trend: agg.paid_usage_trend,
     credit: {
       demand_30d: agg.credit_demand_30d,
       by_urgency: agg.credit_by_urgency,

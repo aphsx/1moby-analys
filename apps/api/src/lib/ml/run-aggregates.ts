@@ -16,6 +16,8 @@ export type RunAggregates = {
   lifecycle: { active_paid: number; active_free: number; churned: number; ghost: number };
   churn_by_risk: Record<RiskLevel, number>;
   usage_trend: { increasing: number; stable: number; declining: number; no_usage: number };
+  /** The same counts for Active Paid customers only (AT_RISK_SCOPE). */
+  paid_usage_trend: { increasing: number; stable: number; declining: number; no_usage: number };
   credit_by_urgency: Record<UrgencyLevel, number>;
   revenue_expected_at_risk: number;
   revenue_high_risk_exposure: number;
@@ -53,7 +55,11 @@ export async function fetchRunAggregates(runId: string): Promise<RunAggregates> 
         .where(and(inRun, sql`${o.churnRiskLevel} IS NOT NULL`))
         .groupBy(o.churnRiskLevel),
       db
-        .select({ trend: o.usageTrend, n: sql<number>`COUNT(*)::int` })
+        .select({
+          trend: o.usageTrend,
+          n: sql<number>`COUNT(*)::int`,
+          paid: sql<number>`COUNT(*) FILTER (WHERE ${AT_RISK_SCOPE})::int`,
+        })
         .from(o)
         .where(and(inRun, sql`${o.usageTrend} IS NOT NULL`))
         .groupBy(o.usageTrend),
@@ -107,8 +113,11 @@ export async function fetchRunAggregates(runId: string): Promise<RunAggregates> 
   }
 
   const usageTrend = { increasing: 0, stable: 0, declining: 0, no_usage: 0 };
+  const paidUsageTrend = { ...usageTrend };
   for (const row of trendRows) {
-    if (row.trend && row.trend in usageTrend) usageTrend[row.trend as keyof typeof usageTrend] = row.n;
+    if (!row.trend || !(row.trend in usageTrend)) continue;
+    usageTrend[row.trend as keyof typeof usageTrend] = row.n;
+    paidUsageTrend[row.trend as keyof typeof usageTrend] = row.paid;
   }
 
   const creditByUrgency: Record<UrgencyLevel, number> = {
@@ -128,6 +137,7 @@ export async function fetchRunAggregates(runId: string): Promise<RunAggregates> 
     lifecycle,
     churn_by_risk: churnByRisk,
     usage_trend: usageTrend,
+    paid_usage_trend: paidUsageTrend,
     credit_by_urgency: creditByUrgency,
     revenue_expected_at_risk: scalars.expectedAtRisk,
     revenue_high_risk_exposure: scalars.highRiskExposure,

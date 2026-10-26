@@ -126,6 +126,10 @@ export interface RunSummary {
     clv_sum: number;
     revenue_at_risk: number;
   }[];
+  /**
+   * Active Paid customers by usage trend. `declining` overcounts when the cutoff is a month start
+   * (docs/ui/REFACTOR-PLAN.md §4.2); show `no_usage` only until the ML window fix lands.
+   */
   usage_trend: Record<PredictionOutput["usage_trend"], number>;
   credit: {
     demand_30d: number;
