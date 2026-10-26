@@ -9,6 +9,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import { AiBadge } from "@/components/ai-badge";
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { fetchRunInsight, generateRunInsight } from "@/lib/ml-api";
+import { formatDateTime } from "@/lib/format";
 import { useAsync } from "@/lib/use-async";
 import { TEXT_SAFE } from "./palette";
 
@@ -72,7 +73,7 @@ export function RunInsightCard({ runId }: { runId: string }) {
         )}
         {ready && insight?.ai_generated_at ? (
           <p className="mt-3 text-[11px] text-[color:var(--ink-5)]">
-            สร้างเมื่อ {new Date(insight.ai_generated_at).toLocaleString("th-TH")}
+            สร้างเมื่อ {formatDateTime(insight.ai_generated_at)}
             {insight.ai_model ? ` · ${insight.ai_model}` : ""}
           </p>
         ) : null}

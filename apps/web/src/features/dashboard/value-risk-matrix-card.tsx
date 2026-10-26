@@ -2,7 +2,7 @@
 
 import { type RunSummary } from "@moby/types";
 import Link from "next/link";
-import { formatCompactCurrency } from "@/lib/format";
+import { formatBahtCompact, formatCount } from "@/lib/format";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
 import { HighValueMedal } from "@/features/customers/customer-row-ui";
 import { TEXT_SAFE } from "./palette";
@@ -65,7 +65,7 @@ export function ValueRiskMatrixCard({ summary, runId }: { summary: RunSummary; r
       <div className="overflow-x-auto">
         <div className="min-w-[520px]">
           <div
-            className={`grid gap-3 border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] ${MATRIX_GRID}`}
+            className={`grid gap-3 border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-semibold text-[color:var(--ink-5)] ${MATRIX_GRID}`}
           >
             <div />
             {RISKS.map((risk) => (
@@ -100,17 +100,17 @@ export function ValueRiskMatrixCard({ summary, runId }: { summary: RunSummary; r
                     <Link
                       key={risk}
                       href={`/customers?run=${runId}&customer_value_tier=${tier}&churn_risk_level=${risk}`}
-                      title={`CLV รวม ${formatCompactCurrency(data?.clv_sum ?? 0)} ฿`}
+                      title={`CLV รวม ${formatBahtCompact(data?.clv_sum ?? 0)}`}
                       className="rounded-xl border border-gray-200 bg-white px-2 py-3 text-center transition-colors hover:border-[color:var(--moby-200)] hover:bg-gray-50"
                     >
                       <div
                         className="num text-[18px] font-semibold leading-none text-[color:var(--ink-2)]"
                         style={countColor ? { color: countColor } : undefined}
                       >
-                        {(data?.count ?? 0).toLocaleString()}
+                        {formatCount(data?.count ?? 0)}
                       </div>
                       <div className="num mt-1 text-[11.5px] text-[color:var(--ink-5)]">
-                        {formatCompactCurrency(data?.clv_sum ?? 0)}
+                        {formatBahtCompact(data?.clv_sum ?? 0)}
                       </div>
                     </Link>
                   );

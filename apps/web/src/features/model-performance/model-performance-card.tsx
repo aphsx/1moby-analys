@@ -3,10 +3,10 @@
 import { type ModelPerfEntry } from "@moby/types";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { formatCount, formatDate } from "@/lib/format";
 import { MetricLabel } from "./metric-help";
 import {
   formatBaselineName,
-  formatDate,
   metricInfo,
   metricInfoByLabel,
   pickSecondaryMetrics,
@@ -28,9 +28,9 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
     typeof primary.value === "number" ? primaryInfo.fmt(primary.value) : String(primary.value);
 
   return (
-    <article className="surface lift flex flex-col overflow-visible p-4 sm:p-5">
+    <article className="surface flex flex-col overflow-visible p-4 sm:p-5">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="text-[12px] font-semibold uppercase tracking-wide text-[color:var(--ink-2)]">
+        <h2 className="text-[12px] font-semibold text-[color:var(--ink-2)]">
           {entry.model_type}
         </h2>
         {entry.version ? (
@@ -46,7 +46,7 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
           <MetricLabel info={primaryInfo} />
           <span>· test holdout</span>
         </div>
-        <p className="num mt-1 text-[32px] font-semibold leading-none tracking-tight">{primaryValue}</p>
+        <p className="num mt-1 text-[32px] font-semibold leading-none ">{primaryValue}</p>
         {isMl && primary.baseline !== undefined && primary.baseline > 0 && (
           <p className="num mt-1.5 text-[11px] text-[color:var(--ink-5)]">
             baseline {formatBaselineName(primary.baseline_name ?? "baseline")}{" "}
@@ -95,7 +95,7 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
 
       <footer className="mt-4 border-t border-gray-100 pt-3 text-[10.5px] leading-5 text-[color:var(--ink-5)]">
         {entry.trained_at ? <p>trained {formatDate(entry.trained_at)}</p> : null}
-        {entry.dataset_rows != null ? <p>{entry.dataset_rows.toLocaleString()} rows</p> : null}
+        {entry.dataset_rows != null ? <p>{formatCount(entry.dataset_rows)} rows</p> : null}
         {entry.notes ? <p className="mt-1 text-[color:var(--ink-4)]">{entry.notes}</p> : null}
       </footer>
     </article>

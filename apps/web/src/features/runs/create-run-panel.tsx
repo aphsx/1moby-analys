@@ -26,10 +26,10 @@ import { SectionCard } from "@/components/ui";
 import { uploadPredictDataFile } from "@/lib/api";
 import { createPredictionRun, fetchModelVersions, fetchPredictSuggestedCutoff } from "@/lib/ml-api";
 import { getDisplayError, getImportErrorMessage } from "@/lib/ui-error";
+import { formatCount, formatDate } from "@/lib/format";
 import { useAsync } from "@/lib/use-async";
 import {
   defaultRunName,
-  formatDate,
   formatRelative,
   getCleanCounts,
   todayISO,
@@ -184,7 +184,7 @@ export function CreateRunPanel({
           </div>
           {selected && (
             <p className="mt-2 text-[12px] text-[color:var(--ink-5)]">
-              {counts ? `${counts.customers.toLocaleString()} ลูกค้า · ` : ""}
+              {counts ? `${formatCount(counts.customers)} ลูกค้า · ` : ""}
               นำเข้า {formatRelative(selected.imported_at)}
               {selected.created_by_name ? ` โดย ${selected.created_by_name}` : ""}
               {cutoff ? ` · ทำนาย ณ ${formatDate(cutoff)} (อัตโนมัติ)` : ""}
@@ -240,7 +240,7 @@ export function CreateRunPanel({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {MODEL_TYPES.map((modelType) => (
                   <label key={modelType} className="block">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ink-5)]">
+                    <span className="text-[11px] font-semibold text-[color:var(--ink-5)]">
                       {modelType}
                     </span>
                     <Select

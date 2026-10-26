@@ -9,7 +9,7 @@ import {
   TrendingDown,
   Users,
 } from "lucide-react";
-import { formatCredits, formatCurrency, formatNumber } from "@/lib/format";
+import { formatBahtCompact, formatCount, formatCredits, formatPercent } from "@/lib/format";
 import { CreditUrgencyCard } from "./credit-urgency-card";
 import { LifecycleMixCard } from "./lifecycle-mix-card";
 import { MetricCard } from "./metric-card";
@@ -50,28 +50,28 @@ export function DashboardView({ summary, runId }: { summary: RunSummary; runId: 
         <MetricCard
           icon={Users}
           label="Total customers"
-          value={formatNumber(overview.totals.customers)}
+          value={formatCount(overview.totals.customers)}
           hint={`run cutoff ${overview.run.cutoff_date}`}
           tone="brand"
         />
         <MetricCard
           icon={Gem}
           label="Avg monthly value"
-          value={formatCurrency(overview.monthly_value.avg_monthly_revenue)}
+          value={formatBahtCompact(overview.monthly_value.avg_monthly_revenue)}
           hint={`${overview.monthly_value.months}-month avg from payment history (actual)`}
           tone="warn"
         />
         <MetricCard
           icon={TrendingDown}
           label="Active high risk"
-          value={formatNumber(overview.active_churn.high)}
-          hint={`${activeHighRiskPct.toFixed(1)}% of churn-eligible (active paid) — forecast`}
+          value={formatCount(overview.active_churn.high)}
+          hint={`${formatPercent(activeHighRiskPct / 100, 1)} of churn-eligible (active paid) — forecast`}
           tone="danger"
         />
         <MetricCard
           icon={CreditCard}
           label="Revenue at risk"
-          value={formatCurrency(overview.totals.revenue_at_risk)}
+          value={formatBahtCompact(overview.totals.revenue_at_risk)}
           hint="expected 6m loss across active paid — forecast"
           tone="warn"
         />

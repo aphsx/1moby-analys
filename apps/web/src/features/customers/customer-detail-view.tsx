@@ -4,7 +4,7 @@ import { type ChurnFactor, type PaymentEvent, type ProfileSnapshot } from "@moby
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { AiBadge } from "@/components/ai-badge";
-import { formatCurrency } from "@/lib/format";
+import { formatBaht, formatBahtCompact, formatCount, formatPercent } from "@/lib/format";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
 import { CustomerPaymentChart } from "./customer-payment-chart";
 import { CustomerProfilePanel } from "./customer-profile-panel";
@@ -93,13 +93,13 @@ export function CustomerDetailView({
   const trend = USAGE_TREND_BADGE[customer.usage_trend];
   const creditRange = (point: number | null, p10: number | null, p90: number | null): string => {
     if (point == null) return "—";
-    const base = point.toLocaleString();
+    const base = formatCount(point);
     if (p10 == null || p90 == null) return base;
-    return `${base} (${p10.toLocaleString()}–${p90.toLocaleString()})`;
+    return `${base} (${formatCount(p10)}–${formatCount(p90)})`;
   };
   const clvRange = (): string => {
     if (!clvInterval) return "—";
-    return `${formatCurrency(clvInterval.p10)} – ${formatCurrency(clvInterval.p90)}`;
+    return `${formatBahtCompact(clvInterval.p10)}–${formatBahtCompact(clvInterval.p90)}`;
   };
   const interval = customer.credit_forecast_interval;
 
@@ -107,7 +107,7 @@ export function CustomerDetailView({
     <main className="min-w-0 px-4 py-5 pb-10 sm:px-6 sm:py-6 lg:px-8 lg:pb-12">
       <Link
         href={customerListHref}
-        className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[.16em] text-[color:var(--ink-5)] hover:text-[color:var(--moby-600)]"
+        className="inline-flex items-center gap-1 text-[11px] font-semibold text-[color:var(--ink-5)] hover:text-[color:var(--moby-600)]"
       >
         <ArrowLeft size={11} /> Customers
       </Link>
@@ -148,7 +148,7 @@ export function CustomerDetailView({
               <div className="space-y-3">
                 <HeroMetric
                   label="Churn"
-                  value={churnPct != null ? `${churnPct.toFixed(1)}%` : "—"}
+                  value={churnPct != null ? formatPercent(churnPct / 100) : "—"}
                   hint={
                     customer.churn_risk_level ??
                     // Active-Paid but no score = abstained (too little history to
@@ -161,21 +161,21 @@ export function CustomerDetailView({
                 />
                 <HeroMetric
                   label="P(alive)"
-                  value={pAlivePct != null ? `${pAlivePct.toFixed(0)}%` : "—"}
+                  value={pAlivePct != null ? formatPercent(pAlivePct / 100) : "—"}
                   hint="ยังใช้บริการอยู่ (BG/NBD)"
                   valueColor={MOBY_BRAND.blue}
                 />
                 {hasTwoPartClv && (
                   <HeroMetric
                     label="P(จ่าย 6m)"
-                    value={`${clvPayPct!.toFixed(0)}%`}
+                    value={formatPercent(clvPayPct! / 100)}
                     hint="โอกาสมีรายได้ใน 6 เดือน"
                     valueColor={MOBY_BRAND.blue}
                   />
                 )}
                 <HeroMetric
                   label="CLV 6m"
-                  value={customer.predicted_clv_6m != null ? formatCurrency(customer.predicted_clv_6m) : "—"}
+                  value={customer.predicted_clv_6m != null ? formatBahtCompact(customer.predicted_clv_6m) : "—"}
                   hint={
                     hasTwoPartClv
                       ? `${customer.customer_value_tier} · P(จ่าย)×มูลค่ากลาง`
@@ -184,7 +184,7 @@ export function CustomerDetailView({
                 />
                 <HeroMetric
                   label="Revenue risk"
-                  value={customer.revenue_at_risk != null ? formatCurrency(customer.revenue_at_risk) : "—"}
+                  value={customer.revenue_at_risk != null ? formatBahtCompact(customer.revenue_at_risk) : "—"}
                   hint="มูลค่าที่เสี่ยงสูญเสีย"
                 />
                 <HeroMetric
@@ -200,12 +200,12 @@ export function CustomerDetailView({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <MiniStatCard
                 label="ใช้งานล่าสุด"
-                value={latestUsage?.total.toLocaleString() ?? "—"}
+                value={latestUsage ? formatCount(latestUsage.total) : "—"}
                 hint={latestUsage ? `${latestUsage.month} เครดิต` : "ไม่มีข้อมูลการใช้งาน"}
               />
               <MiniStatCard
                 label="ใช้งานสูงสุด"
-                value={peakUsage != null ? peakUsage.toLocaleString() : "—"}
+                value={peakUsage != null ? formatCount(peakUsage) : "—"}
                 hint="ย้อนหลัง 12 เดือน"
               />
               <MiniStatCard
@@ -236,11 +236,11 @@ export function CustomerDetailView({
           <Panel title="ข้อมูลสรุป">
             <div className="grid grid-cols-2 gap-3">
               <FactCard label="สถานะ" value={customer.lifecycle_stage} />
-              <FactCard label="จำนวนการชำระ" value={customer.n_purchases.toLocaleString()} />
-              <FactCard label="รายได้รวม" value={formatCurrency(customer.total_revenue)} />
+              <FactCard label="จำนวนการชำระ" value={formatCount(customer.n_purchases)} />
+              <FactCard label="รายได้รวม" value={formatBaht(customer.total_revenue)} />
               <FactCard
                 label="เฉลี่ยต่อครั้ง"
-                value={customer.avg_transaction_value != null ? formatCurrency(customer.avg_transaction_value) : "—"}
+                value={customer.avg_transaction_value != null ? formatBaht(customer.avg_transaction_value) : "—"}
               />
               <FactCard
                 label="เครดิต 30 วัน (p10–90)"
@@ -252,7 +252,7 @@ export function CustomerDetailView({
               />
               {hasTwoPartClv && (
                 <>
-                  <FactCard label="P(จ่าย 6m)" value={`${clvPayPct!.toFixed(1)}%`} />
+                  <FactCard label="P(จ่าย 6m)" value={formatPercent(clvPayPct! / 100)} />
                   <FactCard
                     label="มูลค่าถ้าจ่าย (p10–p90)"
                     value={clvRange()}

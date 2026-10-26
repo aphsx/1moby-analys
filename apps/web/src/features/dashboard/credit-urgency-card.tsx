@@ -1,5 +1,5 @@
 import type { DashboardOverview } from "./types";
-import { formatCredits, formatNumber } from "@/lib/format";
+import { formatCount, formatCredits } from "@/lib/format";
 import { RiskListRow } from "./risk-card";
 import { CREDIT_PALETTE, TEXT_SAFE } from "./palette";
 
@@ -20,7 +20,7 @@ export function CreditUrgencyCard({ overview }: { overview: DashboardOverview })
           </div>
           <div className="mt-2 flex min-w-0 items-end justify-between gap-3">
             <div className="num text-[24px] leading-none text-[color:var(--ink-1)] tabular-nums">
-              {formatNumber(overview.credit.next_topup_7d)}
+              {formatCount(overview.credit.next_topup_7d)}
             </div>
             <div className="min-w-0 pb-1 text-right">
               <div className="type-label !text-[10px]">

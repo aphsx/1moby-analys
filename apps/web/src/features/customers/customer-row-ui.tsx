@@ -11,7 +11,7 @@ export function MetricCell({
 }) {
   return (
     <div className={alignRight ? "xl:text-right" : undefined}>
-      <p className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] xl:hidden">
+      <p className="text-[11px] font-semibold text-[color:var(--ink-5)] xl:hidden">
         {label}
       </p>
       <p

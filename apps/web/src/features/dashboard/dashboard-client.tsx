@@ -22,7 +22,6 @@ export function DashboardClient() {
     return (
       <div className="px-4 py-10 sm:px-6 lg:px-8">
         <EmptyState
-          icon={Database}
           title="ยังไม่มี prediction run ที่เสร็จสมบูรณ์"
           hint="import ข้อมูล predict แล้วสร้าง run ก่อน ตัวเลขบน dashboard ทั้งหมดมาจากผลของ run"
           action={

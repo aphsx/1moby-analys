@@ -287,8 +287,7 @@ export default function AIChatWidget() {
 
           {/* Suggestion chips */}
           {firstLoad && (
-            <div className="flex gap-2 px-3 pt-2.5 overflow-x-auto
-              [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-2 px-3 pt-2.5 overflow-x-auto">
               {CHIPS.map(chip => (
                 <button
                   key={chip}

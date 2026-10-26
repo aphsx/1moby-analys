@@ -7,7 +7,7 @@
 
 แผนนี้แทนข้อ 5.2–5.4 และ 5.12 ของแผนหลัก [`docs/REFACTOR-PLAN.md`](../REFACTOR-PLAN.md) (ตัดสินใจ 2026-10-26: คง Tailwind 3 + React 18 ไม่ใช้ shadcn, คำบนจอเป็นไทยตาม `CONTENT.md`) ข้ออื่นของ Phase 5 ในแผนหลักยังใช้อยู่ ติ๊กเมื่อ merge แล้ว:
 
-- [ ] เฟส 0 — Foundation
+- [x] เฟส 0 — Foundation
 - [ ] เฟส 1 — Shell
 - [ ] §3 Contract / API (ก่อนหรือคู่กับเฟส 2)
 - [ ] เฟส 2 — หน้าภาพรวม

@@ -1,4 +1,5 @@
 import { type PredictDataSource } from "@moby/types";
+import { formatDate } from "@/lib/format";
 /**
  * Local helpers for the Prediction Runs page (spec §2.5 + §5).
  * Display-only mapping/formatting — no business logic.
@@ -34,19 +35,6 @@ export function getCleanCounts(source: PredictDataSource): CleanCounts | null {
 // ── Dates (DD MMM YYYY, Asia/Bangkok — spec §5) ─────────────────
 
 const BKK = "Asia/Bangkok";
-
-const DATE_FMT: Intl.DateTimeFormatOptions = {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: BKK,
-};
-
-export function formatDate(value: string | null | undefined): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-GB", DATE_FMT);
-}
 
 /** Compact relative time in Thai, e.g. "เพิ่งเริ่ม", "5 นาทีก่อน", "2 ชม. ก่อน", "เมื่อวาน". */
 export function formatRelative(value: string | null | undefined): string {

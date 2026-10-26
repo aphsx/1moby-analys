@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
-import { formatCurrency } from "@/lib/format";
+import { formatBahtCompact, formatPercent } from "@/lib/format";
 import { composeReasoning } from "./reasoning";
 import type { CustomerDetail } from "./customer-detail-view";
 
@@ -29,7 +29,7 @@ export function Panel({
     <section className={`surface-elev flex min-h-0 flex-col overflow-hidden ${className ?? ""}`}>
       <div className="shrink-0 border-b border-gray-100 px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <h2 className="text-[20px] font-semibold tracking-[-0.035em] text-[color:var(--ink-1)]">
+          <h2 className="text-[20px] font-semibold text-[color:var(--ink-1)]">
             {title}
           </h2>
           {headerRight ? (
@@ -58,13 +58,13 @@ export function HeroMetric({
   return (
     <div className="flex items-center justify-between gap-4 rounded-[22px] border border-gray-200 bg-white/80 px-4 py-3.5 shadow-[var(--shadow-1)]">
       <div className="min-w-0">
-        <p className="text-[10.5px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)]">
+        <p className="text-[10.5px] font-semibold text-[color:var(--ink-5)]">
           {label}
         </p>
         <p className="mt-1 truncate text-[11.5px] text-[color:var(--ink-4)]">{hint}</p>
       </div>
       <p
-        className="num shrink-0 whitespace-nowrap text-right text-[22px] font-semibold tracking-[-0.03em]"
+        className="num shrink-0 whitespace-nowrap text-right text-[22px] font-semibold "
         style={valueColor ? { color: valueColor } : undefined}
       >
         {value}
@@ -76,7 +76,7 @@ export function HeroMetric({
 export function MiniStatCard({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)]">
+      <p className="text-[10.5px] font-semibold text-[color:var(--ink-5)]">
         {label}
       </p>
       <p className="num mt-1 text-[20px] font-semibold">{value}</p>
@@ -88,7 +88,7 @@ export function MiniStatCard({ label, value, hint }: { label: string; value: str
 export function FactCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-3">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)]">
+      <p className="text-[10.5px] font-semibold text-[color:var(--ink-5)]">
         {label}
       </p>
       <p className="num mt-1 text-[13px] font-semibold">{value}</p>
@@ -156,7 +156,7 @@ function ReasonSection({
         <span className="grid h-5 w-5 place-items-center rounded-full bg-gray-100 text-[10px] font-bold text-[color:var(--ink-4)]">
           {order}
         </span>
-        <h3 className="text-[11px] font-semibold uppercase tracking-[.14em] text-[color:var(--ink-5)]">
+        <h3 className="text-[11px] font-semibold text-[color:var(--ink-5)]">
           {label}
         </h3>
       </div>
@@ -180,19 +180,19 @@ export function ReasoningStack({ customer }: { customer: CustomerDetail }) {
             <li className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
               <span className="text-[12.5px] text-[color:var(--ink-2)]">โอกาสมีรายได้ 6 เดือน</span>
               <span className="num shrink-0 text-[12.5px] font-semibold text-[color:var(--ink-1)]">
-                {clvPayPct!.toFixed(1)}%
+                {formatPercent(clvPayPct! / 100)}
               </span>
             </li>
             <li className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
               <span className="text-[12.5px] text-[color:var(--ink-2)]">มูลค่าถ้าจ่าย (p50)</span>
               <span className="num shrink-0 text-[12.5px] font-semibold text-[color:var(--ink-1)]">
-                {formatCurrency(clvInterval!.p50)}
+                {formatBahtCompact(clvInterval!.p50)}
               </span>
             </li>
             <li className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
               <span className="text-[12.5px] text-[color:var(--ink-2)]">ช่วงมูลค่า (p10–p90)</span>
               <span className="num shrink-0 text-[12.5px] font-semibold text-[color:var(--ink-1)]">
-                {formatCurrency(clvInterval!.p10)} – {formatCurrency(clvInterval!.p90)}
+                {formatBahtCompact(clvInterval!.p10)} – {formatBahtCompact(clvInterval!.p90)}
               </span>
             </li>
           </ul>

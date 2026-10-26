@@ -2,6 +2,7 @@
  * Metric display metadata for the Model Performance page.
  * The UI never computes metrics, it only explains them.
  */
+import { formatCount } from "@/lib/format";
 
 export interface MetricInfo {
   label: string;
@@ -18,7 +19,7 @@ export interface MetricInfo {
 const dec3 = (v: number): string => v.toFixed(3);
 const pct1 = (v: number): string => `${(v * 100).toFixed(1)}%`;
 const times = (v: number): string => `${v.toFixed(2)}×`;
-const int = (v: number): string => Math.round(v).toLocaleString();
+const int = (v: number): string => formatCount(v);
 
 export const METRIC_INFO: Record<string, MetricInfo> = {
   pr_auc: {
@@ -276,7 +277,7 @@ export function metricInfo(key: string): MetricInfo {
       label: key,
       tooltip: key,
       help: key,
-      fmt: (v: number) => (Math.abs(v) <= 1 ? dec3(v) : v.toLocaleString()),
+      fmt: (v: number) => (Math.abs(v) <= 1 ? dec3(v) : formatCount(v)),
       higherIsBetter: true,
     }
   );
@@ -321,13 +322,3 @@ export const SPLIT_LABELS: Record<(typeof SPLIT_ORDER)[number], string> = {
   backtest_avg: "BT avg",
 };
 
-export function formatDate(value: string): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Bangkok",
-  });
-}

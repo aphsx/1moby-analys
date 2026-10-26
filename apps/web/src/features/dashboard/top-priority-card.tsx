@@ -3,7 +3,7 @@
 import { type RunSummary, TOP_PRIORITY_LIMIT } from "@moby/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatCurrency } from "@/lib/format";
+import { formatBaht, formatCount, formatPercent } from "@/lib/format";
 import {
   LifecycleRowPill,
   MetricCell,
@@ -37,7 +37,7 @@ export function TopPriorityCard({ summary, runId }: { summary: RunSummary; runId
       </div>
 
       <div
-        className={`grid gap-4 border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] max-xl:hidden ${TOP_PRIORITY_ROW_HEADER_GRID}`}
+        className={`grid gap-4 border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-semibold text-[color:var(--ink-5)] max-xl:hidden ${TOP_PRIORITY_ROW_HEADER_GRID}`}
       >
         <span>Account</span>
         <span>Lifecycle</span>
@@ -62,7 +62,7 @@ export function TopPriorityCard({ summary, runId }: { summary: RunSummary; runId
               }}
             >
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] xl:hidden">
+                <p className="text-[11px] font-semibold text-[color:var(--ink-5)] xl:hidden">
                   Account
                 </p>
                 <p className="num text-[18px] font-semibold text-[color:var(--ink-2)]">{c.acc_id}</p>
@@ -72,13 +72,13 @@ export function TopPriorityCard({ summary, runId }: { summary: RunSummary; runId
               </div>
               <MetricCell
                 label="Churn"
-                value={churnPct != null ? `${churnPct.toFixed(1)}%` : "—"}
+                value={churnPct != null ? formatPercent(churnPct / 100) : "—"}
                 valueColor="#fc4c02"
               />
-              <MetricCell label="Score" value={c.priority_score.toFixed(0)} alignRight />
+              <MetricCell label="Score" value={formatCount(c.priority_score)} alignRight />
               <MetricCell
                 label="CLV 6m"
-                value={c.predicted_clv_6m != null ? formatCurrency(c.predicted_clv_6m) : "—"}
+                value={c.predicted_clv_6m != null ? formatBaht(c.predicted_clv_6m) : "—"}
                 alignRight
               />
             </div>

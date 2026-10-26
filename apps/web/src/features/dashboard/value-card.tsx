@@ -1,5 +1,5 @@
 import type { DashboardOverview } from "./types";
-import { formatCurrency } from "@/lib/format";
+import { formatBahtCompact } from "@/lib/format";
 import { RiskListRow } from "./risk-card";
 import {
   BRAND_BLUE_GRADIENT,
@@ -33,7 +33,7 @@ export function ValueCard({ overview }: { overview: DashboardOverview }) {
           <div className={`text-[11px] font-normal text-[color:var(--moby-600)] ${TEXT_SAFE}`}>Predicted CLV</div>
           <div className="mt-2 flex min-w-0 items-end justify-between gap-3">
             <div className={`num text-[24px] leading-none text-[color:var(--ink-1)] tabular-nums ${TEXT_SAFE}`}>
-              {formatCurrency(overview.value.predicted_clv_6m)}
+              {formatBahtCompact(overview.value.predicted_clv_6m)}
             </div>
             <div className="type-meta pb-0.5 text-right text-[11px] font-normal">6-month forecast</div>
           </div>

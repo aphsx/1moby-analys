@@ -1,5 +1,5 @@
 import type { DashboardOverview } from "./types";
-import { formatNumber } from "@/lib/format";
+import { formatCount, formatPercent } from "@/lib/format";
 import { CHURN_PALETTE, TEXT_SAFE } from "./palette";
 
 export function RiskCard({ overview }: { overview: DashboardOverview }) {
@@ -19,10 +19,10 @@ export function RiskCard({ overview }: { overview: DashboardOverview }) {
           </div>
           <div className="mt-2 flex min-w-0 items-end justify-between gap-3">
             <div className="num text-[24px] leading-none text-[color:var(--danger)] tabular-nums">
-              {formatNumber(overview.active_churn.high)}
+              {formatCount(overview.active_churn.high)}
             </div>
             <div className="type-meta num pb-0.5 text-right text-[11px] font-normal">
-              {highPct.toFixed(1)}% จากลูกค้าทั้งหมดที่ใช้งาน
+              {formatPercent(highPct / 100, 1)} จากลูกค้าทั้งหมดที่ใช้งาน
             </div>
           </div>
         </div>
@@ -73,12 +73,12 @@ export function RiskListRow({
             {label}
           </div>
           <div className={`type-meta num mt-1 text-[11px] font-normal ${TEXT_SAFE}`}>
-            {pct !== null ? `${pct.toFixed(1)}% of ${totalLabel ?? "total"}` : hint}
+            {pct !== null ? `${formatPercent(pct / 100, 1)} of ${totalLabel ?? "total"}` : hint}
           </div>
         </div>
       </div>
       <div className="num text-[22px] text-[color:var(--ink-1)] tabular-nums">
-        {formatNumber(value)}
+        {formatCount(value)}
       </div>
     </div>
   );

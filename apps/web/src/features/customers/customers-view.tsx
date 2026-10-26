@@ -15,7 +15,7 @@ import {
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { StatusDialog } from "@/components/status-dialog";
 import { Skeleton } from "@/components/ui";
-import { formatCurrency } from "@/lib/format";
+import { formatBaht, formatCount, formatPercent } from "@/lib/format";
 import { CREDIT_PALETTE } from "@/features/dashboard/palette";
 import { shouldConfirmAiOverwrite } from "./customer-ai";
 import { EXPORT_ROW_CAP, exportOutputsCsv } from "./export-csv";
@@ -253,8 +253,8 @@ export function CustomersView({
       if (result.capped) {
         notifyStatusDialog({
           tone: "warning",
-          title: `Export ถูกตัดที่ ${EXPORT_ROW_CAP.toLocaleString()} แถว`,
-          message: `ผลลัพธ์ที่ตรงเงื่อนไขมี ${result.total.toLocaleString()} แถว — ไฟล์ CSV มีเฉพาะ ${result.rows.toLocaleString()} แถวแรกตามการเรียงปัจจุบัน กรุณา filter ให้แคบลงถ้าต้องการครบทุกแถว`,
+          title: `Export ถูกตัดที่ ${formatCount(EXPORT_ROW_CAP)} แถว`,
+          message: `ผลลัพธ์ที่ตรงเงื่อนไขมี ${formatCount(result.total)} แถว — ไฟล์ CSV มีเฉพาะ ${formatCount(result.rows)} แถวแรกตามการเรียงปัจจุบัน กรุณา filter ให้แคบลงถ้าต้องการครบทุกแถว`,
         });
       }
     } catch (e: unknown) {
@@ -345,7 +345,7 @@ export function CustomersView({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)]">
+              <span className="text-[11px] font-semibold text-[color:var(--ink-5)]">
                 มุมมองด่วน
               </span>
               {CUSTOMER_PRESETS.map((preset) => (
@@ -370,7 +370,7 @@ export function CustomersView({
                   <Download size={13} className={exporting ? "animate-bounce" : undefined} />
                   {exporting
                     ? exportProgress
-                      ? `กำลัง export… ${exportProgress.loaded.toLocaleString()}/${Math.min(exportProgress.total, EXPORT_ROW_CAP).toLocaleString()}`
+                      ? `กำลัง export… ${formatCount(exportProgress.loaded)}/${formatCount(Math.min(exportProgress.total, EXPORT_ROW_CAP))}`
                       : "กำลัง export…"
                     : "Export CSV"}
                 </button>
@@ -380,7 +380,7 @@ export function CustomersView({
 
           <div className="overflow-x-auto">
             <div className="xl:min-w-[1220px]">
-              <div className={`grid gap-4 border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] max-xl:hidden ${CUSTOMER_ROW_HEADER_GRID}`}>
+              <div className={`grid gap-4 border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-semibold text-[color:var(--ink-5)] max-xl:hidden ${CUSTOMER_ROW_HEADER_GRID}`}>
                 <SortableHeader label="Account" sortKey="acc_id" activeSort={sort} onSort={cycleSort} />
                 <SortableHeader label="Lifecycle" sortKey="lifecycle_stage" activeSort={sort} onSort={cycleSort} />
                 <SortableHeader label="Churn" sortKey="churn_probability" activeSort={sort} onSort={cycleSort} />
@@ -421,7 +421,7 @@ export function CustomersView({
             <div className="num text-[12px] text-[color:var(--ink-4)]">
               {pending
                 ? "Loading customers..."
-                : `${startRow.toLocaleString()}-${endRow.toLocaleString()} of ${total.toLocaleString()} matching`}
+                : `${formatCount(startRow)}-${formatCount(endRow)} of ${formatCount(total)} matching`}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -433,7 +433,7 @@ export function CustomersView({
                 <ChevronLeft size={13} /> Previous
               </button>
               <span className="num min-w-[76px] text-center text-[12px] text-[color:var(--ink-4)]">
-                Page {page.toLocaleString()} / {totalPages.toLocaleString()}
+                Page {formatCount(page)} / {formatCount(totalPages)}
               </span>
               <button
                 type="button"
@@ -490,7 +490,7 @@ function CustomerTableRow({
       onKeyDown={(event) => { if (event.key === "Enter") onNavigate(href); }}
     >
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] xl:hidden">Account</p>
+        <p className="text-[11px] font-semibold text-[color:var(--ink-5)] xl:hidden">Account</p>
         <div className="flex items-center gap-2">
           <p className="num text-[18px] font-semibold text-[color:var(--ink-2)]">{r.acc_id}</p>
           {isHighValueTier(r.customer_value_tier) ? <HighValueMedal /> : null}
@@ -501,18 +501,18 @@ function CustomerTableRow({
         <LifecycleRowPill stage={r.lifecycle_stage ?? "—"} />
         {r.sub_stage && <span className="truncate text-[12px] text-[color:var(--ink-4)]">{r.sub_stage}</span>}
       </div>
-      <MetricCell label="Churn" value={churnPct != null ? `${churnPct.toFixed(1)}%` : "—"} valueColor="#fc4c02" />
-      <MetricCell label="Score" value={r.priority_score.toFixed(0)} alignRight />
-      <MetricCell label="CLV 6m" value={r.predicted_clv_6m != null ? formatCurrency(r.predicted_clv_6m) : "—"} alignRight />
-      <MetricCell label="Revenue" value={r.total_revenue != null ? formatCurrency(r.total_revenue) : "—"} alignRight />
+      <MetricCell label="Churn" value={churnPct != null ? formatPercent(churnPct / 100) : "—"} valueColor="#fc4c02" />
+      <MetricCell label="Score" value={formatCount(r.priority_score)} alignRight />
+      <MetricCell label="CLV 6m" value={r.predicted_clv_6m != null ? formatBaht(r.predicted_clv_6m) : "—"} alignRight />
+      <MetricCell label="Revenue" value={r.total_revenue != null ? formatBaht(r.total_revenue) : "—"} alignRight />
       <MetricCell
         label="At risk"
-        value={r.revenue_at_risk != null ? formatCurrency(r.revenue_at_risk) : "—"}
+        value={r.revenue_at_risk != null ? formatBaht(r.revenue_at_risk) : "—"}
         valueColor={r.revenue_at_risk != null && r.revenue_at_risk > 0 ? "#fc4c02" : undefined}
         alignRight
       />
       <div className="xl:text-right">
-        <p className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] xl:hidden">
+        <p className="text-[11px] font-semibold text-[color:var(--ink-5)] xl:hidden">
           Credit
         </p>
         <p

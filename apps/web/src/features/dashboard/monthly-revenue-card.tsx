@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatMonth } from "@/lib/format";
+import { formatBaht, formatBahtCompact, formatMonth } from "@/lib/format";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
 import type { MonthlyRevenuePoint } from "./types";
 import { TEXT_SAFE } from "./palette";
@@ -96,20 +96,20 @@ export function MonthlyRevenueCard({ data }: { data: MonthlyRevenuePoint[] }) {
               <p className={`type-label ${TEXT_SAFE}`}>Latest month</p>
               <div className="mt-1 flex min-w-0 items-baseline gap-1.5">
                 <span className="num text-[26px] leading-none text-[color:var(--ink-1)] tabular-nums">
-                  ฿{formatCompactAmount(latest?.revenue ?? 0)}
+                  {formatBahtCompact(latest?.revenue ?? 0)}
                 </span>
                 <span className="type-muted text-[14px] font-medium leading-none">
                   {latest ? `· ${latest.payments} payments` : ""}
                 </span>
               </div>
               <p className="type-meta mt-1 text-[11px] font-normal">
-                {latest ? `${latest.month} · avg ฿${formatCompactAmount(avgRevenue)}/mo` : "ไม่มีข้อมูลการจ่ายเงิน"}
+                {latest ? `${latest.month} · avg ${formatBahtCompact(avgRevenue)}/mo` : "ไม่มีข้อมูลการจ่ายเงิน"}
               </p>
             </div>
             <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-right">
               <div className="type-label !text-[10px]">Scale</div>
               <div className="num text-[12px] text-[color:var(--ink-1)] tabular-nums">
-                ฿{formatCompactAmount(chartMinRevenue)}-{formatCompactAmount(chartMaxRevenue)}
+                {formatBahtCompact(chartMinRevenue)}–{formatBahtCompact(chartMaxRevenue)}
               </div>
             </div>
           </div>
@@ -249,7 +249,7 @@ function MonthlyRevenueChart({ data }: { data: MonthlyRevenuePoint[] }) {
                 axisLine={false}
                 tickLine={false}
                 width={Y_AXIS_WIDTH}
-                tickFormatter={formatCompactAmount}
+                tickFormatter={formatBahtCompact}
                 stroke="#999999"
                 fontSize={10}
                 tickCount={3}
@@ -279,14 +279,14 @@ function MonthlyRevenueChart({ data }: { data: MonthlyRevenuePoint[] }) {
                     tickLine={false}
                     tickMargin={8}
                     interval={0}
-                    tickFormatter={formatMonth}
+                    tickFormatter={(m: string) => formatMonth(m)}
                     stroke="#999999"
                     fontSize={10}
                   />
                   <YAxis hide domain={[yMin, yMax]} />
                   <Tooltip
                     labelFormatter={(label: string) => formatMonth(label)}
-                    formatter={(value: number) => [`฿${value.toLocaleString()}`, "Revenue"]}
+                    formatter={(value: number) => [formatBaht(value), "Revenue"]}
                     contentStyle={{
                       borderRadius: 12,
                       border: "1px solid #e5e7eb",
@@ -311,10 +311,4 @@ function MonthlyRevenueChart({ data }: { data: MonthlyRevenuePoint[] }) {
       </div>
     </div>
   );
-}
-
-function formatCompactAmount(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return Math.round(value).toLocaleString();
 }

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui";
 import { deletePredictionRun, retryPredictionRun } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
+import { formatCount } from "@/lib/format";
 import { useRunStore } from "@/stores/run-store";
 import { formatRelative, runStatusLabel, runStatusTone } from "./runs-utils";
 
@@ -29,7 +30,7 @@ function AutoRunBadge() {
   return (
     <span
       title="run นี้ถูกสร้างอัตโนมัติหลัง import ข้อมูล predict"
-      className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-[color:var(--moby-50)] px-1.5 text-[10px] font-semibold uppercase tracking-[.08em] text-[color:var(--moby-600)]"
+      className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-[color:var(--moby-50)] px-1.5 text-[10px] font-semibold text-[color:var(--moby-600)]"
     >
       Auto
     </span>
@@ -108,13 +109,12 @@ export function RunsTable({
           </div>
         ) : runs.length === 0 ? (
           <EmptyState
-            icon={ListChecks}
             title="ยังไม่มี prediction run — import ข้อมูลและสร้าง run แรก"
             hint="เลือก predict source ที่ ready แล้วกด รัน ด้านบน"
           />
         ) : (
           <div className="overflow-x-auto rounded-[22px] border border-gray-200">
-            <table className="table-base min-w-[640px]">
+            <table className="data-table min-w-[640px]">
               <thead>
                 <tr>
                   <th>Run</th>
@@ -217,7 +217,7 @@ function RunRow({
           )}
         </div>
       </td>
-      <td className="text-right num">{run.total_customers?.toLocaleString() ?? "—"}</td>
+      <td className="text-right num">{run.total_customers != null ? formatCount(run.total_customers) : "—"}</td>
       <td className="text-[color:var(--ink-3)]">
         {formatRelative(run.finished_at ?? run.created_at)}
       </td>

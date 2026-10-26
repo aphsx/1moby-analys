@@ -1,4 +1,5 @@
 import { type RunStatus } from "@moby/types";
+import type { PillTone } from "@/components/ui";
 /**
  * Canonical tone + label mapping for an ML run status (prediction + training).
  * Previously duplicated in features/runs/runs-utils.ts (a Record, with an invalid
@@ -7,12 +8,12 @@ import { type RunStatus } from "@moby/types";
  */
 
 /** Subset of the StatusPill tones used for run statuses. */
-export type RunStatusTone = "brand" | "danger" | "info" | "neutral";
+export type RunStatusTone = Extract<PillTone, "positive" | "negative" | "accent" | "neutral">;
 
 export function runStatusTone(status: RunStatus): RunStatusTone {
-  if (status === "completed") return "brand";
-  if (status === "failed") return "danger";
-  if (status === "in_progress") return "info";
+  if (status === "completed") return "positive";
+  if (status === "failed") return "negative";
+  if (status === "in_progress") return "accent";
   return "neutral";
 }
 

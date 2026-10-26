@@ -244,7 +244,7 @@ function renderBlock(block: Block, idx: number, strongClass?: string): React.Rea
       return (
         <div key={idx} className="my-2 overflow-x-auto rounded-lg border border-gray-200 bg-gray-50">
           {block.lang && (
-            <div className="border-b border-gray-200 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-[color:var(--ink-5)]">
+            <div className="border-b border-gray-200 px-3 py-1 text-[10px] font-medium text-[color:var(--ink-5)]">
               {block.lang}
             </div>
           )}

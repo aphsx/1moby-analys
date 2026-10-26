@@ -24,6 +24,7 @@ import { Select } from "@/components/select";
 import { ProgressCard } from "./progress-card";
 import { formatFileSize, getCleanCounts, PRIMARY_BUTTON_CLS } from "./training-utils";
 import { DEFAULT_HORIZON_DAYS } from "./training-run-utils";
+import { formatCount } from "@/lib/format";
 
 const fieldCls =
   "mt-1.5 h-11 w-full rounded-2xl border border-gray-200 bg-white px-3.5 text-[13px] text-[color:var(--ink-2)] shadow-[var(--shadow-1)] outline-none transition-colors focus:border-[color:var(--moby-500)] disabled:opacity-50";
@@ -138,7 +139,7 @@ export function TrainPanel({
 
         <p className="mt-2 text-[12px] text-[color:var(--ink-5)]">
           {selectedSource
-            ? `${counts ? `${counts.customers.toLocaleString()} แถว · ` : ""}${
+            ? `${counts ? `${formatCount(counts.customers)} แถว · ` : ""}${
                 selectedSource.created_by_name ? `นำเข้าโดย ${selectedSource.created_by_name} · ` : ""
               }cutoff ${
                 cutoffDate || "—"

@@ -135,13 +135,12 @@ export function TrainingHistoryTable({
           </div>
         ) : runs.length === 0 ? (
           <EmptyState
-            icon={History}
             title="ยังไม่มี training run"
             hint="เลือก dataset ที่ Ready แล้วกด เทรน ด้านบน"
           />
         ) : (
           <div className="overflow-x-auto rounded-[22px] border border-gray-200">
-            <table className="table-base min-w-[860px]">
+            <table className="data-table min-w-[860px]">
               <thead>
                 <tr>
                   <th>Dataset</th>

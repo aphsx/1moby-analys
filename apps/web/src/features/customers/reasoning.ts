@@ -1,4 +1,5 @@
 import { type ChurnFactor } from "@moby/types";
+import { formatCount } from "@/lib/format";
 /**
  * Single ordered behaviour layer for a customer.
  *
@@ -78,7 +79,7 @@ function formatFactorValue(value: number | string): string {
     if (!Number.isFinite(value)) return "—";
     const abs = Math.abs(value);
     if (abs !== 0 && abs < 1) return value.toFixed(2);
-    return Math.round(value).toLocaleString("th-TH");
+    return formatCount(value);
   }
   return String(value);
 }

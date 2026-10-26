@@ -34,7 +34,7 @@ export function ModelPerformanceView() {
           Training
         </p>
 
-        {error && <EmptyState icon={Activity} title="โหลดไม่สำเร็จ" hint={error} />}
+        {error && <EmptyState title="โหลดไม่สำเร็จ" hint={error} />}
 
         {!error && entries === null && (
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -46,7 +46,6 @@ export function ModelPerformanceView() {
 
         {!error && entries?.length === 0 && (
           <EmptyState
-            icon={Activity}
             title="ยังไม่มี evaluation"
             hint="รัน training ให้สำเร็จก่อน"
           />

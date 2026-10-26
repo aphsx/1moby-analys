@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatMonth } from "@/lib/format";
+import { formatBaht, formatBahtCompact, formatCount, formatCredits, formatMonth } from "@/lib/format";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
 
 const DEFAULT_VISIBLE = 12;
@@ -30,12 +30,6 @@ type Viewport = {
   start: number;
   count: number;
 };
-
-function formatCompact(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return Math.round(value).toLocaleString();
-}
 
 function clampViewport(start: number, count: number, total: number): Viewport {
   if (total <= 0) return { start: 0, count: DEFAULT_VISIBLE };
@@ -279,7 +273,7 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
                   axisLine={false}
                   tickLine={false}
                   width={Y_AXIS_WIDTH}
-                  tickFormatter={(v: number) => `฿${formatCompact(v)}`}
+                  tickFormatter={(v: number) => formatBahtCompact(v)}
                   stroke="#999999"
                   fontSize={10}
                   tickCount={5}
@@ -309,7 +303,7 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
                       tickLine={false}
                       tickMargin={8}
                       interval={0}
-                      tickFormatter={formatMonth}
+                      tickFormatter={(m: string) => formatMonth(m)}
                       stroke="#999999"
                       fontSize={10}
                     />
@@ -320,7 +314,7 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
                       formatter={(value: number, _name, item) => {
                         const row = item?.payload as MonthlyPayment | undefined;
                         return [
-                          `฿${value.toLocaleString()} · ${row?.count ?? 0} payments · ${(row?.credit_add ?? 0).toLocaleString()} credits`,
+                          `${formatBaht(value)} · ${formatCount(row?.count ?? 0)} payments · ${formatCredits(row?.credit_add ?? 0)}`,
                           "Paid",
                         ];
                       }}
@@ -385,9 +379,9 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
       </div>
 
       <div className="grid shrink-0 grid-cols-3 gap-2 lg:grid-cols-1 lg:w-[148px]">
-        <PaymentStat label="Total paid" value={`฿${formatCompact(totalPaid)}`} hint={`${payments.length} payments`} />
-        <PaymentStat label="Avg ticket" value={`฿${formatCompact(avgTicket)}`} hint="per payment" />
-        <PaymentStat label="Credits bought" value={totalCredits.toLocaleString()} hint="total top-up" />
+        <PaymentStat label="Total paid" value={formatBahtCompact(totalPaid)} hint={`${payments.length} payments`} />
+        <PaymentStat label="Avg ticket" value={formatBahtCompact(avgTicket)} hint="per payment" />
+        <PaymentStat label="Credits bought" value={formatCount(totalCredits)} hint="total top-up" />
       </div>
     </div>
   );
@@ -396,7 +390,7 @@ export function CustomerPaymentChart({ payments }: { payments: readonly PaymentE
 function PaymentStat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 lg:p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] lg:text-[10.5px]">
+      <p className="text-[10px] font-semibold text-[color:var(--ink-5)] lg:text-[10.5px]">
         {label}
       </p>
       <p className="num mt-1 text-[17px] font-semibold lg:text-[20px]">{value}</p>

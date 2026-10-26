@@ -129,23 +129,23 @@ function ModelStatusCard({
           {MODEL_TYPE_LABELS[modelType]}
         </span>
         {active ? (
-          <StatusPill tone="brand" icon={Check}>
+          <StatusPill tone="positive" icon={Check}>
             production {active.version}
           </StatusPill>
         ) : versions === null && latestResult ? (
           latestResult.promoted ? (
-            <StatusPill tone="brand" icon={Check}>
+            <StatusPill tone="positive" icon={Check}>
               promoted {latestResult.new_version ?? ""}
             </StatusPill>
           ) : (
-            <StatusPill tone="warn" icon={X}>
+            <StatusPill tone="warning" icon={X}>
               ไม่ promote
             </StatusPill>
           )
         ) : versions === null ? (
           <StatusPill tone="neutral">กำลังโหลด…</StatusPill>
         ) : (
-          <StatusPill tone="warn" icon={X}>
+          <StatusPill tone="warning" icon={X}>
             ยังไม่มี production
           </StatusPill>
         )}
@@ -154,7 +154,7 @@ function ModelStatusCard({
       {/* Headline metric — the production champion. */}
       {active ? (
         <>
-          <p className="num mt-3 text-[24px] font-semibold tracking-[-0.03em] text-[color:var(--ink-1)]">
+          <p className="num mt-3 text-[24px] font-semibold text-[color:var(--ink-1)]">
             {active.primary_metric_value != null ? formatMetric(active.primary_metric_value) : "—"}
           </p>
           <p className="text-[12px] text-[color:var(--ink-4)]">

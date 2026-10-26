@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { BadgeCheck, Loader2, Trash2 } from "lucide-react";
 import { StatusDialog } from "@/components/status-dialog";
 import { deleteUser, updateUser, useSession } from "@/lib/auth/client";
+import { formatDate } from "@/lib/format";
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -51,9 +52,7 @@ export function ProfileView() {
 
   const displayName = name.trim() || user.email?.split("@")[0] || "User";
   const dirty = name.trim() !== (user.name ?? "").trim() || image.trim() !== (user.image ?? "").trim();
-  const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString("th-TH", {
-    year: "numeric", month: "long", day: "numeric",
-  }) : "—";
+  const createdAt = formatDate(user.createdAt);
 
   const handleSave = async () => {
     if (!dirty || !name.trim()) return;
@@ -120,7 +119,7 @@ export function ProfileView() {
 
       {/* Editable fields */}
       <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
-        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-[.1em] text-[color:var(--ink-5)]">
+        <h3 className="mb-4 text-[13px] font-semibold text-[color:var(--ink-5)]">
           ข้อมูลส่วนตัว
         </h3>
 
@@ -175,7 +174,7 @@ export function ProfileView() {
 
       {/* Danger zone */}
       <section className="mt-6 rounded-2xl border border-[color:var(--danger)]/30 bg-white p-6">
-        <h3 className="text-[13px] font-semibold uppercase tracking-[.1em] text-[color:var(--danger)]">
+        <h3 className="text-[13px] font-semibold text-[color:var(--danger)]">
           ลบบัญชี
         </h3>
         <p className="mt-2 text-[13px] leading-6 text-[color:var(--ink-4)]">

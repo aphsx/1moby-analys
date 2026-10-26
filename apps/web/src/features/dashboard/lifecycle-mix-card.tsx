@@ -1,5 +1,5 @@
 import type { DashboardOverview } from "./types";
-import { formatNumber } from "@/lib/format";
+import { formatCount, formatPercent } from "@/lib/format";
 import { LIFECYCLE_PALETTE, TEXT_SAFE } from "./palette";
 
 export function LifecycleMixCard({ overview }: { overview: DashboardOverview }) {
@@ -25,7 +25,7 @@ export function LifecycleMixCard({ overview }: { overview: DashboardOverview }) 
           </h2>
           <div className="mt-2 flex min-w-0 items-baseline gap-1.5">
             <span className="num text-[26px] leading-none text-[color:var(--ink-1)] tabular-nums">
-              {formatNumber(totalCustomers)}
+              {formatCount(totalCustomers)}
             </span>
             <span className="type-muted text-[12px] font-medium leading-none">
               customers
@@ -60,7 +60,7 @@ export function LifecycleMixCard({ overview }: { overview: DashboardOverview }) 
                 <div key={stage} className="flex h-full min-w-0 flex-col items-center justify-end">
                   <div className="mb-2 rounded-full bg-gray-50 px-2 py-1 text-center">
                     <div className="num text-[11px] leading-none text-[color:var(--ink-1)] tabular-nums">
-                      {formatNumber(count)}
+                      {formatCount(count)}
                     </div>
                   </div>
                   <div className="flex h-full w-full items-end justify-center">
@@ -82,11 +82,11 @@ export function LifecycleMixCard({ overview }: { overview: DashboardOverview }) 
         <div className="mt-3 grid grid-cols-4 gap-3 sm:gap-4">
           {lifecycleStats.map(({ stage, pct }) => (
             <div key={stage} className="min-w-0 text-center">
-              <div className={`type-muted truncate text-[10px] font-normal uppercase tracking-[.08em] ${TEXT_SAFE}`}>
+              <div className={`type-muted truncate text-[10px] font-normal ${TEXT_SAFE}`}>
                 {stage}
               </div>
               <div className="num mt-1 text-[13px] text-[color:var(--ink-1)] tabular-nums">
-                {pct.toFixed(1)}%
+                {formatPercent(pct / 100, 1)}
               </div>
             </div>
           ))}

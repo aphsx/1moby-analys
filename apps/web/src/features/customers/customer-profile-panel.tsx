@@ -1,14 +1,9 @@
 "use client";
 
 import { type ProfileSnapshot } from "@moby/types";
+import { formatCount, formatCredits, formatDate, formatDaysAgo, formatPercent } from "@/lib/format";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
 
-function formatDate(value: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
-}
 
 function daysAgo(value: string | null): string | null {
   if (!value) return null;
@@ -16,8 +11,7 @@ function daysAgo(value: string | null): string | null {
   if (Number.isNaN(d.getTime())) return null;
   const diff = Math.floor((Date.now() - d.getTime()) / 86_400_000);
   if (diff < 0) return null;
-  if (diff === 0) return "วันนี้";
-  return `${diff.toLocaleString()} วันก่อน`;
+  return formatDaysAgo(diff);
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -52,7 +46,7 @@ export function CustomerProfilePanel({ snapshot }: { snapshot: ProfileSnapshot }
 
       {/* Lifecycle dates */}
       <div className="grid grid-cols-3 gap-3">
-        <DateFact label="Joined" value={formatDate(snapshot.join_date)} hint={`${snapshot.customer_age_days.toLocaleString()} วัน`} />
+        <DateFact label="Joined" value={formatDate(snapshot.join_date)} hint={`${formatCount(snapshot.customer_age_days)} วัน`} />
         <DateFact label="Last access" value={formatDate(snapshot.last_access)} hint={daysAgo(snapshot.last_access) ?? "—"} />
         <DateFact label="Last send" value={formatDate(snapshot.last_send)} hint={daysAgo(snapshot.last_send) ?? "—"} />
       </div>
@@ -60,11 +54,11 @@ export function CustomerProfilePanel({ snapshot }: { snapshot: ProfileSnapshot }
       {/* Channel usage share (last 180d) */}
       <div className="rounded-2xl border border-gray-200 bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)]">
+          <p className="text-[11px] font-semibold text-[color:var(--ink-5)]">
             Usage share · 180d
           </p>
           <span className="num text-[11.5px] text-[color:var(--ink-4)]">
-            {snapshot.usage_total_180d.toLocaleString()} credits
+            {formatCredits(snapshot.usage_total_180d)}
           </span>
         </div>
         <div className="space-y-2.5">
@@ -80,7 +74,7 @@ export function CustomerProfilePanel({ snapshot }: { snapshot: ProfileSnapshot }
                   />
                 </div>
                 <span className="num w-10 shrink-0 text-right text-[11.5px] font-semibold text-[color:var(--ink-2)]">
-                  {(share * 100).toFixed(0)}%
+                  {formatPercent(share)}
                 </span>
               </div>
             );
@@ -106,7 +100,7 @@ function ServiceCard({
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)]">
+        <span className="text-[11px] font-semibold text-[color:var(--ink-5)]">
           {label}
         </span>
         {status ? (
@@ -119,7 +113,7 @@ function ServiceCard({
         ) : null}
       </div>
       <p className="num mt-2 text-[18px] font-semibold text-[color:var(--ink-1)]">
-        {credit.toLocaleString()}
+        {formatCount(credit)}
       </p>
       <p className="text-[10.5px] text-[color:var(--ink-5)]">credits · หมดอายุ {formatDate(expire)}</p>
     </div>
@@ -129,7 +123,7 @@ function ServiceCard({
 function DateFact({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)]">
+      <p className="text-[10.5px] font-semibold text-[color:var(--ink-5)]">
         {label}
       </p>
       <p className="num mt-1 text-[12.5px] font-semibold text-[color:var(--ink-1)]">{value}</p>

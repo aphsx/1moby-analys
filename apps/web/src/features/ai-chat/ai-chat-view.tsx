@@ -251,7 +251,7 @@ function EvidencePanel({ evidence }: { evidence: ChatEvidence }) {
         <div className="space-y-2 border-t border-gray-200 p-3">
           {evidence.sql && (
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ink-5)]">SQL</p>
+              <p className="mb-1 text-[10px] font-semibold text-[color:var(--ink-5)]">SQL</p>
               <pre className="overflow-x-auto rounded-lg bg-gray-900 p-3 text-[11px] leading-relaxed text-green-300">
                 <code>{evidence.sql}</code>
               </pre>
@@ -265,7 +265,7 @@ function EvidencePanel({ evidence }: { evidence: ChatEvidence }) {
           )}
           {evidence.row_count > 0 && evidence.columns.length > 0 && (
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ink-5)]">
+              <p className="mb-1 text-[10px] font-semibold text-[color:var(--ink-5)]">
                 Result · {evidence.row_count} rows
               </p>
               <div className="overflow-x-auto rounded-lg border border-gray-200">

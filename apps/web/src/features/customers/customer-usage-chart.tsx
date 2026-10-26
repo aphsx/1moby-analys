@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatMonth } from "@/lib/format";
+import { formatCount, formatCountCompact, formatMonth } from "@/lib/format";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
 import { Panel } from "./customer-detail-primitives";
 
@@ -42,12 +42,6 @@ const SERIES: SeriesDef[] = [
   { key: "api", label: "API", color: "#06b6d4", group: "source" },
   { key: "otp", label: "OTP", color: MOBY_BRAND.orangeWarm, group: "source" },
 ];
-
-function formatCompact(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return Math.round(value).toLocaleString();
-}
 
 function clampViewport(start: number, count: number, total: number): Viewport {
   if (total <= 0) return { start: 0, count: DEFAULT_VISIBLE };
@@ -368,7 +362,7 @@ export function UsageLineChart({
                   axisLine={false}
                   tickLine={false}
                   width={Y_AXIS_WIDTH}
-                  tickFormatter={formatCompact}
+                  tickFormatter={formatCountCompact}
                   stroke="#999999"
                   fontSize={10}
                   tickCount={5}
@@ -398,14 +392,14 @@ export function UsageLineChart({
                       tickLine={false}
                       tickMargin={8}
                       interval={0}
-                      tickFormatter={formatMonth}
+                      tickFormatter={(m: string) => formatMonth(m)}
                       stroke="#999999"
                       fontSize={10}
                     />
                     <YAxis hide domain={[0, yMax]} />
                     <Tooltip
                       labelFormatter={(label: string) => formatMonth(label)}
-                      formatter={(value: number, name: string) => [value.toLocaleString(), name]}
+                      formatter={(value: number, name: string) => [formatCount(value), name]}
                       contentStyle={{
                         borderRadius: 12,
                         border: "1px solid #e5e7eb",

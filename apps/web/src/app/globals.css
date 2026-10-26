@@ -2,145 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: "Geometrica";
-  src: url("/fonts/GeometricaEN/Geometrica-Light.otf") format("opentype");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
+/* Tokens are named by role, not by colour (docs/ui/DESIGN.md §2), so the dark theme only swaps values. */
 
-@font-face {
-  font-family: "Geometrica";
-  src: url("/fonts/GeometricaEN/Geometrica-Regular.otf") format("opentype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geometrica";
-  src: url("/fonts/GeometricaEN/Geometrica-Medium.otf") format("opentype");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geometrica";
-  src: url("/fonts/GeometricaEN/Geometrica-Bold.otf") format("opentype");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geometrica";
-  src: url("/fonts/GeometricaEN/Geometrica-ExtraBold.otf") format("opentype");
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "merothai";
-  src: url("/fonts/MeroTH/MeroThai-Regular.otf") format("opentype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "merothai";
-  src: url("/fonts/MeroTH/MeroThai-Medium.otf") format("opentype");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "merothai";
-  src: url("/fonts/MeroTH/MeroThai-Bold.otf") format("opentype");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-/* ───────────────────────────────────────────────────────────
-   1Moby — Light Premium Design Tokens
-   Inspired by Salesforce / Tableau / Stripe
-   ─────────────────────────────────────────────────────────── */
+/* Light = Theme A · Accent ladder (default) */
 :root {
-  /* Brand */
-  --moby-50:  #eff6ff;
-  --moby-100: #dbeafe;
-  --moby-200: #bfdbfe;
-  --moby-500: #006bff;
-  --moby-600: #006bff;
-  --moby-700: #006bff;
-  --moby-800: #0056cc;
-  --moby-900: #003f99;
+  color-scheme: light;
+  /* surfaces */
+  --ground: #f9fafb;
+  --surface: #ffffff;
+  --raised: #f3f4f6;
+  --active: #eaf2ff;
+  /* lines */
+  --border: #e5e7eb;
+  --rule: #f2f2f2;
+  --control: #d1d5db;
+  /* text (every level passes 4.5:1 on the surface it sits on) */
+  --text: #111827;
+  --muted: #5f6672;
+  --faint: #646b78;
+  /* brand ladder */
+  --accent: #006bff;
+  --accent-soft: #eaf2ff;
+  --accent-track: #d3e4ff;
+  --accent-ink: #0a3d91;
+  --primary: #006bff; --primary-ink: #ffffff;
+  /* status: good / bad, not up / down */
+  --positive: #247b50; --pill-positive-bg: #dcfce7; --pill-positive-ink: #14532d;
+  --negative: #b93a06; --pill-negative-bg: #ffede3; --pill-negative-ink: #8f2d00;
+  --warning:  #92400e; --pill-warning-bg:  #fff6e5; --pill-warning-ink:  #8a4a00;
+  --pill-neutral-bg: #f3f4f6; --pill-neutral-ink: #374151;
+  /* data */
+  --chart-1: #006bff;
+  --chart-muted: #c3c8d1;
+  --grid: #edf0f3; --axis-ink: #5f6672;
+  --risk-low: #d3e4ff; --risk-medium: #9fc3ff; --risk-high: #4b92ff; --risk-critical: #006bff;
+  /* tooltip */
+  --tip-bg: #111827; --tip-ink: #ffffff;
+  /* type (--font-plex comes from next/font in app/layout.tsx) */
+  --font: var(--font-plex), system-ui, sans-serif;
+  --fs-micro: 12px; --fs-small: 13px; --fs-body: 14px; --fs-section: 16px;
+  --fs-kpi: 24px; --fs-title: 28px; --fs-lead: 32px;
+  /* shape & space */
+  --radius-card: 8px; --radius-control: 6px; --radius-pill: 999px;
+  --gap: 24px; --card-pad: 20px; --page-pad: 32px;
+  --control-h: 32px; --row-h: 45px; --nav-row: 32px;
+  --sidebar-w: 232px; --rail-w: 384px;
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, .16); /* menus, tooltips, dialogs only */
+  --shadow-card: none;
 
-  /* Neutrals (slate) */
-  --bg:       #f8fafc;
-  --surface:  #ffffff;
-  --surface-2:#f9fafb;
-  --line:     #e5e7eb;
-  --line-2:   #f3f4f6;
+  /* Legacy names, aliased to the new tokens until every page is migrated (UI plan phase 6 deletes them). */
+  --moby-50: var(--accent-soft); --moby-100: var(--accent-soft); --moby-200: var(--accent-track);
+  --moby-500: var(--accent); --moby-600: var(--accent); --moby-700: var(--accent);
+  --moby-800: var(--accent-ink); --moby-900: var(--accent-ink);
+  --bg: var(--ground); --surface-2: var(--raised);
+  --line: var(--border); --line-2: var(--rule);
+  --ink-1: var(--text); --ink-2: var(--text); --ink-3: var(--text);
+  --ink-4: var(--muted); --ink-5: var(--faint); --ink-6: var(--control);
+  --ok: var(--positive); --ok-bg: var(--pill-positive-bg);
+  --warn: var(--warning); --warn-bg: var(--pill-warning-bg);
+  --danger: var(--negative); --danger-bg: var(--pill-negative-bg);
+  --info: var(--accent); --info-bg: var(--accent-soft);
+  --c-paid: var(--accent); --c-free: var(--warning); --c-churn: var(--negative); --c-ghost: var(--faint);
+  --r-sm: var(--radius-control); --r-md: var(--radius-card); --r-lg: var(--radius-card); --r-xl: var(--radius-card);
+  --shadow-1: var(--shadow-card); --shadow-2: var(--shadow-card); --shadow-3: var(--shadow-float);
+  --font-display: var(--font); --font-body: var(--font); --font-ui: var(--font); --font-num: var(--font);
+}
 
-  --ink-1: #1D1F2A;     /* 1Moby headline dark */
-  --ink-2: #242424;     /* strong text */
-  --ink-3: #3a3e53;     /* body */
-  --ink-4: #6B6B6B;     /* meta / secondary copy */
-  --ink-5: #999999;     /* labels */
-  --ink-6: #d1d5db;     /* gray-300: disabled */
-
-  /* Semantic — 1Moby palette (no generic green) */
-  --ok:       #006bff;
-  --ok-bg:    #eff6ff;
-  --warn:     #ffa400;
-  --warn-bg:  #fff8eb;
-  --danger:   #fc4c02;
-  --danger-bg:#fff4ed;
-  --info:     #1893f0;
-  --info-bg:  #eff6ff;
-
-  /* Lifecycle palette — 1Moby brand (must match dashboard LIFECYCLE_PALETTE) */
-  --c-paid:    #006bff;
-  --c-free:    #ffa400;
-  --c-churn:   #fc4c02;
-  --c-ghost:   #9ca3af;
-
-  /* Shape */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --r-xl: 18px;
-
-  /* Shadow */
-  --shadow-1: 0 1px 0 rgba(15,23,42,.04), 0 1px 2px rgba(15,23,42,.04);
-  --shadow-2: 0 1px 0 rgba(15,23,42,.04), 0 4px 12px rgba(15,23,42,.06);
-  --shadow-3: 0 8px 24px rgba(15,23,42,.08);
-
-  /* Type — 1moby.com stacks:
-     UI/default + headings = merothai, long-form copy = Sarabun,
-     Latin labels & numerals = "Geometrica, merothai" (never monospace) */
-  --font-display: 'merothai', 'MeroThai', 'Sarabun', 'Noto Sans Thai', sans-serif;
-  --font-body: 'Sarabun', 'merothai', 'Noto Sans Thai', sans-serif;
-  --font-ui: 'merothai', 'Sarabun', 'Noto Sans Thai', sans-serif;
-  --font-num: 'Geometrica', 'merothai', 'Sarabun', 'Noto Sans Thai', sans-serif;
+/* Dark = Theme C · Data terminal */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #171719; --surface: #131217; --raised: #212023; --active: #212023;
+  --border: #222224; --rule: #1d1c21; --control: #3a3a3e;
+  --text: #ffffff; --muted: #a3a5ab; --faint: #8a8c92;
+  --accent: #3d8bff; --accent-soft: #1b2a44; --accent-track: #22385c; --accent-ink: #cfe0ff;
+  --primary: #ffffff; --primary-ink: #000000;
+  --positive: #44a282; --pill-positive-bg: #1b2828; --pill-positive-ink: #5fc39c;
+  --negative: #e5566f; --pill-negative-bg: #2c1a20; --pill-negative-ink: #f07a8e;
+  --warning:  #d9a441; --pill-warning-bg:  #2a2416; --pill-warning-ink:  #e3b55a;
+  --pill-neutral-bg: #212023; --pill-neutral-ink: #bdbdc0;
+  --chart-1: #f2f2f3; --chart-muted: #5b5b62; --grid: #242328; --axis-ink: #8a8c92;
+  --risk-low: #26354d; --risk-medium: #2c5ba6; --risk-high: #3d8bff; --risk-critical: #a9cbff;
+  --tip-bg: #f2f2f3; --tip-ink: #111111;
+  --shadow-card: 0 12px 28px rgba(0, 0, 0, .2); /* dark cards lift with this shadow alone, no border */
 }
 
 html, body { height: 100%; }
 body {
-  font-family: var(--font-ui);
-  font-weight: 400;
-  @apply bg-slate-50;
-  color: var(--ink-3);
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  line-height: 1.5; /* Thai needs room for upper and lower vowels */
+  background: var(--ground);
+  color: var(--text);
   font-synthesis-weight: none;
-  -webkit-font-smoothing: auto;
-  -moz-osx-font-smoothing: auto;
-  text-rendering: optimizeLegibility;
 }
 
 a {
@@ -148,116 +101,35 @@ a {
   text-decoration: none;
 }
 
-/* numerals — 1moby never goes heavier than Medium (500); this wins over
-   stray font-bold/font-semibold utilities so every number shares one pattern */
-.num {
-  font-family: var(--font-num);
-  font-weight: 500;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-  letter-spacing: -.01em;
-  color: inherit;
+.num { font-variant-numeric: tabular-nums; }
+
+/* Legacy type helpers, restyled to the new rules (no uppercase, no letter-spacing on Thai). */
+.type-display { color: var(--text); font-weight: 600; }
+.type-section-title { color: var(--text); font-weight: 600; }
+.type-label { color: var(--muted); font-size: var(--fs-small); }
+.type-meta { color: var(--muted); }
+.type-muted { color: var(--faint); }
+
+/* Legacy surfaces → Panel look (DESIGN.md §6.4) */
+.surface, .surface-elev {
+  border: 1px solid var(--border); border-radius: var(--radius-card);
+  background: var(--surface); box-shadow: var(--shadow-card);
 }
+.surface-soft { border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--raised); }
 
-/* typography patterns from 1moby.com article pages */
-.type-display {
-  font-family: var(--font-display);
-  color: var(--ink-1);
-  font-weight: 500;
-  letter-spacing: -.03em;
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Data table (DESIGN.md §6.5): plain header, row rules, no zebra, no hover fill */
+.data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--fs-body); }
+.data-table thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--surface);
+  color: var(--muted); font-size: var(--fs-micro); font-weight: 400;
+  text-align: left; padding: 0 14px; height: 36px; border-bottom: 1px solid var(--border);
 }
-.type-section-title {
-  font-family: var(--font-display);
-  color: var(--ink-1);
-  font-weight: 500;
-  letter-spacing: -.02em;
+.data-table tbody td { padding: 0 14px; height: var(--row-h); border-bottom: 1px solid var(--rule); color: var(--text); }
+.data-table tbody tr[aria-selected="true"] { background: var(--active); }
+.data-table .num, .data-table th.num { text-align: right; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
 }
-/* small uppercase tag — 1moby blog-tag pattern (Geometrica, light) */
-.type-label {
-  font-family: var(--font-num);
-  color: var(--ink-4);
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-.type-meta { color: var(--ink-4); }
-.type-muted { color: var(--ink-5); }
-/* long-form copy — 1moby blog-content pattern (Sarabun, #6b6b6b, 1.6) */
-.type-body { font-family: var(--font-body); color: var(--ink-4); line-height: 1.6; }
-
-/* surfaces */
-.surface       { @apply rounded-lg border border-gray-200 bg-white shadow-none; }
-.surface-flat  { @apply rounded-lg border border-gray-200 bg-white shadow-none; }
-.surface-soft  { @apply rounded-lg border border-gray-200 bg-gray-50 shadow-none; }
-.surface-elev  { @apply rounded-lg border border-gray-200 bg-white shadow-none; }
-
-/* dividers */
-.hairline { @apply border-gray-200; }
-hr.hairline { @apply border-t border-gray-200; border-bottom: none; }
-
-/* scrollbar: keep scrolling available, hide the visual rail everywhere */
-* {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-*::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
-/* focus */
-:focus-visible { outline: 2px solid var(--moby-500); outline-offset: 2px; border-radius: 6px; }
-
-/* status pill base */
-.pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 11px; font-weight: 600; line-height: 1;
-  padding: 4px 8px; border-radius: 999px;
-  border: 1px solid transparent; letter-spacing: .01em;
-}
-.pill .dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; opacity: .9; }
-
-/* table base */
-.table-base { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-.table-base thead th {
-  position: sticky; top: 0; z-index: 1;
-  @apply bg-gray-50 text-[color:var(--ink-4)];
-  font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
-  text-align: left; padding: 10px 14px; @apply border-b border-gray-200;
-}
-.table-base tbody td { padding: 10px 14px; @apply border-b border-gray-100 text-[color:var(--ink-2)]; }
-.table-base tbody tr:hover { @apply bg-gray-50; }
-
-/* card hover lift */
-.lift { transition: box-shadow .15s ease, transform .15s ease; }
-.lift:hover { box-shadow: var(--shadow-2); }
-
-/* shimmer skeleton */
-@keyframes shimmer {
-  0% { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
-}
-.skeleton {
-  background: linear-gradient(90deg, #eef2f7 0%, #f5f7fb 50%, #eef2f7 100%);
-  background-size: 800px 100%;
-  animation: shimmer 1.4s linear infinite;
-  border-radius: 6px;
-}
-
-/* segmented control */
-.segmented { @apply inline-flex border border-gray-200 bg-gray-100; padding: 3px; border-radius: 8px; }
-.segmented button {
-  @apply text-[color:var(--ink-3)];
-  font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: 6px;
-}
-.segmented button.active { @apply bg-white text-[color:var(--ink-1)]; box-shadow: var(--shadow-1); }
-
-/* sparkline track */
-.spark-track { stroke: #e5e7eb; fill: none; stroke-width: 1; }
-.spark-line  { stroke: var(--moby-600); fill: none; stroke-width: 1.5; }
-.spark-area  { fill: rgba(0,107,255,.10); }
-
-/* anim */
-@keyframes pulse-soft { 0%,100% { opacity: 1 } 50% { opacity: .6 } }
-.pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
