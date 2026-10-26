@@ -8,9 +8,6 @@ import type { PredictDataSource } from "@/lib/api";
 // Run status tone/label live in the shared module (single source for runs + training).
 export { runStatusTone, runStatusLabel } from "@/lib/run-status";
 
-/** Poll cadence while a prediction run is in_progress. */
-export const RUN_POLL_MS = 3000;
-
 // ── clean_manifest.clean row counts (shape-guarded) ─────────────
 
 export interface CleanCounts {

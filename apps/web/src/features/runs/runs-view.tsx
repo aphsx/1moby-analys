@@ -4,10 +4,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchPredictDataSources, type PredictDataSource } from "@/lib/api";
 import { fetchPredictionRuns, type PredictionRun } from "@/lib/ml-api";
+import { isActiveRunStatus, RUN_POLL_MS } from "@/lib/run-status";
 import { getDisplayError } from "@/lib/ui-error";
 import { CreateRunPanel } from "./create-run-panel";
 import { RunsTable } from "./runs-table";
-import { RUN_POLL_MS } from "./runs-utils";
 
 export function RunsView() {
   const [sources, setSources] = useState<PredictDataSource[]>([]);
@@ -39,7 +39,7 @@ export function RunsView() {
   }, [load]);
 
   useEffect(() => {
-    if (!runs.some((run) => run.status === "in_progress")) return undefined;
+    if (!runs.some((run) => isActiveRunStatus(run.status))) return undefined;
     const timer = window.setInterval(() => void load({ quiet: true }), RUN_POLL_MS);
     return () => window.clearInterval(timer);
   }, [load, runs]);

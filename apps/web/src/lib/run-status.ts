@@ -16,6 +16,14 @@ export function runStatusTone(status: RunStatus): RunStatusTone {
   return "neutral";
 }
 
+/** A run that has not finished yet: queued or running. Pages poll while one exists. */
+export function isActiveRunStatus(status: RunStatus): boolean {
+  return status === "pending" || status === "in_progress";
+}
+
+/** Poll cadence while any run on the page is active. */
+export const RUN_POLL_MS = 3_000;
+
 export function runStatusLabel(status: RunStatus): string {
   if (status === "completed") return "Completed";
   if (status === "failed") return "Failed";

@@ -25,18 +25,13 @@ import {
   type RunStatus,
   type TrainingRun,
 } from "@/lib/ml-api";
+import { isActiveRunStatus, RUN_POLL_MS } from "@/lib/run-status";
 import { getDisplayError, getImportErrorMessage } from "@/lib/ui-error";
 import { ModelStatusCards } from "./model-status-cards";
 import { TrainPanel } from "./train-panel";
 import { TrainingHistoryTable } from "./training-history-table";
 import { getTimestamp, wait } from "./training-utils";
 import { promotedSummary } from "./training-run-utils";
-
-const POLL_INTERVAL_MS = 3_000;
-
-function isActiveRunStatus(status: RunStatus) {
-  return status === "in_progress" || status === "pending";
-}
 
 /** Sort newest-first and fire completion/failure toasts on status transitions. */
 function applyTrainingRuns(
@@ -185,12 +180,10 @@ export function TrainingView() {
     void loadRuns();
   }, [loadRuns]);
 
-  const hasActiveRun = runs.some(
-    (run) => run.status === "in_progress" || run.status === "pending"
-  );
+  const hasActiveRun = runs.some((run) => isActiveRunStatus(run.status));
   useEffect(() => {
     if (!hasActiveRun) return;
-    const timer = setInterval(() => void loadRuns(), POLL_INTERVAL_MS);
+    const timer = setInterval(() => void loadRuns(), RUN_POLL_MS);
     return () => clearInterval(timer);
   }, [hasActiveRun, loadRuns]);
 
