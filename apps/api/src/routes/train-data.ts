@@ -10,7 +10,7 @@ import { db } from "../db/client";
 import { trainDataSources, user } from "../db/schema";
 import { requireFoundForRead } from "../lib/access-control";
 import { requireUser } from "../lib/auth-middleware";
-import { UUID_RE, maxUploadBytes } from "../lib/constants";
+import { maxUploadBytes } from "../lib/constants";
 import { getTrainCutoffSuggestion } from "../lib/clean-cutoff";
 import { prepareTrainDataSource } from "../lib/train-import";
 import { abortTrainDataSource, releaseStaleTrainImports } from "../lib/abort-data-source";
@@ -281,7 +281,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
         phase: "raw" as const,
       };
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   .get("/:id", async ({ params, set }) => {
     const rows = await db
@@ -303,10 +303,6 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
   .get(
     "/:id/suggested-cutoff",
     async ({ params, set }) => {
-      if (!UUID_RE.test(params.id)) {
-        set.status = 404;
-        return { message: "Train data source not found" };
-      }
       const [source] = await db
         .select({ id: trainDataSources.id })
         .from(trainDataSources)
@@ -332,7 +328,7 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
         horizon_days: HORIZON_DAYS,
       };
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   .delete(
     "/:id",
@@ -352,6 +348,6 @@ export const trainDataRoutes = new Elysia({ prefix: "/train-data-sources" })
       await db.delete(trainDataSources).where(eq(trainDataSources.id, params.id));
       return { deleted: true };
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   .use(trainImportRoutes);

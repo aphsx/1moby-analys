@@ -120,7 +120,6 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   .get(
     "/conversations/:id",
     async ({ params, userId, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Not found");
       const conv = await getConversation(params.id, userId!);
       if (!conv) return denyNotFound(set, "Conversation not found");
 
@@ -140,14 +139,13 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
 
       return { ...conv, messages: msgs };
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
 
   // ── Rename / archive conversation ────────────────────────────────────────────
   .patch(
     "/conversations/:id",
     async ({ params, body, userId, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Not found");
       const conv = await getConversation(params.id, userId!);
       if (!conv) return denyNotFound(set, "Conversation not found");
 
@@ -165,7 +163,7 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
       return updated;
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: "uuid" }) }),
       body: t.Object({
         title: t.Optional(t.String({ maxLength: 100 })),
         archived: t.Optional(t.Boolean()),
@@ -177,7 +175,6 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   .delete(
     "/conversations/:id",
     async ({ params, userId, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Not found");
       const conv = await getConversation(params.id, userId!);
       if (!conv) return denyNotFound(set, "Conversation not found");
 
@@ -185,14 +182,13 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
       set.status = 204;
       return null;
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
 
   // ── Send message → SSE stream ────────────────────────────────────────────────
   .post(
     "/conversations/:id/messages",
     async ({ params, body, userId, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Conversation not found");
       const conv = await getConversation(params.id, userId!);
       if (!conv) return denyNotFound(set, "Conversation not found");
 
@@ -242,7 +238,7 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
       });
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: "uuid" }) }),
       body: t.Object({
         message: t.String({ minLength: 1, maxLength: MAX_MESSAGE_CHARS }),
       }),

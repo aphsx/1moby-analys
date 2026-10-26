@@ -101,10 +101,6 @@ const trainingWriteRoutes = new Elysia()
   .post(
     "/",
     async ({ body, userId, set }) => {
-      if (!UUID_RE.test(body.train_source_id)) {
-        set.status = 400;
-        return { message: "train_source_id must be a UUID" };
-      }
       if (body.cutoff_date !== undefined && !DATE_RE.test(body.cutoff_date)) {
         set.status = 400;
         return { message: "cutoff_date must be YYYY-MM-DD" };
@@ -207,7 +203,7 @@ const trainingWriteRoutes = new Elysia()
     },
     {
       body: t.Object({
-        train_source_id: t.String(),
+        train_source_id: t.String({ format: "uuid" }),
         cutoff_date: t.Optional(t.String()),
         horizon_days: t.Optional(t.Number()),
         // sent by the web client; dataset_name is derived from the source server-side
@@ -237,7 +233,7 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
       if (denied) return denied;
       return mapTrainingRun(run!);
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   // Delete a training run from history (and cascade its model versions).
   // Any authenticated user. Active/pending runs stay. Prediction runs that
@@ -363,5 +359,5 @@ export const trainingRunRoutes = new Elysia({ prefix: "/training-runs" })
         ...(productionCleared.length > 0 ? { production_cleared: productionCleared } : {}),
       };
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   );

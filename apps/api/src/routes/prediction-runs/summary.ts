@@ -4,7 +4,6 @@ import { db } from "../../db/client";
 import { mlModelAliases, mlModelVersions, mlPredictionOutputs, mlPredictionRuns, predictDataSources, user } from "../../db/schema";
 import { requireUser } from "../../lib/auth-middleware";
 import { denyNotFound } from "../../lib/access-control";
-import { UUID_RE } from "../../lib/constants";
 import {
   DEFAULT_RISK_THRESHOLDS,
   EMPTY_MODEL_VERSIONS,
@@ -124,7 +123,6 @@ export const summaryRoutes = new Elysia()
   .get(
     "/:id/summary",
     async ({ params, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Prediction run not found");
       const [row] = await db
         .select({
           ...runSelect,
@@ -138,5 +136,5 @@ export const summaryRoutes = new Elysia()
       if (!row) return denyNotFound(set, "Prediction run not found");
       return buildSummary(row);
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   );

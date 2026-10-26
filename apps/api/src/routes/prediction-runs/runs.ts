@@ -24,10 +24,6 @@ export const runsRoutes = new Elysia()
   .post(
     "/",
     async ({ body, userId, set }) => {
-      if (!UUID_RE.test(body.predict_source_id)) {
-        set.status = 400;
-        return { message: "predict_source_id must be a UUID" };
-      }
       if (body.cutoff_date !== undefined && !DATE_RE.test(body.cutoff_date)) {
         set.status = 400;
         return { message: "cutoff_date must be YYYY-MM-DD" };
@@ -89,7 +85,7 @@ export const runsRoutes = new Elysia()
     },
     {
       body: t.Object({
-        predict_source_id: t.String(),
+        predict_source_id: t.String({ format: "uuid" }),
         name: t.String({ minLength: 1 }),
         cutoff_date: t.Optional(t.String()),
         // Per-run model overrides — version id per model type; omit to use champion.
@@ -111,7 +107,7 @@ export const runsRoutes = new Elysia()
       if (denied) return denied;
       return mapRun(run!);
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   // Retry mutates the run record — any authenticated user.
   .post(
@@ -150,7 +146,7 @@ export const runsRoutes = new Elysia()
       const fresh = await fetchRun(run!.id);
       return mapRun(fresh!);
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   .delete(
     "/:id",
@@ -161,5 +157,5 @@ export const runsRoutes = new Elysia()
       await db.delete(mlPredictionRuns).where(eq(mlPredictionRuns.id, run!.id));
       return { deleted: true };
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   );

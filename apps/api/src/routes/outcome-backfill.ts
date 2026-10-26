@@ -15,7 +15,7 @@ import { mlPredictionRuns } from "../db/schema";
 import { requireUser } from "../lib/auth-middleware";
 import { denyNotFound } from "../lib/access-control";
 import { triggerMlJob } from "../lib/ml-internal";
-import { RUN_STATUS, UUID_RE } from "../lib/constants";
+import { RUN_STATUS } from "../lib/constants";
 import type { OutcomeBackfillResponse } from "@moby/types";
 
 export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })
@@ -24,10 +24,6 @@ export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })
     "/",
     async ({ body, set }) => {
       if (body.prediction_run_id !== undefined) {
-        if (!UUID_RE.test(body.prediction_run_id)) {
-          set.status = 400;
-          return { message: "prediction_run_id must be a UUID" };
-        }
         const [run] = await db
           .select({ id: mlPredictionRuns.id, status: mlPredictionRuns.status })
           .from(mlPredictionRuns)
@@ -61,7 +57,7 @@ export const outcomeBackfillRoutes = new Elysia({ prefix: "/outcome-backfill" })
     },
     {
       body: t.Object({
-        prediction_run_id: t.Optional(t.String()),
+        prediction_run_id: t.Optional(t.String({ format: "uuid" })),
         force: t.Optional(t.Boolean()),
       }),
     }

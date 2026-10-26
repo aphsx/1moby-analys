@@ -4,7 +4,6 @@ import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
 import { requireUser } from "../../lib/auth-middleware";
 import { denyNotFound } from "../../lib/access-control";
-import { UUID_RE } from "../../lib/constants";
 import {
   fetchRun,
   mapOutput,
@@ -44,7 +43,6 @@ export const outputsRoutes = new Elysia()
   .get(
     "/:id/outputs",
     async ({ params, query, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Prediction run not found");
       const run = await fetchRun(params.id);
       const denied = requireRunFound(run, set);
       if (denied) return denied;
@@ -70,7 +68,7 @@ export const outputsRoutes = new Elysia()
       return { total, page, page_size: pageSize, data: rows.map(mapOutput) };
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: "uuid" }) }),
       query: t.Object({
         page: t.Optional(t.Numeric()),
         page_size: t.Optional(t.Numeric()),
@@ -90,7 +88,7 @@ export const outputsRoutes = new Elysia()
     "/:id/outputs/:acc_id",
     async ({ params, set }) => {
       const accId = Number(params.acc_id);
-      if (!UUID_RE.test(params.id) || !Number.isInteger(accId)) {
+      if (!Number.isInteger(accId)) {
         return denyNotFound(set, "Prediction output not found");
       }
       const run = await fetchRun(params.id);
@@ -109,5 +107,5 @@ export const outputsRoutes = new Elysia()
       if (!row) return denyNotFound(set, "Prediction output not found");
       return mapOutput(row);
     },
-    { params: t.Object({ id: t.String(), acc_id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }) }
   );

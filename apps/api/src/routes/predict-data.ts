@@ -11,7 +11,7 @@ import { db } from "../db/client";
 import { predictDataSources, user } from "../db/schema";
 import { requireUser } from "../lib/auth-middleware";
 import { denyNotFound } from "../lib/access-control";
-import { UUID_RE, maxUploadBytes } from "../lib/constants";
+import { maxUploadBytes } from "../lib/constants";
 import { importPredictExcel, type PredictImportResult } from "../lib/predict-import";
 import { abortPredictDataSource, releaseStalePredict } from "../lib/abort-data-source";
 import { cleanPredictFromRaw } from "../lib/predict-clean";
@@ -72,7 +72,6 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
   .get(
     "/:id/suggested-cutoff",
     async ({ params, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Predict data source not found");
       const [source] = await db
         .select({ id: predictDataSources.id })
         .from(predictDataSources)
@@ -90,7 +89,7 @@ export const predictDataRoutes = new Elysia({ prefix: "/predict-data-sources" })
         latest_data_date: latest_data_date,
       };
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   .post(
     "/import",

@@ -18,7 +18,7 @@ export const insightRoutes = new Elysia()
       if (denied) return denied;
       return getRunInsight(run!.id);
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
   .post(
     "/:id/insight",
@@ -39,7 +39,7 @@ export const insightRoutes = new Elysia()
       return result;
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: "uuid" }) }),
       body: t.Object({ force: t.Optional(t.Boolean()) }),
     }
   );

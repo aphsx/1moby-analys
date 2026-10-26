@@ -4,7 +4,6 @@ import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
 import { requireUser } from "../../lib/auth-middleware";
 import { denyNotFound } from "../../lib/access-control";
-import { UUID_RE } from "../../lib/constants";
 import {
   createCustomerAiExplanation,
   loadCustomerPayments,
@@ -24,7 +23,7 @@ export const customer360Routes = new Elysia()
       if (!Number.isInteger(accId)) return denyNotFound(set, "Prediction run not found");
       return loadCustomerUsageMonthly(run!, accId);
     },
-    { params: t.Object({ id: t.String(), acc_id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }) }
   )
   .get(
     "/:id/customers/:acc_id/payments",
@@ -36,13 +35,13 @@ export const customer360Routes = new Elysia()
       if (!Number.isInteger(accId)) return denyNotFound(set, "Prediction run not found");
       return loadCustomerPayments(run!, accId);
     },
-    { params: t.Object({ id: t.String(), acc_id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }) }
   )
   .post(
     "/:id/outputs/:acc_id/ai-explanation",
     async ({ params, body, set }) => {
       const accId = Number(params.acc_id);
-      if (!UUID_RE.test(params.id) || !Number.isInteger(accId)) {
+      if (!Number.isInteger(accId)) {
         return denyNotFound(set, "Prediction output not found");
       }
 
@@ -75,7 +74,7 @@ export const customer360Routes = new Elysia()
       return result;
     },
     {
-      params: t.Object({ id: t.String(), acc_id: t.String() }),
+      params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }),
       body: t.Object({ force: t.Optional(t.Boolean()) }),
     }
   );

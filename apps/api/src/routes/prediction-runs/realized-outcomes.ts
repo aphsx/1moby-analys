@@ -76,5 +76,5 @@ export const realizedOutcomesRoutes = new Elysia()
       };
       return response;
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   );
