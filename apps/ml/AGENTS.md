@@ -27,6 +27,20 @@ python scripts/verify_constants_sync.py        # src/constants.py ↔ apps/api/s
 python scripts/profile_training_dataset.py     # dataset profiling / label viability
 ```
 
+### Golden run (gate for any change under `apps/ml/` or the import pipeline)
+
+End-to-end check: rebuilds a scratch database `moby_golden`, imports `data/sample-1moby-workbook.xlsx`,
+trains (without tabicl and XGBoost, to stay fast), predicts, and dumps the Prediction Outputs. About
+17 minutes; two runs on the same commit match exactly.
+
+```bash
+apps/ml/scripts/golden_run.sh golden/before.csv     # on the base commit (or keep a saved baseline)
+apps/ml/scripts/golden_run.sh golden/after.csv      # on your change
+python3 apps/ml/scripts/golden_run.py compare apps/ml/golden/before.csv apps/ml/golden/after.csv
+```
+
+A change that is meant to alter model output records a new baseline and says so in its PR.
+
 ## Python style
 
 - Type hints on every function signature.
