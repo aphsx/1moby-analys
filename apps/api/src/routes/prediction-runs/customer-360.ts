@@ -9,6 +9,9 @@ import {
 } from "../../lib/ai";
 import { mapOutput, requireOutput, requireRun } from "../../lib/ml/prediction-runs";
 
+/** The payment tab computes yearly totals and the top-up cycle from these rows, so the AI context's 50 is too few. */
+const CUSTOMER_PAGE_PAYMENT_LIMIT = 500;
+
 export const customer360Routes = new Elysia()
   .use(requireUser)
   .get(
@@ -27,7 +30,7 @@ export const customer360Routes = new Elysia()
       const accId = Number(params.acc_id);
       const run = await requireRun(params.id);
       if (!Number.isInteger(accId)) throw notFound("Prediction run not found");
-      return loadCustomerPayments(run, accId);
+      return loadCustomerPayments(run, accId, CUSTOMER_PAGE_PAYMENT_LIMIT);
     },
     { params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }) }
   )
