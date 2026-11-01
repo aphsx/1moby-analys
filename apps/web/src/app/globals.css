@@ -46,7 +46,7 @@
   --radius-card: 8px; --radius-control: 6px; --radius-pill: 999px;
   --gap: 24px; --card-pad: 20px; --page-pad: 32px;
   --control-h: 32px; --row-h: 45px; --nav-row: 32px;
-  --sidebar-w: 232px; --rail-w: 384px;
+  --sidebar-w: 232px; --sidebar-collapsed-w: 56px; --rail-w: 384px;
   --shadow-float: 0 8px 24px rgba(0, 0, 0, .16); /* menus, tooltips, dialogs only */
   --shadow-card: none;
 }
