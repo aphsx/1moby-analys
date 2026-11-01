@@ -1,10 +1,11 @@
 "use client";
 /** Left panel of the customer page: who they are, how they use the service, how they pay. */
 import { type PaymentEvent, type PredictionOutput } from "@moby/types";
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { StatusPill } from "@/components/ui";
 import { formatBaht, formatCount, formatCredits, formatDate, formatDaysAgo, formatPercent } from "@/lib/format";
 import { CHANNEL_LABEL, LIFECYCLE_LABEL, SEGMENT_LABEL, VALUE_TIER_LABEL } from "@/lib/labels";
+import { daysBetween, overdueLabel, topupStats } from "./customer-model";
 
 // ShareBar parts take the one-hue risk ladder, darkest first (DESIGN.md §4, §7)
 const CHANNELS = [
@@ -14,20 +15,22 @@ const CHANNELS = [
   { key: "email_usage_share", label: CHANNEL_LABEL.email, color: "var(--risk-low)" },
 ] as const;
 
-function daysSince(iso: string | null): number | null {
-  if (!iso) return null;
-  const t = new Date(iso).getTime();
-  return Number.isNaN(t) ? null : Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
-}
-
-export function CustomerProfilePanel({ customer: c, payments }: { customer: PredictionOutput; payments: PaymentEvent[] }) {
+export function CustomerProfilePanel({ customer: c, payments, cutoffMs }: { customer: PredictionOutput; payments: PaymentEvent[]; cutoffMs: number }) {
+  // Below the two-column layout the panel is a summary card above the tabs, expandable for the rest
+  const [expanded, setExpanded] = useState(false);
   const s = c.profile_snapshot;
-  const lastPayment = payments.reduce<string | null>((a, p) => (!a || p.payment_date > a ? p.payment_date : a), null);
+  const topups = topupStats(payments, cutoffMs);
   const shares = CHANNELS.map((ch) => ({ ...ch, share: Math.max(0, s[ch.key] ?? 0) }));
   const used = shares.filter((ch) => ch.share > 0);
+  const daysSince = (iso: string | null) => {
+    if (!iso) return null;
+    const days = daysBetween(iso, cutoffMs);
+    return Number.isNaN(days) ? null : Math.max(0, days);
+  };
+  const detailClass = `space-y-5 ${expanded ? "" : "max-[1179px]:hidden"}`;
 
   return (
-    <aside className="surface h-fit space-y-5 rounded-card p-5 max-[1179px]:order-last" aria-label="ข้อมูลลูกค้า">
+    <aside className="surface h-fit space-y-5 rounded-card p-5" aria-label="ข้อมูลลูกค้า">
       <div className="flex flex-wrap gap-2">
         <StatusPill tone={c.customer_value_tier === "high" ? "accent" : "neutral"}>{VALUE_TIER_LABEL[c.customer_value_tier]}</StatusPill>
         <StatusPill>{LIFECYCLE_LABEL[c.lifecycle_stage]}</StatusPill>
@@ -43,6 +46,16 @@ export function CustomerProfilePanel({ customer: c, payments }: { customer: Pred
         <Fact label="ส่งข้อความล่าสุด" value={formatDate(s.last_send)} hint={formatDaysAgo(daysSince(s.last_send))} />
       </Facts>
 
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+        className="min-h-11 text-small font-medium text-accent-ink underline underline-offset-2 min-[1180px]:hidden"
+      >
+        {expanded ? "ซ่อนข้อมูลบัญชี" : "ดูข้อมูลบัญชีทั้งหมด"}
+      </button>
+
+      <div className={detailClass}>
       <Group title="ช่องทางที่ใช้ · 180 วัน" right={formatCredits(s.usage_total_180d)}>
         {used.length === 0 ? (
           <p className="text-small text-muted">ไม่มีการใช้งานใน 180 วัน</p>
@@ -81,9 +94,16 @@ export function CustomerProfilePanel({ customer: c, payments }: { customer: Pred
           <Fact label="ยอดชำระรวม" value={formatBaht(c.total_revenue)} />
           <Fact label="จำนวนครั้งที่ชำระ" value={`${formatCount(c.n_purchases)} ครั้ง`} />
           <Fact label="ยอดเฉลี่ยต่อครั้ง" value={c.avg_transaction_value != null ? formatBaht(c.avg_transaction_value) : "—"} />
-          <Fact label="ชำระครั้งล่าสุด" value={formatDate(lastPayment)} />
+          <Fact label="รอบเติมเงินปกติ" value={topups.usualCycle != null ? `${formatCount(Math.round(topups.usualCycle))} วัน` : "—"} />
+          <Fact
+            label="ชำระครั้งล่าสุด"
+            value={formatDate(topups.lastDate)}
+            hint={topups.overdueRatio != null ? overdueLabel(topups.overdueRatio) : undefined}
+            alert={topups.overdueRatio != null}
+          />
         </Facts>
       </Group>
+      </div>
     </aside>
   );
 }
@@ -104,11 +124,11 @@ function Facts({ children }: { children: ReactNode }) {
   return <dl className="space-y-2">{children}</dl>;
 }
 
-function Fact({ label, value, hint, tag }: { label: string; value: string; hint?: string; tag?: string | null }) {
+function Fact({ label, value, hint, tag, alert = false }: { label: string; value: string; hint?: string; tag?: string | null; alert?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-small text-muted">{label}</dt>
-      <dd className="num min-w-0 text-right text-small text-text">
+      <dd className={`num min-w-0 text-right text-small ${alert ? "font-medium text-negative" : "text-text"}`}>
         {tag ? <span className="mr-1.5 align-middle"><StatusPill>{tag}</StatusPill></span> : null}
         {value}
         {hint ? <span className="block text-micro text-muted">{hint}</span> : null}

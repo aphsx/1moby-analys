@@ -84,6 +84,7 @@ export function CustomerDetailClient({
       usageTrend={usageTrend}
       payments={payments}
       runId={effectiveRun?.id}
+      cutoff={effectiveRun?.cutoff_date ?? new Date().toISOString()}
       customersHref={customersHref}
       onCustomerChange={(next) => detail.setData([next, usageTrend, payments])}
     />

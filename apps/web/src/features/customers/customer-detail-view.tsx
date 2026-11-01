@@ -1,12 +1,14 @@
 "use client";
 /**
- * Customer page (UI plan phase 4): profile on the left, four tabs on the right. Every label and ⓘ
- * text follows docs/ui/CONTENT.md §3 and §5.
+ * Customer page (CUSTOMER-PAGES.md §3): profile on the left, five tabs on the right. Answers "what
+ * happened with this customer, and what next". The tab lives in `?view=`, because `?tab=` already
+ * carries the list's tab for the back link.
  */
-import { type ChurnFactor, type PaymentEvent, type PredictionOutput } from "@moby/types";
+import { type ChurnFactor, type MonthlyUsagePoint, type PaymentEvent, type PredictionOutput } from "@moby/types";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { ArrowLeft, CalendarClock, Coins, Gauge, HeartPulse, Loader2, Sparkles, TrendingDown, Wallet } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, ChevronRight, Coins, Gauge, HeartPulse, Loader2, Phone, Sparkles, TrendingDown, Wallet } from "lucide-react";
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { BUTTON, EmptyState, InfoTip, KpiStrip, Panel, StatusPill, type PillTone } from "@/components/ui";
 import { generateCustomerAiExplanation } from "@/lib/ml-api";
@@ -22,12 +24,12 @@ import {
 } from "@/lib/format";
 import { LIFECYCLE_LABEL, RISK_LABEL, SEGMENT_LABEL, URGENCY_LABEL, VALUE_TIER_LABEL } from "@/lib/labels";
 import { getDisplayError } from "@/lib/ui-error";
-import { CustomerPaymentChart } from "./customer-payment-chart";
+import { CustomerFollowTab } from "./customer-follow-tab";
+import { buildFinding, recentEvents, topupStats } from "./customer-model";
+import { CustomerPaymentTab } from "./customer-payment-tab";
 import { CustomerProfilePanel } from "./customer-profile-panel";
-import { UsageCreditPanel, type UsageTrendPoint } from "./customer-usage-chart";
+import { CustomerUsageTab, UsageTopupChart } from "./customer-usage-tab";
 import { humanizeFeature } from "./reasoning";
-
-export type { UsageTrendPoint };
 
 const INFO = {
   churn: "โอกาสที่ลูกค้าจะเลิกใช้ ปรับเทียบ (calibration) แล้ว อ่านเป็นเปอร์เซ็นต์ได้ตรง ๆ: 78% คือจากลูกค้าลักษณะนี้ 100 ราย คาดว่าจะเลิกใช้ราว 78 ราย",
@@ -42,12 +44,13 @@ const INFO = {
 
 const RISK_TONE: Record<string, PillTone> = { critical: "negative", high: "warning", medium: "neutral", low: "neutral" };
 
-type Tab = "overview" | "predictions" | "usage" | "payments";
+type Tab = "overview" | "prediction" | "usage" | "payment" | "follow";
 const TABS: { key: Tab; label: string }[] = [
   { key: "overview", label: "ภาพรวม" },
-  { key: "predictions", label: "การทำนาย" },
+  { key: "prediction", label: "การทำนาย" },
   { key: "usage", label: "การใช้งาน" },
-  { key: "payments", label: "การชำระเงิน" },
+  { key: "payment", label: "การชำระเงิน" },
+  { key: "follow", label: "การติดตาม" },
 ];
 
 export function CustomerDetailView({
@@ -56,25 +59,50 @@ export function CustomerDetailView({
   usageTrend,
   payments,
   runId,
+  cutoff,
   customersHref,
   onCustomerChange,
 }: {
   accId: string;
   customer: PredictionOutput;
-  usageTrend: UsageTrendPoint[];
+  usageTrend: MonthlyUsagePoint[];
   payments: PaymentEvent[];
   runId?: string;
+  cutoff: string;
   customersHref?: string;
   onCustomerChange: (customer: PredictionOutput) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("overview");
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const view = sp.get("view");
+  const tab: Tab = TABS.some((t) => t.key === view) ? (view as Tab) : "overview";
+  // Set by the finding's call-to-action, so arriving at the follow tab lands in the form
+  const [focusForm, setFocusForm] = useState(false);
+  const cutoffMs = Date.parse(cutoff);
   const listHref = customersHref ?? (runId ? `/customers?run=${encodeURIComponent(runId)}` : "/customers");
+
+  const setTab = (next: Tab) => {
+    const params = new URLSearchParams(Array.from(sp.entries()));
+    if (next === "overview") params.delete("view");
+    else params.set("view", next);
+    const query = params.toString();
+    setFocusForm(false);
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
 
   return (
     <div className="space-y-5 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
-      <Link href={listHref} className="inline-flex items-center gap-1 text-small text-muted hover:text-text">
-        <ArrowLeft size={14} aria-hidden /> รายชื่อลูกค้า
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <nav aria-label="ตำแหน่งในระบบ" className="flex items-center gap-2 text-[20px] leading-tight">
+          <Link href={listHref} className="text-muted hover:text-text">
+            รายชื่อลูกค้า
+          </Link>
+          <ChevronRight size={16} aria-hidden className="text-faint" />
+          <h1 className="tabular-nums text-[20px] font-semibold text-text">บัญชี #{accId}</h1>
+        </nav>
+        <StatusPill>{LIFECYCLE_LABEL[customer.lifecycle_stage]}</StatusPill>
+      </div>
 
       {customer.needs_review ? (
         <p className="flex flex-wrap items-center gap-2 text-small text-text">
@@ -84,7 +112,7 @@ export function CustomerDetailView({
       ) : null}
 
       <div className="grid gap-6 min-[1180px]:grid-cols-[320px_minmax(0,1fr)]">
-        <CustomerProfilePanel customer={customer} payments={payments} />
+        <CustomerProfilePanel customer={customer} payments={payments} cutoffMs={cutoffMs} />
 
         <div className="min-w-0 space-y-5">
           <nav aria-label="หัวข้อของลูกค้า" className="-mx-1 overflow-x-auto border-b border-border">
@@ -107,15 +135,28 @@ export function CustomerDetailView({
           </nav>
 
           {tab === "overview" ? (
-            <Overview customer={customer} accId={accId} runId={runId} onCustomerChange={onCustomerChange} />
-          ) : tab === "predictions" ? (
+            <Overview
+              customer={customer}
+              accId={accId}
+              runId={runId}
+              usage={usageTrend}
+              payments={payments}
+              cutoff={cutoff}
+              onCustomerChange={onCustomerChange}
+              onShowPrediction={() => setTab("prediction")}
+              onCreateTask={() => {
+                setTab("follow");
+                setFocusForm(true);
+              }}
+            />
+          ) : tab === "prediction" ? (
             <Predictions customer={customer} />
           ) : tab === "usage" ? (
-            <UsageCreditPanel data={usageTrend} daysSinceActivity={customer.days_since_last_activity} />
+            <CustomerUsageTab usage={usageTrend} lastSend={customer.profile_snapshot?.last_send} />
+          ) : tab === "payment" ? (
+            <CustomerPaymentTab customer={customer} payments={payments} cutoffMs={cutoffMs} />
           ) : (
-            <Panel title="การชำระเงิน" meta="ยอดชำระรายเดือนจากตารางการชำระเงิน">
-              {payments.length > 0 ? <CustomerPaymentChart payments={payments} /> : <EmptyState title="ไม่มีประวัติการชำระเงิน" />}
-            </Panel>
+            <CustomerFollowTab accId={accId} focusForm={focusForm} />
           )}
         </div>
       </div>
@@ -134,15 +175,47 @@ function Overview({
   customer: c,
   accId,
   runId,
+  usage,
+  payments,
+  cutoff,
   onCustomerChange,
+  onShowPrediction,
+  onCreateTask,
 }: {
   customer: PredictionOutput;
   accId: string;
   runId?: string;
+  usage: MonthlyUsagePoint[];
+  payments: PaymentEvent[];
+  cutoff: string;
   onCustomerChange: (customer: PredictionOutput) => void;
+  onShowPrediction: () => void;
+  onCreateTask: () => void;
 }) {
+  const cutoffMs = Date.parse(cutoff);
+  const finding = buildFinding(c, payments, usage, cutoffMs);
+  const { usualCycle } = topupStats(payments, cutoffMs);
+  const clvRange = c.clv_forecast_interval;
+  const events = recentEvents(c, payments, cutoff);
+
   return (
     <div className="space-y-5">
+      <section
+        aria-labelledby="customer-finding"
+        className="rounded-card p-5"
+        style={{ background: finding.alert ? "var(--pill-negative-bg)" : "var(--raised)" }}
+      >
+        <h2 id="customer-finding" className="text-small font-semibold text-muted">
+          สิ่งที่ควรรู้ก่อนโทร
+        </h2>
+        <p className="num mt-1 text-section font-medium text-text">{finding.sentence}</p>
+        {finding.evidence ? <p className="num mt-1 text-small text-muted">{finding.evidence}</p> : null}
+        <button type="button" onClick={onCreateTask} className={`${BUTTON.primary} mt-3`}>
+          <Phone size={14} aria-hidden />
+          สร้างงานโทรหาลูกค้า
+        </button>
+      </section>
+
       <KpiStrip
         items={[
           {
@@ -163,22 +236,80 @@ function Overview({
           {
             label: "มูลค่า 6 เดือน",
             value: c.predicted_clv_6m != null ? formatBahtCompact(c.predicted_clv_6m) : "—",
-            caption: VALUE_TIER_LABEL[c.customer_value_tier],
+            caption: clvRange ? `ถ้าจ่าย ${formatBahtCompact(clvRange.p10)}–${formatBahtCompact(clvRange.p90)}` : VALUE_TIER_LABEL[c.customer_value_tier],
             info: INFO.clv,
           },
           {
             label: "เติมครั้งถัดไป",
             value: formatDaysAhead(c.estimated_days_until_topup),
-            caption: c.credit_urgency_level ? URGENCY_LABEL[c.credit_urgency_level] : undefined,
+            caption: usualCycle != null ? `รอบปกติ ${formatCount(Math.round(usualCycle))} วัน` : c.credit_urgency_level ? URGENCY_LABEL[c.credit_urgency_level] : undefined,
             info: INFO.topup,
           },
         ]}
       />
-      <Panel title="ปัจจัยที่มีผล" info={INFO.factors} meta="5 อันดับแรกของลูกค้ารายนี้">
-        <FactorBars factors={c.churn_factors} />
-      </Panel>
+
+      <UsageTopupChart usage={usage} payments={payments} />
+
+      <div className="grid gap-5 min-[860px]:grid-cols-2">
+        <Panel
+          title="ทำไมโมเดลให้ความเสี่ยงระดับนี้"
+          info={INFO.factors}
+          right={
+            <button type="button" onClick={onShowPrediction} className="text-small font-medium text-accent-ink underline underline-offset-2">
+              ดูการทำนาย
+            </button>
+          }
+        >
+          <TopFactors customer={c} />
+        </Panel>
+        <Panel title="เหตุการณ์ล่าสุด" info="รวมผลทำนาย การเข้าระบบ การส่งข้อความ และการเติมเงินล่าสุด">
+          {events.length === 0 ? (
+            <p className="text-body text-muted">ไม่มีเหตุการณ์ในช่วงข้อมูล</p>
+          ) : (
+            <ul className="space-y-2">
+              {events.map((e, i) => (
+                <li key={`${e.date}-${i}`} className="flex items-baseline justify-between gap-3 text-body">
+                  <span className="min-w-0 text-text">{e.label}</span>
+                  <span className="num shrink-0 text-small text-muted">{formatDate(e.date)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+
       <AiCard customer={c} accId={accId} runId={runId} onCustomerChange={onCustomerChange} />
     </div>
+  );
+}
+
+/** Top 3 factors with direction; the full two-way bars are on the prediction tab. */
+function TopFactors({ customer: c }: { customer: PredictionOutput }) {
+  if (c.churn_probability == null) {
+    return (
+      <p className="text-body text-muted">
+        {c.lifecycle_stage === "Active Paid" ? "ยังไม่มีคะแนน · ลูกค้าใหม่กว่า 90 วัน" : "ทำนายความเสี่ยงเฉพาะลูกค้าที่จ่ายเงิน"}
+      </p>
+    );
+  }
+  const factors = (c.churn_factors ?? []).slice(0, 3);
+  if (factors.length === 0) return <p className="text-body text-muted">รอบนี้ไม่มีคำอธิบายจากโมเดล</p>;
+  return (
+    <ul className="space-y-3">
+      {factors.map((f) => {
+        const up = f.direction === "up";
+        const Icon = up ? ArrowUp : ArrowDown;
+        return (
+          <li key={f.feature} className="flex gap-3">
+            <Icon size={16} aria-hidden className={`mt-0.5 shrink-0 ${up ? "text-negative" : "text-accent"}`} />
+            <div className="min-w-0">
+              <p className="text-body text-text">{humanizeFeature(f.feature)}</p>
+              <p className="text-micro text-muted">{up ? "ทำให้เสี่ยงขึ้น" : "ช่วยลดความเสี่ยง"}</p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -312,6 +443,12 @@ function Predictions({ customer: c }: { customer: PredictionOutput }) {
           </button>
         ))}
       </div>
+
+      {show("risk") ? (
+        <Panel title="ปัจจัยที่มีผล" info={INFO.factors} meta="5 อันดับแรกของลูกค้ารายนี้">
+          <FactorBars factors={c.churn_factors} />
+        </Panel>
+      ) : null}
 
       {show("risk") ? (
         <PredictionSection title="ความเสี่ยงเลิกใช้">
