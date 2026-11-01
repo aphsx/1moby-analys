@@ -128,45 +128,63 @@ export function Panel({
 /* ────────────────────────────────────────── */
 /*  InfoTip (§6.3): hover, focus and tap; Esc or tapping outside closes */
 /* ────────────────────────────────────────── */
+const TIP_W = 264;
+const TIP_MARGIN = 8;
+
 export function InfoTip({ label, children, align = "left" }: { label: string; children: ReactNode; align?: "left" | "right" }) {
-  const [open, setOpen] = useState(false);
+  // Fixed to the viewport, so no card, table scroller or nowrap header can clip or squeeze it
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const id = useId();
   const ref = useRef<HTMLSpanElement>(null);
+  const open = pos !== null;
+
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const width = Math.min(TIP_W, window.innerWidth - 2 * TIP_MARGIN);
+    const preferred = align === "right" ? r.right + TIP_MARGIN - width : r.left - TIP_MARGIN;
+    const left = Math.max(TIP_MARGIN, Math.min(preferred, window.innerWidth - width - TIP_MARGIN));
+    setPos({ top: r.bottom + 4, left, width });
+  };
+  const hide = () => setPos(null);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    const onDown = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && hide();
+    const onDown = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && hide();
+    // A fixed tip follows its icon when the page or a table scroller moves (focusing an icon can scroll it into view)
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onDown);
+    window.addEventListener("scroll", show, true);
+    window.addEventListener("resize", show);
     return () => {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("scroll", show, true);
+      window.removeEventListener("resize", show);
     };
   }, [open]);
 
   return (
-    <span ref={ref} className="relative inline-flex" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <span ref={ref} className="relative inline-flex" onMouseEnter={show} onMouseLeave={hide}>
       <button
         type="button"
         aria-label={`อธิบาย ${label}`}
         aria-describedby={open ? id : undefined}
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
+        onClick={() => (open ? hide() : show())}
+        onFocus={show}
+        onBlur={hide}
         className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-control text-faint transition-colors duration-150 after:absolute after:-inset-2 after:content-[''] hover:text-text focus-visible:text-text"
       >
         <Info size={14} aria-hidden />
       </button>
-      {open ? (
+      {pos ? (
         <span
           id={id}
           role="tooltip"
-          className={`absolute top-full z-50 mt-1 w-[264px] rounded-control px-3 py-2 text-left text-micro font-normal leading-[18px] ${
-            align === "right" ? "right-[-8px]" : "left-[-8px]"
-          }`}
-          style={{ background: "var(--tip-bg)", color: "var(--tip-ink)", boxShadow: "var(--shadow-float)" }}
+          className="fixed z-50 whitespace-normal break-words rounded-control px-3 py-2 text-left text-micro font-normal normal-case leading-[18px] tracking-normal"
+          style={{ top: pos.top, left: pos.left, width: pos.width, background: "var(--tip-bg)", color: "var(--tip-ink)", boxShadow: "var(--shadow-float)" }}
         >
           {children}
         </span>

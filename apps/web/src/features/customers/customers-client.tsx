@@ -1,252 +1,130 @@
 "use client";
 /**
- * Binds /customers to the active prediction run (spec §2.0/§2.2):
- * run selector → fetchRunOutputs → CustomersView. Owns loading/empty/error
- * states per spec §5 — no mock fallback when no run is completed.
- *
- * Filters are SERVER-side: stage/search/tier/risk go into the outputs query.
- * Client-side filtering of one priority-sorted page silently starved every
- * non-top-priority stage (Ghost/Churned never reached the page), so every
- * filter change refetches instead.
+ * Binds /customers to the URL-selected or active prediction run. All list state (tab, filters, sort,
+ * search, page) lives in the search params so reloads, links and the back button keep the view;
+ * filtering and sorting are server-side so every lifecycle stage is reachable.
  */
-import { type OutputsPage, type OutputsQuery } from "@moby/types";
+import { type OutputsPage } from "@moby/types";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useActiveRun } from "@/stores/run-store";
-import { BUTTON, EmptyState, Skeleton } from "@/components/ui";
+import { BUTTON, EmptyState } from "@/components/ui";
 import { fetchRunOutputs, fetchRunSummary } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { useAsync } from "@/lib/use-async";
 import {
   CustomersView,
-  type CustomerFilters,
-  type CustomerSort,
-  type CustomerSortDirection,
-  type CustomerSortKey,
+  FILTER_KEYS,
+  PAGE_SIZE,
+  presetFilters,
+  TAB_KEYS,
+  TABS,
+  toOutputsQuery,
+  type ListState,
+  type TabKey,
 } from "./customers-view";
 
-// Server-side sort keeps the most important customers in the fetched page;
-// filters are applied server-side so every lifecycle stage is reachable.
-const PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 300;
-const FILTER_KEYS = [
-  "lifecycle_stage",
-  "search",
-  "customer_value_tier",
-  "churn_risk_level",
-  "credit_urgency_level",
-] as const satisfies readonly (keyof CustomerFilters)[];
-const SORT_KEYS = [
-  "acc_id",
-  "lifecycle_stage",
-  "churn_probability",
-  "priority_score",
-  "predicted_clv_6m",
-  "total_revenue",
-  "revenue_at_risk",
-  "estimated_days_until_topup",
-  "days_since_last_activity",
-  "ai_status",
-] as const satisfies readonly CustomerSortKey[];
-const SORT_DIRECTIONS = ["asc", "desc"] as const satisfies readonly CustomerSortDirection[];
 
-function filtersFromSearchParams(sp: URLSearchParams): CustomerFilters {
+function stateFromParams(sp: URLSearchParams): ListState {
+  const tab = (TAB_KEYS as readonly string[]).includes(sp.get("tab") ?? "") ? (sp.get("tab") as TabKey) : "paid";
+  const sort = sp.get("sort") ?? "";
+  const page = Number(sp.get("page"));
   return {
-    lifecycle_stage: sp.get("lifecycle_stage") || "",
-    search: sp.get("search") || "",
-    customer_value_tier: sp.get("customer_value_tier") || "",
-    churn_risk_level: sp.get("churn_risk_level") || "",
-    credit_urgency_level: sp.get("credit_urgency_level") || "",
+    tab,
+    search: sp.get("search") ?? "",
+    filters: Object.fromEntries(FILTER_KEYS.map((k) => [k, sp.get(k) ?? ""])) as ListState["filters"],
+    sort: TABS[tab].sorts.some((s) => s.value === sort) ? sort : "",
+    page: Number.isInteger(page) && page > 0 ? page : 1,
   };
 }
 
-function filtersEqual(left: CustomerFilters, right: CustomerFilters) {
-  return FILTER_KEYS.every((key) => left[key] === right[key]);
-}
-
-function sortFromSearchParams(sp: URLSearchParams): CustomerSort | null {
-  const [key, direction] = (sp.get("sort") ?? "").split(":");
-  if (
-    SORT_KEYS.includes(key as CustomerSortKey) &&
-    SORT_DIRECTIONS.includes(direction as CustomerSortDirection)
-  ) {
-    return { key: key as CustomerSortKey, direction: direction as CustomerSortDirection };
-  }
-  return null;
-}
-
-function sortsEqual(left: CustomerSort | null, right: CustomerSort | null) {
-  return left?.key === right?.key && left?.direction === right?.direction;
-}
-
-function pageFromSearchParams(sp: URLSearchParams) {
-  const page = Number(sp.get("page"));
-  return Number.isInteger(page) && page > 0 ? page : 1;
+function paramsFromState(s: ListState, base: URLSearchParams): URLSearchParams {
+  const params = new URLSearchParams(base);
+  const set = (key: string, value: string) => (value ? params.set(key, value) : params.delete(key));
+  set("tab", s.tab === "paid" ? "" : s.tab);
+  set("search", s.search.trim());
+  FILTER_KEYS.forEach((k) => set(k, s.filters[k]));
+  set("sort", s.sort);
+  set("page", s.page > 1 ? String(s.page) : "");
+  return params;
 }
 
 function CustomersClientInner() {
   const router = useRouter();
   const pathname = usePathname();
-  const { run, runId, runs, setRunId, loading: runsLoading } = useActiveRun();
   const sp = useSearchParams();
+  const { run, runId, runs, loading: runsLoading } = useActiveRun();
   const requestedRunId = sp.get("run") || "";
-  const effectiveRunId =
-    requestedRunId && runs.some((candidate) => candidate.id === requestedRunId)
-      ? requestedRunId
-      : runId;
-  const [filters, setFilters] = useState<CustomerFilters>(() =>
-    filtersFromSearchParams(new URLSearchParams(Array.from(sp.entries())))
-  );
-  const [sort, setSort] = useState<CustomerSort | null>(() =>
-    sortFromSearchParams(new URLSearchParams(Array.from(sp.entries())))
-  );
-  const [pageNumber, setPageNumber] = useState(() =>
-    pageFromSearchParams(new URLSearchParams(Array.from(sp.entries())))
-  );
-  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
-  const [page, setPage] = useState<OutputsPage | null>(null);
+  const effectiveRunId = requestedRunId && runs.some((r) => r.id === requestedRunId) ? requestedRunId : runId;
+  const effectiveRun = runs.find((r) => r.id === effectiveRunId) ?? run;
+
+  const state = stateFromParams(sp);
+  // The search box updates at once; the URL (and the fetch) follow after a pause
+  const [search, setSearch] = useState(state.search);
+  const [data, setData] = useState<OutputsPage | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   // Tab and preset counts; the list still renders if this fails
   const summary = useAsync(() => fetchRunSummary(effectiveRunId), [effectiveRunId], Boolean(effectiveRunId)).data ?? null;
+  // One count per preset pill, from the server with the pill's own filters (page_size 1: only `total` is read)
+  const presets = TABS[state.tab].presets;
+  const presetCounts =
+    useAsync(
+      async () => {
+        const totals = await Promise.all(
+          presets.map((p) =>
+            fetchRunOutputs(effectiveRunId, { ...toOutputsQuery({ ...state, search: "", filters: presetFilters(p) }), page_size: 1 }).then((r) => r.total)
+          )
+        );
+        return Object.fromEntries(presets.map((p, i) => [p.key, totals[i]]));
+      },
+      [effectiveRunId, state.tab],
+      Boolean(effectiveRunId) && presets.length > 1
+    ).data ?? null;
+
+  const replace = (next: ListState) => {
+    const query = paramsFromState(next, new URLSearchParams(Array.from(sp.entries()))).toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+  const onChange = (next: Partial<ListState>) => {
+    if (next.search !== undefined) setSearch(next.search);
+    const merged = { ...state, search, ...next, page: next.page ?? 1 };
+    // Search waits for the debounce below; everything else goes to the URL now
+    if (Object.keys(next).some((k) => k !== "search")) replace(merged);
+  };
+
+  useEffect(() => setSearch(state.search), [state.search]);
 
   useEffect(() => {
-    const timer = window.setTimeout(
-      () => setDebouncedSearch(filters.search),
-      SEARCH_DEBOUNCE_MS
-    );
+    if (search === state.search) return;
+    const timer = window.setTimeout(() => replace({ ...state, search, page: 1 }), SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [filters.search]);
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    const params = new URLSearchParams(Array.from(sp.entries()));
-    const nextFilters = filtersFromSearchParams(params);
-    const nextSort = sortFromSearchParams(params);
-    const nextPage = pageFromSearchParams(params);
-    setFilters((current) => (filtersEqual(current, nextFilters) ? current : nextFilters));
-    setSort((current) => (sortsEqual(current, nextSort) ? current : nextSort));
-    setPageNumber((current) => (current === nextPage ? current : nextPage));
-  }, [sp]);
-
-  const updateFilters = (nextFilters: CustomerFilters) => {
-    setFilters(nextFilters);
-    setPageNumber(1);
-
-    const params = new URLSearchParams(Array.from(sp.entries()));
-    FILTER_KEYS.forEach((key) => {
-      const value = nextFilters[key].trim();
-      if (value) {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-    });
-    params.delete("page");
-
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  };
-
-  const updateSort = (nextSort: CustomerSort | null) => {
-    setSort(nextSort);
-    setPageNumber(1);
-
-    const params = new URLSearchParams(Array.from(sp.entries()));
-    if (nextSort) {
-      params.set("sort", `${nextSort.key}:${nextSort.direction}`);
-    } else {
-      params.delete("sort");
-    }
-    params.delete("page");
-
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  };
-
-  /** Preset click: filters + sort in ONE router.replace (two sequential updates
-   *  would each rebuild from the stale URL and drop the other's params). */
-  const applyPreset = (nextFilters: CustomerFilters, nextSort: CustomerSort | null) => {
-    setFilters(nextFilters);
-    setSort(nextSort);
-    setPageNumber(1);
-
-    const params = new URLSearchParams(Array.from(sp.entries()));
-    FILTER_KEYS.forEach((key) => {
-      const value = nextFilters[key].trim();
-      if (value) {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-    });
-    if (nextSort) {
-      params.set("sort", `${nextSort.key}:${nextSort.direction}`);
-    } else {
-      params.delete("sort");
-    }
-    params.delete("page");
-
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  };
-
-  const updatePage = (nextPage: number) => {
-    const safePage = Math.max(1, nextPage);
-    setPageNumber(safePage);
-
-    const params = new URLSearchParams(Array.from(sp.entries()));
-    if (safePage > 1) {
-      params.set("page", String(safePage));
-    } else {
-      params.delete("page");
-    }
-
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  };
-
+  const queryKey = JSON.stringify([effectiveRunId, toOutputsQuery(state), state.page, reload]);
   useEffect(() => {
     if (!effectiveRunId) return;
     let alive = true;
     setPending(true);
     setError(null);
-    fetchRunOutputs(effectiveRunId, {
-      page: pageNumber,
-      page_size: PAGE_SIZE,
-      sort: sort ? `${sort.key}:${sort.direction}` : undefined,
-      search: debouncedSearch,
-      lifecycle_stage: filters.lifecycle_stage as OutputsQuery["lifecycle_stage"],
-      customer_value_tier: filters.customer_value_tier as OutputsQuery["customer_value_tier"],
-      churn_risk_level: filters.churn_risk_level as OutputsQuery["churn_risk_level"],
-      credit_urgency_level: filters.credit_urgency_level as OutputsQuery["credit_urgency_level"],
-    })
+    fetchRunOutputs(effectiveRunId, { ...toOutputsQuery(state), page: state.page, page_size: PAGE_SIZE })
       .then((result) => {
         if (!alive) return;
         const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
-        if (pageNumber > totalPages) {
-          updatePage(totalPages);
-          return;
-        }
-        setPage(result);
+        if (state.page > totalPages) return replace({ ...state, page: totalPages });
+        setData(result);
       })
       .catch((e: unknown) => alive && setError(getDisplayError(e, "เกิดข้อผิดพลาด")))
       .finally(() => alive && setPending(false));
     return () => {
       alive = false;
     };
-  }, [
-    effectiveRunId,
-    debouncedSearch,
-    filters.lifecycle_stage,
-    filters.customer_value_tier,
-    filters.churn_risk_level,
-    filters.credit_urgency_level,
-    pageNumber,
-    sort,
-  ]);
+  }, [queryKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!runsLoading && !run) {
+  if (!runsLoading && !effectiveRun) {
     return (
       <div className="px-4 pt-6 sm:px-6 lg:px-8">
         <EmptyState
@@ -258,40 +136,22 @@ function CustomersClientInner() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="px-4 pt-6 sm:px-6 lg:px-8">
-        <EmptyState title="โหลดรายชื่อลูกค้าไม่สำเร็จ" hint={error} />
-      </div>
-    );
-  }
-
-  if (runsLoading || !page) {
-    return (
-      <div className="space-y-5 px-4 pt-6 sm:px-6 lg:px-8">
-        <Skeleton className="h-11" />
-        <Skeleton className="h-11 w-2/3" />
-        <Skeleton className="h-[480px]" />
-      </div>
-    );
-  }
+  // Carried to the customer page so its back link returns to this exact view
+  const listQuery = paramsFromState(state, new URLSearchParams(effectiveRunId ? { run: effectiveRunId } : {})).toString();
 
   return (
     <CustomersView
-      rows={page.data}
-      total={page.total}
-      revenueAtRiskSum={page.revenue_at_risk_sum}
+      state={{ ...state, search }}
       summary={summary}
-      page={page.page}
-      pageSize={page.page_size}
-      pending={pending}
+      presetCounts={presetCounts}
       runId={effectiveRunId}
-      filters={filters}
-      sort={sort}
-      onFiltersChange={updateFilters}
-      onSortChange={updateSort}
-      onPresetApply={applyPreset}
-      onPageChange={updatePage}
+      cutoff={effectiveRun?.cutoff_date ?? null}
+      data={data}
+      pending={pending || runsLoading}
+      error={error}
+      onRetry={() => setReload((n) => n + 1)}
+      onChange={onChange}
+      customerHref={(accId) => `/customers/${accId}?${listQuery}`}
     />
   );
 }

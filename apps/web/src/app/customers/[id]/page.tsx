@@ -9,22 +9,24 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 type CustomerDetailSearchParams = {
   run?: string | string[];
-  lifecycle_stage?: string | string[];
+  tab?: string | string[];
   search?: string | string[];
   customer_value_tier?: string | string[];
   churn_risk_level?: string | string[];
   credit_urgency_level?: string | string[];
+  ever_paid?: string | string[];
   sort?: string | string[];
   page?: string | string[];
 };
 
 const CUSTOMER_LIST_QUERY_KEYS = [
   "run",
-  "lifecycle_stage",
+  "tab",
   "search",
   "customer_value_tier",
   "churn_risk_level",
   "credit_urgency_level",
+  "ever_paid",
   "sort",
   "page",
 ] as const;

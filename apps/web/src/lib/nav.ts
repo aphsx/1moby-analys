@@ -69,7 +69,7 @@ export function shouldShowRunSelector(pathname: string): boolean {
 }
 
 /** Pages that render their own PageHeader (with a finding and a primary action). */
-const OWN_HEADER_ROUTES = ["/"];
+const OWN_HEADER_ROUTES = ["/", "/customers"];
 
 /** The shell renders the page header unless the page owns it or is the full-height AI chat. */
 export function shellRendersPageHeader(pathname: string): boolean {
