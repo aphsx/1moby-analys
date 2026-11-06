@@ -58,7 +58,6 @@ function Avatar() {
 
 function MessageRow({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === "user";
-  const showTimestamp = msg.id !== "init";
   return (
     <div className={`flex items-end gap-2 min-w-0 ${isUser ? "flex-row-reverse" : ""}`}>
       {!isUser && <Avatar />}
@@ -74,11 +73,7 @@ function MessageRow({ msg }: { msg: ChatMsg }) {
         >
           <MarkdownLite text={msg.content} />
         </div>
-        {showTimestamp && (
-          <span className="text-[9.5px] text-[color:var(--ink-5)] px-1">
-            {formatTime(msg.ts)}
-          </span>
-        )}
+        <span className="text-[9.5px] text-[color:var(--ink-5)] px-1">{formatTime(msg.ts)}</span>
       </div>
     </div>
   );
@@ -349,9 +344,8 @@ export default function AIChatWidget() {
             </button>
           </div>
 
-          {/* Disclaimer */}
+          {/* Link to the full-page assistant */}
           <p className="text-[9.5px] text-[color:var(--ink-6)] text-center pb-2 px-4 leading-tight">
-            Chat API connected · no mock prediction data ·{" "}
             <Link
               href="/ai-chat"
               className="text-[color:var(--moby-500)] hover:underline"

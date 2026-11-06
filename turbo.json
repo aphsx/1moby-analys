@@ -5,9 +5,9 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "moby-dashboard#build": {
+    "@moby/web#build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "dev": {
       "cache": false,

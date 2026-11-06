@@ -8,6 +8,7 @@
  * separate data-sources section anymore.
  */
 
+import { type ModelVersionSummary, type PredictDataSource } from "@moby/types";
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -22,14 +23,10 @@ import {
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { Select } from "@/components/select";
 import { SectionCard } from "@/components/ui";
-import { uploadPredictDataFile, type PredictDataSource } from "@/lib/api";
-import {
-  createPredictionRun,
-  fetchModelVersions,
-  fetchPredictSuggestedCutoff,
-  type ModelVersionSummary,
-} from "@/lib/ml-api";
+import { uploadPredictDataFile } from "@/lib/api";
+import { createPredictionRun, fetchModelVersions, fetchPredictSuggestedCutoff } from "@/lib/ml-api";
 import { getDisplayError, getImportErrorMessage } from "@/lib/ui-error";
+import { useAsync } from "@/lib/use-async";
 import {
   defaultRunName,
   formatDate,
@@ -65,28 +62,23 @@ export function CreateRunPanel({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Per-run model selection. "" = use the production champion for that type.
-  const [versionsByType, setVersionsByType] = useState<Record<ModelType, ModelVersionSummary[]>>({
-    churn: [],
-    clv: [],
-    credit: [],
-  });
   const [overrides, setOverrides] = useState<Record<ModelType, string>>({
     churn: "",
     clv: "",
     credit: "",
   });
 
-  useEffect(() => {
-    let alive = true;
-    Promise.all(MODEL_TYPES.map((t) => fetchModelVersions(t).catch(() => [])))
-      .then(([churn, clv, credit]) => {
-        if (alive) setVersionsByType({ churn, clv, credit });
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // A model type whose versions fail to load just offers no overrides.
+  const versions = useAsync(
+    () => Promise.all(MODEL_TYPES.map((t) => fetchModelVersions(t).catch((): ModelVersionSummary[] => []))),
+    []
+  );
+  const [churnVersions, clvVersions, creditVersions] = versions.data ?? [[], [], []];
+  const versionsByType: Record<ModelType, ModelVersionSummary[]> = {
+    churn: churnVersions,
+    clv: clvVersions,
+    credit: creditVersions,
+  };
 
   useEffect(() => {
     if (sourceId && readySources.some((s) => s.id === sourceId)) return;

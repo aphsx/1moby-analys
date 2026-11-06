@@ -1,13 +1,12 @@
 /**
- * Realized-outcome loop (docs/ML-CALCULATIONS-TH.md §12.5).
+ * Realized-outcome loop.
  *
  * After a prediction run's horizon has elapsed and newer clean data covers the
  * window, the backfill job rebuilds actual labels (same definitions as
  * training) and persists realized metrics as ml_model_evaluations rows with
  * evaluation_type='production_holdout' linked to the run.
  */
-/** The three served ML models (lifecycle is rule-based and has no outcome). */
-export type RealizedModelType = "churn" | "clv" | "credit";
+import type { ModelType } from "./enums";
 
 /** Calibration curve stored alongside realized churn metrics. */
 export interface RealizedCalibration {
@@ -40,7 +39,7 @@ export interface RealizedOutcomeContext {
 
 /** One model's realized (production_holdout) evaluation for a prediction run. */
 export interface RealizedOutcome {
-  model_type: RealizedModelType;
+  model_type: ModelType;
   model_version_id: string;
   /** Version string of the served model (null if the version row was deleted). */
   model_version: string | null;
@@ -63,14 +62,6 @@ export interface RealizedOutcomesResponse {
   /** True once the backfill job has persisted at least one realized metric. */
   evaluated: boolean;
   outcomes: RealizedOutcome[];
-}
-
-/** POST /outcome-backfill */
-export interface OutcomeBackfillRequest {
-  /** Measure one specific completed run; omit to backfill every eligible run. */
-  prediction_run_id?: string;
-  /** Re-measure runs that already have production_holdout evaluations. */
-  force?: boolean;
 }
 
 export interface OutcomeBackfillResponse {

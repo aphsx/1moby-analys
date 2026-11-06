@@ -2,16 +2,14 @@ import Elysia, { t } from "elysia";
 import { asc, eq, and, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
-import { requireUser } from "../../lib/auth-middleware";
-import { denyNotFound } from "../../lib/access-control";
-import { UUID_RE } from "../../lib/constants";
+import { requireUser } from "../../lib/http/auth-middleware";
 import {
-  fetchRun,
   mapOutput,
-  requireRunFound,
-  SORT_COLUMNS,
   type OutputsQueryParams,
-} from "./_helpers";
+  requireOutput,
+  requireRun,
+  SORT_COLUMNS,
+} from "../../lib/ml/prediction-runs";
 
 function parseSort(sort: string | undefined): SQL {
   const [field, dir] = (sort ?? "priority_score:desc").split(":");
@@ -43,15 +41,12 @@ export const outputsRoutes = new Elysia()
   .use(requireUser)
   .get(
     "/:id/outputs",
-    async ({ params, query, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Prediction run not found");
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
+    async ({ params, query }) => {
+      const run = await requireRun(params.id);
 
       const page = Math.max(1, query.page ?? 1);
       const pageSize = Math.min(200, Math.max(1, query.page_size ?? 8));
-      const where = outputFilters(run!.id, query);
+      const where = outputFilters(run.id, query);
 
       const [[{ total }], rows] = await Promise.all([
         db
@@ -70,7 +65,7 @@ export const outputsRoutes = new Elysia()
       return { total, page, page_size: pageSize, data: rows.map(mapOutput) };
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: "uuid" }) }),
       query: t.Object({
         page: t.Optional(t.Numeric()),
         page_size: t.Optional(t.Numeric()),
@@ -88,26 +83,9 @@ export const outputsRoutes = new Elysia()
   )
   .get(
     "/:id/outputs/:acc_id",
-    async ({ params, set }) => {
-      const accId = Number(params.acc_id);
-      if (!UUID_RE.test(params.id) || !Number.isInteger(accId)) {
-        return denyNotFound(set, "Prediction output not found");
-      }
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
-      const [row] = await db
-        .select()
-        .from(mlPredictionOutputs)
-        .where(
-          and(
-            eq(mlPredictionOutputs.predictionRunId, params.id),
-            eq(mlPredictionOutputs.accId, accId)
-          )
-        )
-        .limit(1);
-      if (!row) return denyNotFound(set, "Prediction output not found");
-      return mapOutput(row);
+    async ({ params }) => {
+      await requireRun(params.id);
+      return mapOutput(await requireOutput(params.id, params.acc_id));
     },
-    { params: t.Object({ id: t.String(), acc_id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }), acc_id: t.String() }) }
   );

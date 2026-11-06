@@ -1,9 +1,42 @@
 /**
  * Canonical enum-like string constants shared across web, api, and ml.
- * These MUST stay in sync with apps/ml/src/constants.py.
- * Single source of truth — previously duplicated between apps/api/src/lib/constants.ts
- * and apps/web/src/lib/mlApi.ts.
+ * These MUST stay in sync with apps/ml/src/constants.py
+ * (apps/ml/scripts/verify_constants_sync.py checks it in CI).
  */
+
+/** The three served ML models. Lifecycle is rule-based, not a model type. */
+export const MODEL_TYPES = ["churn", "clv", "credit"] as const;
+export type ModelType = (typeof MODEL_TYPES)[number];
+
+/** A Data Source's import lifecycle (`*_data_sources.import_status`). */
+export const IMPORT_STATUS = {
+  PENDING: "pending",
+  IMPORTING: "importing",
+  CLEANING: "cleaning",
+  READY: "ready",
+  FAILED: "failed",
+} as const;
+export type ImportStatus = (typeof IMPORT_STATUS)[keyof typeof IMPORT_STATUS];
+
+/** `ml_model_versions.status`. */
+export const MODEL_VERSION_STATUS = {
+  CANDIDATE: "candidate",
+  PRODUCTION: "production",
+  ARCHIVED: "archived",
+} as const;
+export type ModelVersionStatus = (typeof MODEL_VERSION_STATUS)[keyof typeof MODEL_VERSION_STATUS];
+
+/** The `ml_model_aliases.alias` that marks a Model Type's Champion. */
+export const MODEL_ALIAS = { PRODUCTION: "production" } as const;
+
+/** `ml_model_evaluations.evaluation_type`. */
+export const EVALUATION_TYPE = {
+  HOLDOUT: "holdout",
+  BACKTEST: "backtest",
+  BASELINE: "baseline",
+  PRODUCTION_HOLDOUT: "production_holdout",
+} as const;
+export type EvaluationType = (typeof EVALUATION_TYPE)[keyof typeof EVALUATION_TYPE];
 
 export const RUN_STATUS = {
   PENDING: "pending",

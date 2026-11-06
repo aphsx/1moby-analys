@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -66,10 +67,10 @@ def parse_args() -> ProfileConfig:
 
 
 def db_url() -> str:
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        raise RuntimeError("DATABASE_URL environment variable is required.")
-    return url
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from src.training.data import database_url
+
+    return database_url()
 
 
 def connect():

@@ -7,11 +7,12 @@
  * champions owned by the run are auto-repointed or cleared when safe).
  */
 
+import { type TrainingRun } from "@moby/types";
 import { useState } from "react";
 import { History, RefreshCw, Trash2 } from "lucide-react";
 import { StatusDialog } from "@/components/status-dialog";
 import { EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill } from "@/components/ui";
-import { deleteTrainingRun, type TrainingRun } from "@/lib/ml-api";
+import { deleteTrainingRun } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { formatRelative } from "@/features/runs/runs-utils";
 import {

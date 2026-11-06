@@ -13,7 +13,6 @@
  *                     openai default : https://api.openai.com/v1
  *                     ollama default : http://localhost:11434
  *   LLM_MODEL       Chat model  (e.g. gpt-4o, llama-3.3-70b, qwen3.5:397b-cloud)
- *   LLM_EMBED_MODEL Embedding model name (for future RAG)
  *
  * Legacy Ollama vars still work as fallbacks so existing .env files need no changes:
  *   OLLAMA_API_KEY → LLM_API_KEY   OLLAMA_HOST → LLM_BASE_URL   OLLAMA_MODEL → LLM_MODEL
@@ -26,21 +25,18 @@ export type LLMConfig = {
   apiKey: string;
   baseUrl: string;
   model: string;
-  embedModel: string;
 };
 
-type ProviderDefaults = { baseUrl: string; model: string; embedModel: string };
+type ProviderDefaults = { baseUrl: string; model: string };
 
 const PROVIDER_DEFAULTS: Record<LLMProvider, ProviderDefaults> = {
   openai: {
     baseUrl: "https://api.openai.com/v1",
     model: "gpt-4o",
-    embedModel: "text-embedding-3-small",
   },
   ollama: {
     baseUrl: "http://localhost:11434",
     model: "qwen3.5:397b-cloud",
-    embedModel: "nomic-embed-text",
   },
 };
 
@@ -65,9 +61,8 @@ export function getLLMConfig(): LLMConfig {
     (provider === "ollama" ? process.env.OLLAMA_MODEL?.trim() ?? "" : "") ||
     d.model;
 
-  const embedModel = process.env.LLM_EMBED_MODEL?.trim() || d.embedModel;
 
-  return { provider, apiKey, baseUrl, model, embedModel };
+  return { provider, apiKey, baseUrl, model };
 }
 
 /** True when the provider looks configured enough to attempt a call. */

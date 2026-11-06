@@ -2,11 +2,11 @@
  * Run-insight context — maps shared RunAggregates to the RunInsightSignals
  * shape expected by the AI base-summary prompt.
  *
- * Uses fetchRunAggregates (apps/api/src/lib/run-aggregates.ts) so the
+ * Uses fetchRunAggregates (apps/api/src/lib/ml/run-aggregates.ts) so the
  * insight service and the summary route never drift on aggregation logic.
  */
-import { fetchRunAggregates } from "../run-aggregates";
-import type { RiskLevel, UrgencyLevel, ValueTier } from "../ml-contract";
+import { type RiskLevel, type UrgencyLevel, type ValueTier } from "@moby/types";
+import { fetchRunAggregates } from "../ml/run-aggregates";
 
 export type RunInsightCohort = {
   value_tier: ValueTier;

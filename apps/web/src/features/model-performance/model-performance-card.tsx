@@ -1,8 +1,8 @@
 "use client";
 
+import { type ModelPerfEntry } from "@moby/types";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-import type { ModelPerfEntry } from "@/lib/ml-api";
 import { MetricLabel } from "./metric-help";
 import {
   formatBaselineName,

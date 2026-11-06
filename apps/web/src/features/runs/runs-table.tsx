@@ -5,14 +5,15 @@
  * Polling while in_progress lives in RunsView.
  */
 
+import { type PredictionRun } from "@moby/types";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, ListChecks, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronRight, ListChecks, RefreshCw, Trash2 } from "lucide-react";
 import { StatusDialog } from "@/components/status-dialog";
 import {
   EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill,
 } from "@/components/ui";
-import { deletePredictionRun, retryPredictionRun, type PredictionRun } from "@/lib/ml-api";
+import { deletePredictionRun, retryPredictionRun } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { useRunStore } from "@/stores/run-store";
 import { formatRelative, runStatusLabel, runStatusTone } from "./runs-utils";
@@ -197,6 +198,15 @@ function RunRow({
                 title={run.error_message}
               >
                 {run.error_message}
+              </span>
+            )}
+            {run.status === "completed" && run.warnings.length > 0 && (
+              <span
+                className="flex max-w-[220px] items-center gap-1 truncate text-[11px] text-amber-700"
+                title={run.warnings.join("\n")}
+              >
+                <AlertTriangle size={11} className="shrink-0" />
+                {run.warnings[0]}
               </span>
             )}
           </div>

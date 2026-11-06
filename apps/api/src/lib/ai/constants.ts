@@ -18,7 +18,6 @@ export const SSE_EVENT = {
   DONE: "done",
   ERROR: "error",
 } as const;
-export type SseEventName = (typeof SSE_EVENT)[keyof typeof SSE_EVENT];
 
 // ── Planner step ids (stable; UI may key labels/icons off these) ─────────────
 export const STEP = {

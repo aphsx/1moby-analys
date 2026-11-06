@@ -1,30 +1,31 @@
+import {
+  type LifecycleStage,
+  MODEL_ALIAS,
+  type RunStatus,
+  type RunSummary,
+  TOP_PRIORITY_LIMIT,
+  type ValueTier,
+} from "@moby/types";
 import Elysia, { t } from "elysia";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client";
-import { mlModelAliases, mlModelVersions, mlPredictionOutputs, mlPredictionRuns, predictDataSources, user } from "../../db/schema";
-import { requireUser } from "../../lib/auth-middleware";
-import { denyNotFound } from "../../lib/access-control";
-import { UUID_RE } from "../../lib/constants";
+import { mlModelAliases, mlModelVersions, mlPredictionOutputs } from "../../db/schema";
+import { requireUser } from "../../lib/http/auth-middleware";
 import {
   DEFAULT_RISK_THRESHOLDS,
   EMPTY_MODEL_VERSIONS,
   monthKeysBeforeCutoff,
   num,
-  TOP_PRIORITY_LIMIT,
-  type LifecycleStage,
-  type RunStatus,
-  type RunSummary,
-  type ValueTier,
 } from "../../lib/ml-contract";
-import { fetchRunAggregates } from "../../lib/run-aggregates";
-import { runSelect, type RunRow } from "./_helpers";
+import { fetchRunAggregates } from "../../lib/ml/run-aggregates";
+import { requireRun, type RunRow } from "../../lib/ml/prediction-runs";
 
 async function churnThresholds(): Promise<{ medium: number; high: number; critical: number }> {
   const rows = await db
     .select({ modelCardJson: mlModelVersions.modelCardJson })
     .from(mlModelAliases)
     .innerJoin(mlModelVersions, eq(mlModelAliases.modelVersionId, mlModelVersions.id))
-    .where(and(eq(mlModelAliases.alias, "production"), eq(mlModelAliases.modelType, "churn")))
+    .where(and(eq(mlModelAliases.alias, MODEL_ALIAS.PRODUCTION), eq(mlModelAliases.modelType, "churn")))
     .limit(1);
   const card = rows[0]?.modelCardJson as {
     thresholds?: { medium?: number; high?: number; critical?: number };
@@ -58,7 +59,7 @@ async function monthlyActual(
   }));
 }
 
-async function buildSummary(run: RunRow & { modelVersionsJson: unknown }): Promise<RunSummary> {
+async function buildSummary(run: RunRow): Promise<RunSummary> {
   const o = mlPredictionOutputs;
   const inRun = eq(o.predictionRunId, run.id);
 
@@ -123,20 +124,8 @@ export const summaryRoutes = new Elysia()
   .use(requireUser)
   .get(
     "/:id/summary",
-    async ({ params, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Prediction run not found");
-      const [row] = await db
-        .select({
-          ...runSelect,
-          modelVersionsJson: mlPredictionRuns.modelVersionsJson,
-        })
-        .from(mlPredictionRuns)
-        .leftJoin(predictDataSources, eq(mlPredictionRuns.predictSourceId, predictDataSources.id))
-        .leftJoin(user, eq(mlPredictionRuns.createdBy, user.id))
-        .where(eq(mlPredictionRuns.id, params.id))
-        .limit(1);
-      if (!row) return denyNotFound(set, "Prediction run not found");
-      return buildSummary(row);
+    async ({ params }) => {
+      return buildSummary(await requireRun(params.id));
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   );

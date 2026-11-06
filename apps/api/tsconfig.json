@@ -11,6 +11,6 @@
       "@moby/types": ["../../packages/types/src/index.ts"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "scripts/**/*"],
   "exclude": ["node_modules"]
 }

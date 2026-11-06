@@ -1,3 +1,5 @@
+import type { ModelType } from "./enums";
+
 export interface SplitMetrics {
   split: "validation" | "test" | "backtest_avg";
   metrics: Record<string, number>;
@@ -44,7 +46,7 @@ export interface ModelPerfRealized {
 }
 
 export interface ModelPerfEntry {
-  model_type: "lifecycle" | "churn" | "clv" | "credit";
+  model_type: "lifecycle" | ModelType;
   method: string;
   algorithm: string;
   version: string | null;

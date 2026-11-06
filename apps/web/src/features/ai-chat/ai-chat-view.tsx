@@ -1,5 +1,6 @@
 "use client";
 
+import { type PredictionRun } from "@moby/types";
 import {
   useState, useRef, useEffect, useCallback, useMemo,
   type ChangeEvent, type KeyboardEvent,
@@ -12,10 +13,9 @@ import {
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { TypingDots } from "@/components/chat/typing-dots";
 import { Select } from "@/components/select";
-import { fetchPredictionRuns, type PredictionRun } from "@/lib/ml-api";
-import {
-  useChatStore, formatTime, type ChatEvidence, type Conversation,
-} from "@/stores/chat-store";
+import { formatTime } from "@/lib/format";
+import { useChatStore, type ChatEvidence, type Conversation } from "@/stores/chat-store";
+import { useActiveRun } from "@/stores/run-store";
 
 const VIEWPORT = "h-full";
 
@@ -109,9 +109,9 @@ function ConversationItem({
           </div>
         )}
       </div>
-      {conv.runId && conv.runName && (
+      {conv.run_id && conv.run_name && (
         <div className="pl-[21px]">
-          <RunBadge name={conv.runName} />
+          <RunBadge name={conv.run_name} />
         </div>
       )}
     </div>
@@ -142,7 +142,7 @@ function Sidebar({
     const q = query.trim().toLowerCase();
     return conversations
       .filter((c) => c.archived === showArchived)
-      .filter((c) => !q || c.title.toLowerCase().includes(q) || (c.runName ?? "").toLowerCase().includes(q));
+      .filter((c) => !q || c.title.toLowerCase().includes(q) || (c.run_name ?? "").toLowerCase().includes(q));
   }, [conversations, showArchived, query]);
 
   return (
@@ -399,19 +399,11 @@ export function AIChatView() {
 
   const [input, setInput] = useState("");
   const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
-  const [runs, setRuns] = useState<PredictionRun[]>([]);
+  const { runs } = useActiveRun();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
-
-  useEffect(() => {
-    let alive = true;
-    fetchPredictionRuns()
-      .then((all) => alive && setRuns(all.filter((r) => r.status === "completed")))
-      .catch(() => null);
-    return () => { alive = false; };
-  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -448,8 +440,8 @@ export function AIChatView() {
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
   const showMessages = messages.length > 0 || streaming !== null;
-  const statusLine = activeConv?.runId && activeConv.runName
-    ? `Run “${activeConv.runName}”`
+  const statusLine = activeConv?.run_id && activeConv.run_name
+    ? `Run “${activeConv.run_name}”`
     : config?.configured
       ? `${config.provider} · ${config.model}`
       : "ตั้งค่า LLM ก่อนใช้งาน";
@@ -503,7 +495,7 @@ export function AIChatView() {
             {!activeId ? (
               <NoConversation onCreate={() => createConversation()} />
             ) : !showMessages ? (
-              <EmptyState onPrompt={(p) => handleSend(p)} runName={activeConv?.runName ?? null} />
+              <EmptyState onPrompt={(p) => handleSend(p)} runName={activeConv?.run_name ?? null} />
             ) : (
               <div className="space-y-5">
                 {messages.map((msg) => (

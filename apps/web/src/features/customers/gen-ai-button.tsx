@@ -1,8 +1,8 @@
 "use client";
 
+import { type PredictionOutput } from "@moby/types";
 import type { MouseEvent } from "react";
 import { Loader2, Sparkles } from "lucide-react";
-import type { PredictionOutput } from "@/lib/ml-api";
 import { isCustomerAiGenerated, isCustomerAiGenerating } from "./customer-ai";
 
 type GenAiButtonProps = {

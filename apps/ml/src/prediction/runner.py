@@ -1,4 +1,4 @@
-"""Prediction run executor (see docs/ML-CALCULATIONS-TH.md §13 — output contract).
+"""Prediction run executor.
 
 Loads `predict_clean_*`, runs the production champions (churn / clv / credit)
 through the same feature contract used at training time, computes derived
@@ -205,6 +205,12 @@ def run_prediction(prediction_run_id: str) -> None:
         _run_prediction_inner(prediction_run_id)
     except Exception as exc:  # noqa: BLE001 - §6.8: never leave a run in_progress.
         logger.exception("prediction run %s failed", prediction_run_id)
+        # Outputs may already be committed (the post-check runs after the insert); a failed
+        # run must not leave rows that the outputs routes and the AI SQL agent would read.
+        try:
+            _delete_outputs(prediction_run_id)
+        except Exception:  # noqa: BLE001 - the run is still marked failed below.
+            logger.exception("could not delete outputs of failed prediction run %s", prediction_run_id)
         _update_run(
             prediction_run_id,
             status=RunStatus.FAILED,
@@ -253,7 +259,7 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
                 )
         champions[model_type] = {
             **selected,
-            "bundle": load_artifacts(selected["artifact_path"]),
+            "bundle": load_artifacts(selected["artifact_path"], selected["artifact_checksum"]),
         }
 
     # ── Gates on the predict source ───────────────────────────────
@@ -329,9 +335,12 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
     ]
 
     progress("churn explanations (SHAP)", 45)
-    frame["churn_factors"] = _churn_shap_factors(
+    churn_factors, shap_error = _churn_shap_factors(
         churn_bundle, churn_features, frame, churn_mask
     )
+    frame["churn_factors"] = churn_factors
+    # Shown on the run so a completed run with empty churn factors isn't a silent mystery.
+    warnings = [f"Churn explanations unavailable: {shap_error}"] if shap_error else []
 
     # ── CLV + p_alive ─────────────────────────────────────────────
     progress("clv model", 55)
@@ -384,7 +393,7 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
         error_message=None,
         total_customers=int(len(frame)),
         model_versions=model_versions,
-        progress={"step": "completed", "pct": 100},
+        progress={"step": "completed", "pct": 100, "warnings": warnings},
         mark_finished=True,
     )
     logger.info(
@@ -423,12 +432,12 @@ def _churn_shap_factors(
     features_raw: pd.DataFrame,
     frame: pd.DataFrame,
     churn_mask: np.ndarray,
-) -> list[list[dict[str, Any]] | None]:
-    """Top-5 SHAP factors per eligible customer (§3.4)."""
+) -> tuple[list[list[dict[str, Any]] | None], str | None]:
+    """Top-5 SHAP factors per eligible customer (§3.4), plus the error if SHAP failed."""
 
     factors: list[list[dict[str, Any]] | None] = [None] * len(frame)
     if not churn_mask.any():
-        return factors
+        return factors, None
     try:
         x = transform_features(features_raw[churn_mask], churn_bundle["preprocessor"])
         model = churn_bundle["model"]
@@ -458,10 +467,10 @@ def _churn_shap_factors(
                 "per-customer churn_factors will be null (see model_card feature_importance)",
                 type(model).__name__,
             )
-            return factors
+            return factors, None
     except Exception as exc:  # noqa: BLE001 - explainability failure must not block the run.
         logger.warning("SHAP factors unavailable: %s", exc)
-        return factors
+        return factors, f"{type(exc).__name__}: {exc}"
 
     feature_names = list(x.columns)
     raw_values = features_raw[churn_mask].reset_index(drop=True)
@@ -478,7 +487,7 @@ def _churn_shap_factors(
             }
             for j in top
         ]
-    return factors
+    return factors, None
 
 
 def _blend_clv_tail(
@@ -1156,6 +1165,14 @@ OUTPUT_COLUMNS = [
     "model_versions_json",
     "profile_snapshot_json",
 ]
+
+
+def _delete_outputs(prediction_run_id: str) -> None:
+    with create_engine(database_url()).begin() as conn:
+        conn.execute(
+            text("DELETE FROM ml_prediction_outputs WHERE prediction_run_id = CAST(:run_id AS UUID)"),
+            {"run_id": prediction_run_id},
+        )
 
 
 def _replace_outputs(prediction_run_id: str, rows: list[dict[str, Any]]) -> None:

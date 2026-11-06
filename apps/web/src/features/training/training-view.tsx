@@ -1,13 +1,14 @@
 "use client";
 /**
- * Model training surface (redesigned). Two sections only:
- *   1. TrainPanel       — pick/upload a dataset → Train (cutoff/horizon in Advanced)
- *   2. ModelStatusCards — production champion + latest result + version management
- * This view owns all state: data sources (load/upload/select/delete) and training
- * runs (create/poll/suggested cutoff). The old upload section, dataset table,
- * training-history table, result cards, and version section are gone.
+ * Model Training page:
+ *   1. TrainPanel           — pick/upload a Train Data Source → Train (cutoff/horizon in Advanced)
+ *   2. ModelStatusCards     — each Model Type's Champion, latest result, version management
+ *   3. TrainingHistoryTable — past Training Runs
+ * This view owns all state: Data Sources (load/upload/select/delete) and Training Runs
+ * (create/poll/suggested cutoff).
  */
 
+import { type RunStatus, type TrainDataSource, type TrainingRun } from "@moby/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { StatusDialog } from "@/components/status-dialog";
@@ -16,27 +17,16 @@ import {
   deleteTrainDataSource,
   fetchTrainDataSources,
   uploadTrainDataFileWithProgress,
-  type TrainDataSource,
 } from "@/lib/api";
-import {
-  createTrainingRun,
-  fetchTrainingRuns,
-  fetchTrainSuggestedCutoff,
-  type RunStatus,
-  type TrainingRun,
-} from "@/lib/ml-api";
+import { createTrainingRun, fetchTrainingRuns, fetchTrainSuggestedCutoff } from "@/lib/ml-api";
+import { isActiveRunStatus, RUN_POLL_MS } from "@/lib/run-status";
 import { getDisplayError, getImportErrorMessage } from "@/lib/ui-error";
+import { useAsync } from "@/lib/use-async";
 import { ModelStatusCards } from "./model-status-cards";
 import { TrainPanel } from "./train-panel";
 import { TrainingHistoryTable } from "./training-history-table";
 import { getTimestamp, wait } from "./training-utils";
 import { promotedSummary } from "./training-run-utils";
-
-const POLL_INTERVAL_MS = 3_000;
-
-function isActiveRunStatus(status: RunStatus) {
-  return status === "in_progress" || status === "pending";
-}
 
 /** Sort newest-first and fire completion/failure toasts on status transitions. */
 function applyTrainingRuns(
@@ -100,8 +90,6 @@ export function TrainingView() {
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [creating, setCreating] = useState(false);
   const [trainError, setTrainError] = useState<string | null>(null);
-  const [suggestedCutoff, setSuggestedCutoff] = useState<string | null>(null);
-  const [latestDataDate, setLatestDataDate] = useState<string | null>(null);
   const knownStatusesRef = useRef<Map<string, RunStatus>>(new Map());
 
   const loadSources = useCallback(async () => {
@@ -148,26 +136,15 @@ export function TrainingView() {
     setSelectedSourceId(sortedReady[0]?.id ?? null);
   }, [selectedSourceId, sortedReady]);
 
-  // Suggested cutoff for the selected dataset.
-  const selectedSourceId2 = selectedSource?.id ?? null;
-  useEffect(() => {
-    setSuggestedCutoff(null);
-    setLatestDataDate(null);
-    if (!selectedSourceId2) return;
-    let alive = true;
-    fetchTrainSuggestedCutoff(selectedSourceId2)
-      .then(({ suggested_cutoff, latest_data_date }) => {
-        if (!alive) return;
-        setSuggestedCutoff(suggested_cutoff);
-        setLatestDataDate(latest_data_date);
-      })
-      .catch(() => {
-        // TrainPanel falls back to its local default when no suggestion is available.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [selectedSourceId2]);
+  // Suggested cutoff for the selected source. Without one, TrainPanel falls back to its local default.
+  const activeSourceId = selectedSource?.id ?? null;
+  const suggestion = useAsync(
+    () => fetchTrainSuggestedCutoff(activeSourceId!),
+    [activeSourceId],
+    Boolean(activeSourceId)
+  );
+  const suggestedCutoff = suggestion.data?.suggested_cutoff ?? null;
+  const latestDataDate = suggestion.data?.latest_data_date ?? null;
 
   // Training runs — load + poll while active.
   const loadRuns = useCallback(async () => {
@@ -185,12 +162,10 @@ export function TrainingView() {
     void loadRuns();
   }, [loadRuns]);
 
-  const hasActiveRun = runs.some(
-    (run) => run.status === "in_progress" || run.status === "pending"
-  );
+  const hasActiveRun = runs.some((run) => isActiveRunStatus(run.status));
   useEffect(() => {
     if (!hasActiveRun) return;
-    const timer = setInterval(() => void loadRuns(), POLL_INTERVAL_MS);
+    const timer = setInterval(() => void loadRuns(), RUN_POLL_MS);
     return () => clearInterval(timer);
   }, [hasActiveRun, loadRuns]);
 

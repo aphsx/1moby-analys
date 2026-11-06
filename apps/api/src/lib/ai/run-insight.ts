@@ -9,32 +9,24 @@
  *
  * Like the per-customer overview, this is descriptive — it explains WHAT the
  * base looks like and WHAT is notable, and intentionally prescribes nothing
- * (OUTPUT-CONTRACT §5.2 removed the action workflow). The human decides.
+ * (there is no action workflow). The human decides.
  *
  * One summary per run, cached in ml_prediction_runs.cohort_insight_json and
  * regenerated on demand. ~1 LLM call per run, not per customer — cheap at scale.
  */
+import type { RunInsight } from "@moby/types";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
+import { conflict, HttpError } from "../http/errors";
 import { mlPredictionRuns } from "../../db/schema";
 import { buildRunInsightSignals, type RunInsightSignals } from "./run-insight-context";
 import { complete, type ChatMessage } from "./llm-client";
 import { getLLMConfig, isLLMConfigured } from "./llm-config";
 import { renderGuardrails } from "./safety";
 
-export type RunInsight = {
-  run_id: string;
-  ai_status: "not_requested" | "completed" | "failed";
-  ai_summary: string | null;
-  ai_model: string | null;
-  ai_generated_at: string | null;
-};
-
 type InsightCache =
   | { status: "completed"; summary: string; model: string; generated_at: string }
   | { status: "failed"; summary: null; model: null; generated_at: string };
-
-type ServiceError = { status: number; body: { message: string; code?: string } };
 
 const SYSTEM_PROMPT = `คุณคือนักวิเคราะห์ข้อมูลลูกค้าอาวุโสของบริษัท 1Moby (B2B SaaS ด้านการส่ง SMS/Email)
 
@@ -148,7 +140,7 @@ export async function getRunInsight(runId: string): Promise<RunInsight> {
 export async function createRunInsight(
   runId: string,
   force: boolean
-): Promise<RunInsight | ServiceError> {
+): Promise<RunInsight> {
   const [row] = await db
     .select({ cache: mlPredictionRuns.cohortInsightJson })
     .from(mlPredictionRuns)
@@ -156,14 +148,11 @@ export async function createRunInsight(
     .limit(1);
   const existing = (row?.cache as InsightCache | null) ?? null;
   if (existing?.summary && !force) {
-    return { status: 409, body: { message: "Run insight already exists", code: "insight_already_exists" } };
+    throw conflict("Run insight already exists", "INSIGHT_ALREADY_EXISTS");
   }
 
   if (!isLLMConfigured()) {
-    return {
-      status: 503,
-      body: { message: "กรุณาตั้งค่า LLM_API_KEY (หรือ OLLAMA_API_KEY) ใน .env ก่อนใช้ Gen AI" },
-    };
+    throw new HttpError(503, "กรุณาตั้งค่า LLM_API_KEY (หรือ OLLAMA_API_KEY) ใน .env ก่อนใช้ Gen AI");
   }
 
   try {
@@ -193,6 +182,6 @@ export async function createRunInsight(
       .update(mlPredictionRuns)
       .set({ cohortInsightJson: { status: "failed", summary: null, model: null, generated_at: new Date().toISOString() } })
       .where(eq(mlPredictionRuns.id, runId));
-    return { status: 500, body: { message: (e as Error).message || "Failed to generate run insight" } };
+    throw new HttpError(500, (e as Error).message || "Failed to generate run insight");
   }
 }

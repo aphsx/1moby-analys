@@ -1,10 +1,9 @@
 "use client";
 
+import { type RunSummary, TOP_PRIORITY_LIMIT } from "@moby/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/format";
-import type { RunSummary } from "@/lib/ml-api";
-import { TOP_PRIORITY_LIMIT } from "@/lib/ml-api";
 import {
   LifecycleRowPill,
   MetricCell,

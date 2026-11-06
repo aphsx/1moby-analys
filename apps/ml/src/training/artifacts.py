@@ -23,8 +23,10 @@ def models_dir() -> Path:
 
 
 def artifact_dir(model_type: str, version: str) -> Path:
+    """Create a new version's folder. Fails if it exists, so a version's files are never overwritten."""
     target = models_dir() / model_type / version
-    target.mkdir(parents=True, exist_ok=True)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.mkdir()
     return target
 
 
@@ -75,16 +77,26 @@ def save_artifacts(
     return f"{model_type}/{version}", checksum
 
 
-def load_artifacts(artifact_path: str) -> dict[str, Any]:
+def load_artifacts(artifact_path: str, expected_checksum: str | None = None) -> dict[str, Any]:
     """Load model + companions; raises when files are missing/corrupt.
 
-    Accepts a MODEL_DIR-relative path (preferred) or a legacy absolute path.
+    Accepts a MODEL_DIR-relative path (preferred) or a legacy absolute path. With
+    `expected_checksum` (the registry's `artifact_checksum`), model.pkl must hash to it
+    before it is unpickled, so a lost, partial or swapped file fails loudly.
     """
 
     target = Path(artifact_path)
     if not target.is_absolute():
         target = models_dir() / target
-    with open(target / "model.pkl", "rb") as handle:
+    model_path = target / "model.pkl"
+    if expected_checksum is not None:
+        actual = hashlib.sha256(model_path.read_bytes()).hexdigest()
+        if actual != expected_checksum:
+            raise RuntimeError(
+                f"model.pkl for {artifact_path} does not match the registry checksum "
+                f"(expected {expected_checksum[:12]}…, got {actual[:12]}…)"
+            )
+    with open(model_path, "rb") as handle:
         model_object = dill.load(handle)
 
     calibrator = None

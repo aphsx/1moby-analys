@@ -2,8 +2,7 @@
 
 import Image from "next/image";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
-
-export type StatusDialogTone = "success" | "error" | "warning";
+import type { StatusDialogTone } from "@/stores/status-dialog-store";
 
 type StatusDialogProps = {
   open: boolean;

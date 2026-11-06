@@ -1,8 +1,8 @@
 /**
- * Drizzle schema reflects the single PostgreSQL bootstrap:
- *   db/init/001_schema.sql creates auth, train/predict, and ml_* tables.
+ * Drizzle schema reflects the PostgreSQL schema built by the migrations:
+ *   db/migrations/ creates auth, train/predict, and ml_* tables.
  *
- * DO NOT run drizzle-kit generate or push — edit the bootstrap schema deliberately.
+ * DO NOT run drizzle-kit generate or push — add a migration, then `bun run db:introspect`.
  * This file is for the query builder only.
  */
 import {
@@ -346,7 +346,7 @@ export const predictCleanUsage = pgTable(
   ]
 );
 
-// ── [NEW] ML v2 — training, model registry, evaluation, prediction outputs ──
+// ── ML v2 — training, model registry, evaluation, prediction outputs ──
 
 export const mlTrainingRuns = pgTable(
   "ml_training_runs",
@@ -418,7 +418,6 @@ export const mlModelVersions = pgTable(
     labelDefinitionJson: jsonb("label_definition_json"),
     trainingDataSnapshotJson: jsonb("training_data_snapshot_json"),
     modelCardJson: jsonb("model_card_json"),
-    modelCardPath: text("model_card_path"),
     isActive: boolean("is_active").notNull().default(false),
     activatedAt: timestamp("activated_at", { withTimezone: true }),
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
@@ -542,7 +541,7 @@ export const mlModelEvaluations = pgTable(
     trainingRunId: uuid("training_run_id").notNull().references(() => mlTrainingRuns.id, {
       onDelete: "cascade",
     }),
-    // Realized-outcome loop (TRAINING-PIPELINE §15): set on production_holdout rows.
+    // Realized-outcome loop: set on production_holdout rows.
     predictionRunId: uuid("prediction_run_id").references(() => mlPredictionRuns.id, {
       onDelete: "cascade",
     }),
@@ -560,9 +559,7 @@ export const mlModelEvaluations = pgTable(
     calibrationJson: jsonb("calibration_json"),
     liftTableJson: jsonb("lift_table_json"),
     featureImportanceJson: jsonb("feature_importance_json"),
-    errorAnalysisJson: jsonb("error_analysis_json"),
     businessMetricsJson: jsonb("business_metrics_json"),
-    artifactPath: text("artifact_path"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`NOW()`),
   },
   (t) => [
@@ -633,7 +630,7 @@ export const mlPredictionOutputs = pgTable(
   ]
 );
 
-// ── AI Chat v2 (reflects db/init/001_schema.sql) ──────────────────────────────
+// ── AI Chat v2 (reflects db/migrations/) ──────────────────────────────
 export const aiConversations = pgTable(
   "ai_conversations",
   {

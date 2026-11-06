@@ -1,5 +1,3 @@
-export type AiUserRole = "viewer" | "analyst" | "admin";
-
 export type SemanticColumn = {
   name: string;
   type: "uuid" | "text" | "integer" | "numeric" | "boolean" | "date" | "timestamp" | "json";
@@ -10,14 +8,7 @@ export type SemanticColumn = {
 export type SemanticTable = {
   name: string;
   description: string;
-  minimumRole: AiUserRole;
   columns: SemanticColumn[];
-};
-
-export const ROLE_RANK: Record<AiUserRole, number> = {
-  viewer: 1,
-  analyst: 2,
-  admin: 3,
 };
 
 export const AI_SQL_DEFAULT_LIMIT = 50;
@@ -27,13 +18,12 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "predict_data_sources",
     description: "Uploaded prediction datasets and import/clean status.",
-    minimumRole: "viewer",
     columns: [
       { name: "id", type: "uuid", description: "Prediction data source id." },
       { name: "name", type: "text", description: "Human-readable data source name." },
       { name: "client_label", type: "text", description: "Optional client or portfolio label." },
       { name: "original_filename", type: "text", description: "Original uploaded Excel filename." },
-      { name: "import_status", type: "text", description: "Import lifecycle status such as pending, ready, failed." },
+      { name: "import_status", type: "text", description: "Import status: one of pending, importing, cleaning, ready, failed." },
       { name: "imported_at", type: "timestamp", description: "When the raw import completed." },
       { name: "cleaned_at", type: "timestamp", description: "When clean tables were generated." },
       { name: "created_at", type: "timestamp", description: "When the source record was created." },
@@ -42,7 +32,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "predict_clean_customers",
     description: "Clean customer profile rows for prediction datasets.",
-    minimumRole: "analyst",
     columns: [
       { name: "source_id", type: "uuid", description: "Prediction data source id." },
       { name: "acc_id", type: "integer", description: "1Moby customer account id." },
@@ -60,7 +49,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "predict_clean_payments",
     description: "Clean customer payment and top-up transactions for prediction datasets.",
-    minimumRole: "analyst",
     columns: [
       { name: "source_id", type: "uuid", description: "Prediction data source id." },
       { name: "acc_id", type: "integer", description: "1Moby customer account id." },
@@ -73,7 +61,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "predict_clean_usage",
     description: "Clean monthly usage rows by account, channel, and usage source.",
-    minimumRole: "analyst",
     columns: [
       { name: "source_id", type: "uuid", description: "Prediction data source id." },
       { name: "acc_id", type: "integer", description: "1Moby customer account id." },
@@ -87,11 +74,10 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "ml_prediction_runs",
     description: "ML prediction run catalog and run status.",
-    minimumRole: "viewer",
     columns: [
       { name: "id", type: "uuid", description: "Prediction run id." },
       { name: "predict_source_id", type: "uuid", description: "Prediction data source id used for the run." },
-      { name: "status", type: "text", description: "Run status such as pending, running, done, failed." },
+      { name: "status", type: "text", description: "Run status: one of pending, in_progress, completed, failed." },
       { name: "cutoff_date", type: "date", description: "Point-in-time cutoff date for predictions." },
       { name: "started_at", type: "timestamp", description: "Run start timestamp." },
       { name: "finished_at", type: "timestamp", description: "Run completion timestamp." },
@@ -102,7 +88,6 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
   {
     name: "ml_prediction_outputs",
     description: "Per-customer ML prediction outputs: churn, lifecycle, CLV, credit forecast, and recommended action.",
-    minimumRole: "analyst",
     columns: [
       { name: "prediction_run_id", type: "uuid", description: "Prediction run id." },
       { name: "acc_id", type: "integer", description: "1Moby customer account id." },
@@ -129,24 +114,19 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
       { name: "segment", type: "text", description: "Descriptive customer segment (High-Value At-Risk, Mid-Value At-Risk, High-Value Stable, Emerging, Stable, Low-Value Watch, Low-Value At-Risk, Lapsed, Dormant, Ghost) derived from value tier × churn risk × lifecycle." },
       { name: "priority_rank", type: "integer", description: "Global priority rank (1 = highest priority), ordered by segment priority then money within each segment." },
       { name: "needs_review", type: "boolean", description: "Flagged for human review: high churn risk, or a valuable customer whose p_alive and usage have silently collapsed." },
-      { name: "output_status", type: "text", description: "Prediction output status." },
+      { name: "output_status", type: "text", description: "Prediction output status: one of predicted, partial, insufficient_data." },
       { name: "created_at", type: "timestamp", description: "When the prediction output was created." },
     ],
   },
 ];
 
-export function getAiUserRole(): AiUserRole {
-  const role = process.env.AI_CHAT_DEFAULT_ROLE?.trim().toLowerCase();
-  if (role === "admin" || role === "analyst" || role === "viewer") return role;
-  return "admin";
+/** Every modeled table; access is org-wide, so the AI may query all of them. */
+export function getAllowedTables(): SemanticTable[] {
+  return SEMANTIC_TABLES;
 }
 
-export function getAllowedTables(role: AiUserRole): SemanticTable[] {
-  return SEMANTIC_TABLES.filter((table) => ROLE_RANK[role] >= ROLE_RANK[table.minimumRole]);
-}
-
-export function renderSemanticLayerForPrompt(role: AiUserRole): string {
-  return getAllowedTables(role)
+export function renderSemanticLayerForPrompt(): string {
+  return getAllowedTables()
     .map((table) => {
       const columns = table.columns
         .filter((column) => !column.sensitive)

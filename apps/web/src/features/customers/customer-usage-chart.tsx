@@ -1,5 +1,6 @@
 "use client";
 
+import { type MonthlyUsagePoint } from "@moby/types";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   CartesianGrid,
@@ -11,7 +12,6 @@ import {
 } from "recharts";
 import { formatMonth } from "@/lib/format";
 import { MOBY_BRAND } from "@/lib/login-brand-colors";
-import type { MonthlyUsagePoint } from "@/lib/ml-api";
 import { Panel } from "./customer-detail-primitives";
 
 export type UsageTrendPoint = MonthlyUsagePoint;

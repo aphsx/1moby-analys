@@ -9,7 +9,6 @@ dist
 .turbo
 **/.turbo
 *.tsbuildinfo
-apps/web/bun.lock
 
 # unrelated services
 apps/ml
@@ -22,4 +21,3 @@ data
 # docs and import tooling (not needed in api/web images)
 *.md
 docs
-moby-data-prep

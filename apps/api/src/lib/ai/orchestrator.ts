@@ -17,11 +17,11 @@
 
 import { db } from "../../db/client";
 import { aiConversations, aiMessages, mlPredictionRuns } from "../../db/schema";
-import { and, eq, desc } from "drizzle-orm";
+import type { ChatEvidence } from "@moby/types";
+import { eq, desc } from "drizzle-orm";
 import { complete, stream, LLMError, type ChatMessage } from "./llm-client";
 import { getLLMConfig, isLLMConfigured } from "./llm-config";
 import { checkUserQuestionSafety } from "./safety";
-import { getAiUserRole } from "./semantic-layer";
 import { loadUserScope } from "./scope";
 import { runSqlAgent, type BoundRun, type SqlAgentResult } from "./sql-agent";
 import {
@@ -37,15 +37,7 @@ import {
 
 // ── SSE envelope ─────────────────────────────────────────────────────────────
 
-type EvidenceEvent = {
-  mode: "text_to_sql" | "direct";
-  sql: string | null;
-  row_count: number;
-  rows: unknown[];
-  columns: string[];
-  warnings: string[];
-  sources: string[];
-};
+type EvidenceEvent = ChatEvidence;
 
 function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -84,18 +76,17 @@ export type OrchestratorOptions = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Resolve a run the user owns into the agent's BoundRun, or null if foreign. */
-async function resolveBoundRun(runId: string | null, userId: string): Promise<BoundRun | null> {
+/** Resolve a run into the agent's BoundRun, or null if it doesn't exist. Runs are org-shared. */
+async function resolveBoundRun(runId: string | null): Promise<BoundRun | null> {
   if (!runId) return null;
   const [row] = await db
     .select({
       id: mlPredictionRuns.id,
       name: mlPredictionRuns.name,
       cutoffDate: mlPredictionRuns.cutoffDate,
-      createdBy: mlPredictionRuns.createdBy,
     })
     .from(mlPredictionRuns)
-    .where(and(eq(mlPredictionRuns.id, runId), eq(mlPredictionRuns.createdBy, userId)))
+    .where(eq(mlPredictionRuns.id, runId))
     .limit(1);
   if (!row) return null;
   return { id: row.id, name: row.name, cutoffDate: row.cutoffDate };
@@ -211,13 +202,12 @@ export async function* orchestrate(opts: OrchestratorOptions): AsyncGenerator<st
     : null;
 
   // Resolve + ownership-check the bound run.
-  const boundRun = await resolveBoundRun(opts.boundRunId, opts.userId);
-  const role = getAiUserRole();
+  const boundRun = await resolveBoundRun(opts.boundRunId);
   const scope = await loadUserScope(opts.userId);
 
   // Self-correcting Text-to-SQL agent.
   let result: SqlAgentResult | null = null;
-  for await (const ev of runSqlAgent({ question: opts.userMessage, history, role, scope, boundRun })) {
+  for await (const ev of runSqlAgent({ question: opts.userMessage, history, scope, boundRun })) {
     if (ev.type === "thinking") {
       yield sseThinking(ev.step, ev.message);
     } else {

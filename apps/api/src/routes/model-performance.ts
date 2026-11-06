@@ -1,9 +1,21 @@
 /**
- * [NEW] ML v2 model performance API — docs/ML-V2-DASHBOARD-SPEC.md §2.4/§7.
+ * ML v2 model performance API.
  * Champion (alias='production') per model type + holdout/backtest evaluations
- * and baselines from ml_model_evaluations. Contract: apps/web/src/lib/mlApi.ts.
+ * and baselines from ml_model_evaluations. Contract: apps/web/src/lib/ml-api.ts.
  */
-import Elysia from "elysia";
+import {
+  type CandidateResult,
+  EVALUATION_TYPE,
+  MODEL_ALIAS,
+  MODEL_TYPES,
+  MODEL_VERSION_STATUS,
+  type ModelPerfEntry,
+  type ModelPerfRealized,
+  type ModelType,
+  type ModelVersionSummary,
+  type SplitMetrics,
+} from "@moby/types";
+import Elysia, { t } from "elysia";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import {
@@ -13,20 +25,12 @@ import {
   mlPredictionRuns,
   mlTrainingRuns,
 } from "../db/schema";
-import { requireUser } from "../lib/auth-middleware";
-import { requireFoundForRead } from "../lib/access-control";
-import {
-  DEFAULT_RISK_THRESHOLDS,
-  type CandidateResult,
-  type ModelPerfEntry,
-  type ModelPerfRealized,
-  type ModelVersionSummary,
-  type SplitMetrics,
-} from "../lib/ml-contract";
-import { triggerMlJob } from "../lib/ml-internal";
+import { requireUser } from "../lib/http/auth-middleware";
+import { badRequest, conflict, HttpError, notFound } from "../lib/http/errors";
+import { DEFAULT_RISK_THRESHOLDS } from "../lib/ml-contract";
+import { mlErrorToHttp, triggerMlJob } from "../lib/ml/ml-internal";
+import { assertNotUsedByPredictions, predictionRunsUsingVersion } from "../lib/ml/model-registry";
 
-const MODEL_TYPES = ["churn", "clv", "credit"] as const;
-type ModelType = (typeof MODEL_TYPES)[number];
 
 // Primary headline metric per model type, read from a version's test metrics.
 const PRIMARY_METRIC: Record<ModelType, { key: string; name: string }> = {
@@ -173,7 +177,7 @@ async function fetchLatestRealized(
     .where(
       and(
         eq(mlModelEvaluations.modelVersionId, versionId),
-        eq(mlModelEvaluations.evaluationType, "production_holdout"),
+        eq(mlModelEvaluations.evaluationType, EVALUATION_TYPE.PRODUCTION_HOLDOUT),
         eq(mlModelEvaluations.modelType, modelType)
       )
     )
@@ -205,7 +209,7 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
     })
     .from(mlModelAliases)
     .innerJoin(mlModelVersions, eq(mlModelAliases.modelVersionId, mlModelVersions.id))
-    .where(and(eq(mlModelAliases.alias, "production"), eq(mlModelAliases.modelType, modelType)))
+    .where(and(eq(mlModelAliases.alias, MODEL_ALIAS.PRODUCTION), eq(mlModelAliases.modelType, modelType)))
     .limit(1);
   if (!champion) return null;
 
@@ -216,10 +220,10 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
     .where(eq(mlModelEvaluations.modelVersionId, champion.id));
 
   const holdout = evaluations.filter(
-    (row) => row.baselineName === null && row.evaluationType === "holdout"
+    (row) => row.baselineName === null && row.evaluationType === EVALUATION_TYPE.HOLDOUT
   );
   const backtests = evaluations.filter(
-    (row) => row.baselineName === null && row.evaluationType === "backtest"
+    (row) => row.baselineName === null && row.evaluationType === EVALUATION_TYPE.BACKTEST
   );
 
   const splits: SplitMetrics[] = [];
@@ -295,56 +299,6 @@ interface VersionCard {
   algorithm?: string;
 }
 
-/** Prediction runs that served this version (by version string or override id). */
-async function findReferencingPredictionRuns(
-  modelType: ModelType,
-  version: string,
-  versionId: string
-): Promise<{ id: string; name: string }[]> {
-  return db
-    .select({ id: mlPredictionRuns.id, name: mlPredictionRuns.name })
-    .from(mlPredictionRuns)
-    .where(
-      sql`(
-        ${mlPredictionRuns.modelVersionsJson} ->> ${modelType} = ${version}
-        OR ${mlPredictionRuns.modelOverridesJson} ->> ${modelType} = ${versionId}
-      )`
-    )
-    .orderBy(desc(mlPredictionRuns.createdAt))
-    .limit(5);
-}
-
-const modelActivateRoutes = new Elysia()
-  .use(requireUser)
-  // Manually pin a version to production. Reuses the ML service's promotion
-  // transaction (action='manual_override') so the registry stays consistent.
-  .post("/:modelType/activate", async ({ params, body, userId, set }) => {
-    if (!isModelType(params.modelType)) {
-      set.status = 400;
-      return { message: "Unknown model type" };
-    }
-    const { modelVersionId, reason } = (body ?? {}) as {
-      modelVersionId?: string;
-      reason?: string;
-    };
-    if (!modelVersionId) {
-      set.status = 400;
-      return { message: "modelVersionId is required" };
-    }
-    try {
-      await triggerMlJob("/internal/model-activate", {
-        model_type: params.modelType,
-        model_version_id: modelVersionId,
-        reason,
-        created_by: userId ?? null,
-      });
-    } catch (error) {
-      set.status = 502;
-      return { message: error instanceof Error ? error.message : "Activation failed" };
-    }
-    return { ok: true };
-  });
-
 export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" })
   .use(requireUser)
   .get("/", async (): Promise<ModelPerfEntry[]> => {
@@ -356,11 +310,8 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
     return entries;
   })
   // All trained versions for a model type — fuels the production-override picker.
-  .get("/:modelType/versions", async ({ params, set }): Promise<ModelVersionSummary[]> => {
-    if (!isModelType(params.modelType)) {
-      set.status = 400;
-      return [];
-    }
+  .get("/:modelType/versions", async ({ params }): Promise<ModelVersionSummary[]> => {
+    if (!isModelType(params.modelType)) throw badRequest("Unknown model type");
     const primary = PRIMARY_METRIC[params.modelType];
     const rows = await db
       .select({
@@ -385,7 +336,7 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
         mlModelAliases,
         and(
           eq(mlModelAliases.modelType, params.modelType),
-          eq(mlModelAliases.alias, "production")
+          eq(mlModelAliases.alias, MODEL_ALIAS.PRODUCTION)
         )
       )
       .where(eq(mlModelVersions.modelType, params.modelType))
@@ -411,14 +362,12 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
   // Any authenticated user. Blocked while any prediction run still references
   // the version — delete those prediction results first.
   // The ML service also refuses the current production champion.
-  .delete("/:modelType/versions/:id", async ({ params, userId, set }) => {
+  .delete("/:modelType/versions/:id", async ({ params, userId }) => {
     if (!isModelType(params.modelType)) {
-      set.status = 400;
-      return { message: "Unknown model type" };
+      throw badRequest("Unknown model type");
     }
     if (!params.id) {
-      set.status = 400;
-      return { message: "model version id is required" };
+      throw badRequest("model version id is required");
     }
 
     const [version] = await db
@@ -443,32 +392,19 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
       )
       .limit(1);
 
-    const denied = requireFoundForRead(version, set, "Model version not found");
-    if (denied) return denied;
+    if (!version) throw notFound("Model version not found");
 
-    if (version!.isActive || version!.status === "production" || version!.isProductionAlias) {
-      set.status = 409;
-      return {
-        message:
-          "This version is the production champion — switch production to another version before deleting it.",
-      };
+    if (version.isActive || version.status === MODEL_VERSION_STATUS.PRODUCTION || version.isProductionAlias) {
+      throw conflict(
+        "This version is the production champion — switch production to another version before deleting it."
+      );
     }
 
-    const refs = await findReferencingPredictionRuns(
-      params.modelType,
-      version!.version,
-      version!.id
+    assertNotUsedByPredictions(
+      await predictionRunsUsingVersion(params.modelType, version.version, version.id),
+      "เวอร์ชันนี้",
+      "MODEL_IN_USE_BY_PREDICTIONS"
     );
-    if (refs.length > 0) {
-      const names = refs.map((r) => r.name || r.id.slice(0, 8)).join(", ");
-      const more = refs.length === 5 ? "…" : "";
-      set.status = 409;
-      return {
-        message: `ยังมี prediction run ที่ใช้เวอร์ชันนี้: ${names}${more} — ลบผล prediction เหล่านั้นก่อน`,
-        error_code: "model_in_use_by_predictions",
-        prediction_run_ids: refs.map((r) => r.id),
-      };
-    }
 
     try {
       await triggerMlJob("/internal/model-delete", {
@@ -477,12 +413,34 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
         created_by: userId ?? null,
       });
     } catch (error) {
-      // The ML service rejects production / in-use versions with HTTP 400 —
-      // surface that as 409 Conflict (a state error), not a 502 gateway error.
-      const upstream = (error as { upstreamStatus?: number }).upstreamStatus;
-      set.status = upstream === 400 ? 409 : 502;
-      return { message: error instanceof Error ? error.message : "Delete failed" };
+      throw mlErrorToHttp(error, "Delete failed");
     }
     return { deleted: true };
   })
-  .use(modelActivateRoutes);
+  // Manually pin a version to production. Reuses the ML service's promotion
+  // transaction (action='manual_override') so the registry stays consistent.
+  .post(
+    "/:modelType/activate",
+    async ({ params, body, userId }) => {
+      if (!isModelType(params.modelType)) {
+        throw badRequest("Unknown model type");
+      }
+      try {
+        await triggerMlJob("/internal/model-activate", {
+          model_type: params.modelType,
+          model_version_id: body.model_version_id,
+          reason: body.reason,
+          created_by: userId,
+        });
+      } catch (error) {
+        throw new HttpError(502, error instanceof Error ? error.message : "Activation failed");
+      }
+      return { ok: true };
+    },
+    {
+      body: t.Object({
+        model_version_id: t.String({ format: "uuid" }),
+        reason: t.Optional(t.String()),
+      }),
+    }
+  );

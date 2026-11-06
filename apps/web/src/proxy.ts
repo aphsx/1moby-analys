@@ -13,11 +13,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // API routes are proxied to Elysia — auth is enforced there (requireUser).
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.next();
-  }
-
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();
   }

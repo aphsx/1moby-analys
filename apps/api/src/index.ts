@@ -1,17 +1,17 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { auth } from "./auth";
-import { trainDataRoutes } from "./routes/train-data";
-import { predictDataRoutes } from "./routes/predict-data";
+import { trainDataRoutes } from "./routes/train-data-sources";
+import { predictDataRoutes } from "./routes/predict-data-sources";
 import { aiChatRoutes } from "./routes/ai-chat";
 import { predictionRunRoutes } from "./routes/prediction-runs";
 import { trainingRunRoutes } from "./routes/training-runs";
 import { modelPerformanceRoutes } from "./routes/model-performance";
 import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
-import { releaseStaleTrainImports, releaseStalePredict } from "./lib/abort-data-source";
-import { startStaleRunReaper } from "./lib/run-reaper";
+import { startStaleRunReaper } from "./lib/ml/run-reaper";
 import { maxUploadBytes } from "./lib/constants";
-import { ensureImportSchemaCompat } from "./lib/schema-compat";
+import { runMigrations } from "./db/migrate";
+import { handleError } from "./lib/http/errors";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -20,22 +20,18 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000")
   .map((s) => s.trim())
   .filter(Boolean);
 
-Promise.all([releaseStaleTrainImports(), releaseStalePredict()])
-  .then(([train, predict]) => {
-    if (train > 0 || predict > 0) {
-      console.log(`[api] Released stale imports on startup: train=${train} predict=${predict}`);
-    }
-  })
-  .catch((e) => console.error("[api] Failed to release stale imports:", e));
+// Bring the schema up to date before serving anything; a failed migration stops the boot.
+const appliedMigrations = await runMigrations();
+if (appliedMigrations.length > 0) {
+  console.log(`[api] Applied migrations: ${appliedMigrations.join(", ")}`);
+}
 
-ensureImportSchemaCompat().catch((e) =>
-  console.error("[api] Failed to apply schema compat:", e)
-);
-
-// Mark runs stuck in a non-terminal status as failed — now and every 5 minutes.
+// Fail stuck runs and delete stuck imports — now and every 5 minutes.
 startStaleRunReaper();
 
 const app = new Elysia()
+  // Every error becomes { message, code? } (lib/http/errors.ts); routes throw HttpError.
+  .onError({ as: "global" }, handleError)
   .use(
     cors({
       origin: ALLOWED_ORIGINS,
@@ -50,13 +46,13 @@ const app = new Elysia()
   .use(predictDataRoutes)
   // Isolated LLM chat API. UI wiring will be rebuilt separately.
   .use(aiChatRoutes)
-  // ML v2 — prediction runs + outputs/summary (spec §4/§7)
+  // Prediction runs, their outputs and summaries
   .use(predictionRunRoutes)
-  // ML v2 — training runs (spec §2.6)
+  // Training runs
   .use(trainingRunRoutes)
-  // ML v2 — champion model performance (spec §2.4)
+  // Champion model performance
   .use(modelPerformanceRoutes)
-  // ML v2 — realized-outcome backfill trigger (TRAINING-PIPELINE §15)
+  // Realized-outcome backfill trigger
   .use(outcomeBackfillRoutes)
   .get("/health", () => {
     return {

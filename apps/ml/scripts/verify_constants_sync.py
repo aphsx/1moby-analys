@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Contract check: the canonical enum strings in apps/ml/src/constants.py must
-match apps/api/src/lib/constants.ts exactly. A drift between the Python writer
+match packages/types/src/enums.ts exactly. A drift between the Python writer
 and the TypeScript reader is a silent wire-format break, so fail loudly here.
 
 Run: python scripts/verify_constants_sync.py
@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src import constants  # noqa: E402
 
 TS_PATH = (
-    Path(__file__).resolve().parents[3] / "apps" / "api" / "src" / "lib" / "constants.ts"
+    Path(__file__).resolve().parents[3] / "packages" / "types" / "src" / "enums.ts"
 )
 
 
@@ -49,7 +49,7 @@ def main() -> int:
     only_py = sorted(py - ts)
     only_ts = sorted(ts - py)
     if only_py or only_ts:
-        print("CONSTANTS OUT OF SYNC between constants.py and constants.ts")
+        print("CONSTANTS OUT OF SYNC between constants.py and enums.ts")
         if only_py:
             print("  only in Python:", only_py)
         if only_ts:

@@ -1,5 +1,6 @@
 "use client";
 
+import { type OutputsQuery, type PredictionOutput } from "@moby/types";
 import { useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -15,7 +16,7 @@ import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { StatusDialog } from "@/components/status-dialog";
 import { Skeleton } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
-import type { OutputsQuery, PredictionOutput } from "@/lib/ml-api";
+import { CREDIT_PALETTE } from "@/features/dashboard/palette";
 import { shouldConfirmAiOverwrite } from "./customer-ai";
 import { EXPORT_ROW_CAP, exportOutputsCsv } from "./export-csv";
 import { GenAiButton } from "./gen-ai-button";
@@ -152,11 +153,12 @@ export function toOutputsQuery(
   };
 }
 
+// Same colours as the dashboard's credit urgency card.
 const URGENCY_COLORS: Record<string, string> = {
-  critical: "#fc4c02",
-  warning: "#ffa400",
-  monitor: "#9ca3af",
-  stable: "#006bff",
+  critical: CREDIT_PALETTE.Critical,
+  warning: CREDIT_PALETTE.Warning,
+  monitor: CREDIT_PALETTE.Monitor,
+  stable: CREDIT_PALETTE.Stable,
 };
 
 interface CustomersViewProps {
@@ -177,7 +179,7 @@ interface CustomersViewProps {
   aiError?: string | null;
 }
 
-function Inner({
+export function CustomersView({
   rows,
   total,
   page,
@@ -268,7 +270,6 @@ function Inner({
   };
 
   const activeFilters = Object.entries(filters).filter(([_, value]) => value).length;
-  const pendingRows = pending;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const startRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const endRow = Math.min(total, (page - 1) * pageSize + rows.length);
@@ -278,6 +279,9 @@ function Inner({
       const trimmed = value.trim();
       if (trimmed) params.set(key, trimmed);
     });
+    // Carried through so the detail page's back link returns to this exact list view.
+    if (sort) params.set("sort", `${sort.key}:${sort.direction}`);
+    if (page > 1) params.set("page", String(page));
     return `/customers/${accId}?${params.toString()}`;
   };
 
@@ -390,10 +394,10 @@ function Inner({
               </div>
 
               <div className="divide-y divide-gray-100">
-                {pendingRows && [...Array(8)].map((_, i) => (
+                {pending && [...Array(8)].map((_, i) => (
                   <div key={i} className="px-5 py-4"><Skeleton className="h-10" /></div>
                 ))}
-                {!pendingRows && rows.map((r) => (
+                {!pending && rows.map((r) => (
                   <CustomerTableRow
                     key={r.acc_id}
                     row={r}
@@ -403,7 +407,7 @@ function Inner({
                     onGenAiClick={(event) => handleGenAiClick(event, r)}
                   />
                 ))}
-                {!pendingRows && rows.length === 0 && (
+                {!pending && rows.length === 0 && (
                   <div className="px-5 py-12 text-center">
                     <p className="text-[15px] font-semibold text-[color:var(--ink-2)]">No customers match this view</p>
                     <p className="mt-1 text-[13px] text-[color:var(--ink-4)]">Reset filters or search another account ID.</p>
@@ -415,7 +419,7 @@ function Inner({
 
           <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="num text-[12px] text-[color:var(--ink-4)]">
-              {pendingRows
+              {pending
                 ? "Loading customers..."
                 : `${startRow.toLocaleString()}-${endRow.toLocaleString()} of ${total.toLocaleString()} matching`}
             </div>
@@ -423,7 +427,7 @@ function Inner({
               <button
                 type="button"
                 onClick={() => onPageChange(page - 1)}
-                disabled={pendingRows || page <= 1}
+                disabled={pending || page <= 1}
                 className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] font-semibold text-[color:var(--ink-4)] hover:bg-gray-50 hover:text-[color:var(--ink-2)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <ChevronLeft size={13} /> Previous
@@ -434,7 +438,7 @@ function Inner({
               <button
                 type="button"
                 onClick={() => onPageChange(page + 1)}
-                disabled={pendingRows || page >= totalPages}
+                disabled={pending || page >= totalPages}
                 className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] font-semibold text-[color:var(--ink-4)] hover:bg-gray-50 hover:text-[color:var(--ink-2)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Next <ChevronRight size={13} />
@@ -587,8 +591,4 @@ function FilterChip({
       {children}
     </button>
   );
-}
-
-export function CustomersView(props: CustomersViewProps) {
-  return <Inner {...props} />;
 }

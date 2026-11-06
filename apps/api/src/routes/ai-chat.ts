@@ -20,16 +20,16 @@
  *   POST   /ai-chat/conversations/:id/messages → SSE stream
  */
 
+import type { ChatConversation, ChatConversationDetail, ChatEvidence, ChatMessageRecord } from "@moby/types";
 import Elysia, { t } from "elysia";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { aiConversations, aiMessages, mlPredictionRuns } from "../db/schema";
-import { requireUser } from "../lib/auth-middleware";
-import { denyNotFound } from "../lib/access-control";
+import { requireUser } from "../lib/http/auth-middleware";
+import { badRequest, notFound } from "../lib/http/errors";
 import { orchestrate, sseError } from "../lib/ai";
 import { getLLMConfig, isLLMConfigured } from "../lib/ai/llm-config";
 import { DEFAULT_CONVERSATION_TITLE, ERROR_CODE } from "../lib/ai/constants";
-import { UUID_RE } from "../lib/constants";
 
 const MAX_MESSAGE_CHARS = 12_000;
 
@@ -46,13 +46,26 @@ async function getConversation(id: string, userId: string) {
 
 /** Verify a prediction run exists before binding a chat to it (org-shared). */
 async function runExists(runId: string): Promise<boolean> {
-  if (!UUID_RE.test(runId)) return false;
   const [row] = await db
     .select({ id: mlPredictionRuns.id })
     .from(mlPredictionRuns)
     .where(eq(mlPredictionRuns.id, runId))
     .limit(1);
   return Boolean(row);
+}
+
+type ConversationRow = typeof aiConversations.$inferSelect;
+
+function mapConversation(row: ConversationRow, runName: string | null = null): ChatConversation {
+  return {
+    id: row.id,
+    title: row.title,
+    archived: row.archived,
+    run_id: row.runId,
+    run_name: runName,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  };
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
@@ -67,51 +80,42 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   })
 
   // ── List conversations (+ bound run name) ────────────────────────────────────
-  .get("/conversations", async ({ userId }) => {
-    const convs = await db
-      .select({
-        id: aiConversations.id,
-        title: aiConversations.title,
-        archived: aiConversations.archived,
-        runId: aiConversations.runId,
-        runName: mlPredictionRuns.name,
-        createdAt: aiConversations.createdAt,
-        updatedAt: aiConversations.updatedAt,
-      })
+  .get("/conversations", async ({ userId }): Promise<ChatConversation[]> => {
+    const rows = await db
+      .select({ conversation: aiConversations, runName: mlPredictionRuns.name })
       .from(aiConversations)
       .leftJoin(mlPredictionRuns, eq(aiConversations.runId, mlPredictionRuns.id))
-      .where(eq(aiConversations.userId, userId!))
+      .where(eq(aiConversations.userId, userId))
       .orderBy(desc(aiConversations.updatedAt))
       .limit(100);
-    return convs;
+    return rows.map((r) => mapConversation(r.conversation, r.runName));
   })
 
   // ── Create conversation (optionally bound to a run) ──────────────────────────
   .post(
     "/conversations",
-    async ({ body, userId, set }) => {
+    async ({ body, userId }) => {
       let runId: string | null = null;
       if (body.run_id) {
         if (!(await runExists(body.run_id))) {
-          set.status = 404;
-          return { message: "Prediction run not found", code: "run_not_found" };
+          throw notFound("Prediction run not found");
         }
         runId = body.run_id;
       }
       const [conv] = await db
         .insert(aiConversations)
         .values({
-          userId: userId!,
+          userId: userId,
           runId,
           title: body.title?.trim() || DEFAULT_CONVERSATION_TITLE,
         })
         .returning();
-      return conv;
+      return mapConversation(conv);
     },
     {
       body: t.Object({
         title: t.Optional(t.String({ maxLength: 100 })),
-        run_id: t.Optional(t.String()),
+        run_id: t.Optional(t.String({ format: "uuid" })),
       }),
     }
   )
@@ -119,37 +123,39 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   // ── Get conversation + messages ──────────────────────────────────────────────
   .get(
     "/conversations/:id",
-    async ({ params, userId, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Not found");
-      const conv = await getConversation(params.id, userId!);
-      if (!conv) return denyNotFound(set, "Conversation not found");
+    async ({ params, userId }) => {
+      const conv = await getConversation(params.id, userId);
+      if (!conv) throw notFound("Conversation not found");
 
       const msgs = await db
-        .select({
-          id: aiMessages.id,
-          role: aiMessages.role,
-          content: aiMessages.content,
-          evidenceJson: aiMessages.evidenceJson,
-          model: aiMessages.model,
-          createdAt: aiMessages.createdAt,
-        })
+        .select()
         .from(aiMessages)
         .where(eq(aiMessages.conversationId, params.id))
         .orderBy(aiMessages.id)
         .limit(200);
 
-      return { ...conv, messages: msgs };
+      const detail: ChatConversationDetail = {
+        ...mapConversation(conv),
+        messages: msgs.map((m) => ({
+          id: m.id,
+          role: m.role as ChatMessageRecord["role"],
+          content: m.content,
+          evidence: (m.evidenceJson as ChatEvidence | null) ?? null,
+          model: m.model,
+          created_at: m.createdAt.toISOString(),
+        })),
+      };
+      return detail;
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
 
   // ── Rename / archive conversation ────────────────────────────────────────────
   .patch(
     "/conversations/:id",
-    async ({ params, body, userId, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Not found");
-      const conv = await getConversation(params.id, userId!);
-      if (!conv) return denyNotFound(set, "Conversation not found");
+    async ({ params, body, userId }) => {
+      const conv = await getConversation(params.id, userId);
+      if (!conv) throw notFound("Conversation not found");
 
       const updates: { title?: string; archived?: boolean; updatedAt: Date } = {
         updatedAt: new Date(),
@@ -162,10 +168,10 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
         .set(updates)
         .where(eq(aiConversations.id, params.id))
         .returning();
-      return updated;
+      return mapConversation(updated);
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: "uuid" }) }),
       body: t.Object({
         title: t.Optional(t.String({ maxLength: 100 })),
         archived: t.Optional(t.Boolean()),
@@ -177,29 +183,26 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
   .delete(
     "/conversations/:id",
     async ({ params, userId, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Not found");
-      const conv = await getConversation(params.id, userId!);
-      if (!conv) return denyNotFound(set, "Conversation not found");
+      const conv = await getConversation(params.id, userId);
+      if (!conv) throw notFound("Conversation not found");
 
       await db.delete(aiConversations).where(eq(aiConversations.id, params.id));
       set.status = 204;
       return null;
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   )
 
   // ── Send message → SSE stream ────────────────────────────────────────────────
   .post(
     "/conversations/:id/messages",
-    async ({ params, body, userId, set }) => {
-      if (!UUID_RE.test(params.id)) return denyNotFound(set, "Conversation not found");
-      const conv = await getConversation(params.id, userId!);
-      if (!conv) return denyNotFound(set, "Conversation not found");
+    async ({ params, body, userId }) => {
+      const conv = await getConversation(params.id, userId);
+      if (!conv) throw notFound("Conversation not found");
 
       const userMessage = body.message.trim();
       if (!userMessage) {
-        set.status = 400;
-        return { message: "Message cannot be empty" };
+        throw badRequest("Message cannot be empty");
       }
 
       // First message in a default-titled conversation → generate an auto-title.
@@ -212,7 +215,7 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
 
       const gen = orchestrate({
         conversationId: params.id,
-        userId: userId!,
+        userId: userId,
         userMessage,
         boundRunId: conv.runId ?? null,
         generateTitle,
@@ -242,7 +245,7 @@ export const aiChatRoutes = new Elysia({ prefix: "/ai-chat" })
       });
     },
     {
-      params: t.Object({ id: t.String() }),
+      params: t.Object({ id: t.String({ format: "uuid" }) }),
       body: t.Object({
         message: t.String({ minLength: 1, maxLength: MAX_MESSAGE_CHARS }),
       }),

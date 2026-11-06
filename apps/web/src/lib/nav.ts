@@ -39,7 +39,6 @@ export const PRIMARY_NAV: NavSection[] = [
   },
 ];
 
-// Footer nav: [LEGACY] /runs = predict upload · /training = [NEW] train raw import + [LEGACY] model train
 /** Bottom sidebar sections. */
 export const FOOTER_NAV: NavSection[] = [
   {

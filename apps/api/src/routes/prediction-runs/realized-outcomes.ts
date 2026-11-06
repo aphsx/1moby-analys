@@ -1,33 +1,29 @@
 /**
- * Realized outcomes for one prediction run (TRAINING-PIPELINE §15).
+ * Realized outcomes for one prediction run.
  *
  * The outcome-backfill job (apps/ml/src/outcomes/) writes production_holdout
  * rows into ml_model_evaluations linked to the run via prediction_run_id.
  * This route only reads what the ML side persisted — no metric math here.
  */
+import { EVALUATION_TYPE } from "@moby/types";
 import Elysia, { t } from "elysia";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlModelEvaluations, mlModelVersions } from "../../db/schema";
-import { requireUser } from "../../lib/auth-middleware";
+import { requireUser } from "../../lib/http/auth-middleware";
 import type {
   RealizedOutcome,
   RealizedOutcomesResponse,
 } from "@moby/types";
-import { fetchRun, requireRunFound } from "./_helpers";
-
-/** Must match PRODUCTION_HOLDOUT_EVALUATION_TYPE in apps/ml/src/outcomes/runner.py. */
-const PRODUCTION_HOLDOUT_EVALUATION_TYPE = "production_holdout";
+import { requireRun } from "../../lib/ml/prediction-runs";
 
 export const realizedOutcomesRoutes = new Elysia()
   .use(requireUser)
   // Org-wide read: realized metrics are shared evidence, like run outputs.
   .get(
     "/:id/realized-outcomes",
-    async ({ params, set }) => {
-      const run = await fetchRun(params.id);
-      const denied = requireRunFound(run, set);
-      if (denied) return denied;
+    async ({ params }) => {
+      const run = await requireRun(params.id);
 
       const rows = await db
         .select({
@@ -47,8 +43,8 @@ export const realizedOutcomesRoutes = new Elysia()
         .leftJoin(mlModelVersions, eq(mlModelEvaluations.modelVersionId, mlModelVersions.id))
         .where(
           and(
-            eq(mlModelEvaluations.predictionRunId, run!.id),
-            eq(mlModelEvaluations.evaluationType, PRODUCTION_HOLDOUT_EVALUATION_TYPE)
+            eq(mlModelEvaluations.predictionRunId, run.id),
+            eq(mlModelEvaluations.evaluationType, EVALUATION_TYPE.PRODUCTION_HOLDOUT)
           )
         )
         .orderBy(asc(mlModelEvaluations.modelType));
@@ -57,7 +53,7 @@ export const realizedOutcomesRoutes = new Elysia()
         model_type: row.modelType as RealizedOutcome["model_type"],
         model_version_id: row.modelVersionId,
         model_version: row.modelVersion ?? null,
-        evaluation_type: PRODUCTION_HOLDOUT_EVALUATION_TYPE,
+        evaluation_type: EVALUATION_TYPE.PRODUCTION_HOLDOUT,
         cutoff_date: row.cutoffDate,
         horizon_days: row.horizonDays,
         metrics: (row.metricsJson as Record<string, number> | null) ?? {},
@@ -69,12 +65,12 @@ export const realizedOutcomesRoutes = new Elysia()
       }));
 
       const response: RealizedOutcomesResponse = {
-        prediction_run_id: run!.id,
-        cutoff_date: run!.cutoffDate,
+        prediction_run_id: run.id,
+        cutoff_date: run.cutoffDate,
         evaluated: outcomes.length > 0,
         outcomes,
       };
       return response;
     },
-    { params: t.Object({ id: t.String() }) }
+    { params: t.Object({ id: t.String({ format: "uuid" }) }) }
   );

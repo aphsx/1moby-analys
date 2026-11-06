@@ -9,6 +9,7 @@
     "lint": "bunx tsc --noEmit -p tsconfig.json",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",
     "test": "bun test src",
+    "db:migrate": "bun run src/db/migrate.ts",
     "db:introspect": "drizzle-kit introspect"
   },
   "dependencies": {
