@@ -134,7 +134,7 @@ function OverviewBody({
               value: formatCount(summary.credit.by_urgency.critical),
               unit: "ราย",
               caption: `ใน 7 วัน ${formatCount(summary.credit.topup_due_7d)} ราย`,
-              info: `วันที่คาดว่าลูกค้าจะเติมเครดิตครั้งถัดไป ทำนายจากรอบการเติมเงินที่ผ่านมา นับจากวันตัดข้อมูล ${cutoff}`,
+              info: `จำนวนวันที่คาดว่าเครดิตจะหมดและต้องเติม (Runway) คำนวณจากเครดิตคงเหลือหารด้วยอัตราการใช้รายวัน นับจากวันตัดข้อมูล ${cutoff}`,
             },
           ]}
         />

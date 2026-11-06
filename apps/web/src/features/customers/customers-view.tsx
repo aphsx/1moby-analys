@@ -91,7 +91,7 @@ const acctColumn = (sub?: (r: PredictionOutput) => string): Column => ({
 
 const topupColumn: Column = {
   label: "เติมครั้งถัดไป",
-  tip: () => "วันที่คาดว่าจะเติมเครดิตครั้งถัดไป นับจากวันตัดข้อมูล",
+  tip: () => "จำนวนวันที่คาดว่าเครดิตจะหมดและต้องเติม (Runway) นับจากวันตัดข้อมูล",
   cell: (r) => <TopUp days={r.estimated_days_until_topup} />,
 };
 
@@ -127,7 +127,7 @@ export const TABS: Record<TabKey, TabConfig> = {
         key: "credit",
         label: "ต้องเติมใน 14 วัน",
         title: "ต้องเติมเครดิตใน 14 วัน",
-        help: "คาดว่าจะเติมเครดิตครั้งถัดไปภายใน 14 วันนับจากวันตัดข้อมูล (โมเดลทำนายวันชำระครั้งถัดไป ไม่ได้ทำนายว่าเครดิตหมด)",
+        help: "คาดว่าเครดิตจะหมดและต้องเติมภายใน 14 วันนับจากวันตัดข้อมูล (คำนวณจากเครดิตคงเหลือหารด้วยอัตราการใช้รายวัน)",
         filters: { credit_urgency_level: "critical" },
         sort: "estimated_days_until_topup:asc",
       },
@@ -342,9 +342,8 @@ export function CustomersView({ state, summary, presetCounts, runId, cutoff, dat
                       type="button"
                       aria-current={active ? "true" : undefined}
                       onClick={() => onChange({ tab: key, filters: EMPTY_FILTERS, sort: "" })}
-                      className={`-mb-px flex h-14 items-center gap-2 border-b-2 px-0.5 text-[15px] transition-colors duration-150 ${
-                        active ? "border-text font-semibold text-text" : "border-transparent text-muted hover:text-text"
-                      }`}
+                      className={`-mb-px flex h-14 items-center gap-2 border-b-2 px-0.5 text-[15px] transition-colors duration-150 ${active ? "border-text font-semibold text-text" : "border-transparent text-muted hover:text-text"
+                        }`}
                     >
                       {LIFECYCLE_LABEL[TABS[key].stage]}
                       {summary ? <span className="tabular-nums text-small font-normal text-muted">{formatCount(TABS[key].count(summary))}</span> : null}
@@ -367,9 +366,8 @@ export function CustomersView({ state, summary, presetCounts, runId, cutoff, dat
                     type="button"
                     aria-pressed={active}
                     onClick={() => onChange({ filters: presetFilters(p), sort: p.sort ?? "" })}
-                    className={`flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3.5 text-body transition-colors duration-150 max-[859px]:h-11 ${
-                      active ? "bg-accent-soft font-semibold text-accent-ink" : "text-text hover:bg-surface"
-                    }`}
+                    className={`flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3.5 text-body transition-colors duration-150 max-[859px]:h-11 ${active ? "bg-accent-soft font-semibold text-accent-ink" : "text-text hover:bg-surface"
+                      }`}
                   >
                     {p.label}
                     {presetCounts?.[p.key] != null ? <span className="tabular-nums text-micro font-normal opacity-80">{formatCount(presetCounts[p.key])}</span> : null}
@@ -465,42 +463,41 @@ export function CustomersView({ state, summary, presetCounts, runId, cutoff, dat
                   <tbody>
                     {!data
                       ? Array.from({ length: PAGE_SIZE }, (_, i) => (
-                          <tr key={i}>
-                            {tab.columns.map((c, j) => (
-                              <td key={c.label} className={rowH}>
-                                <Skeleton className={`h-4 ${j === 0 ? "w-32" : "ml-auto w-16"}`} />
+                        <tr key={i}>
+                          {tab.columns.map((c, j) => (
+                            <td key={c.label} className={rowH}>
+                              <Skeleton className={`h-4 ${j === 0 ? "w-32" : "ml-auto w-16"}`} />
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                      : rows.map((r) => {
+                        const isSelected = selected?.acc_id === r.acc_id;
+                        return (
+                          <tr key={r.acc_id} onClick={(e) => onRowClick(e, r.acc_id)} className="group cursor-pointer">
+                            {tab.columns.map((c, i) => (
+                              <td
+                                key={c.label}
+                                className={`${rowH} ${c.right ? "text-right" : ""} ${isSelected ? "xl:bg-active" : ""} ${i === 0 ? "sticky left-0 z-[1] max-w-0 bg-surface" : ""
+                                  }`}
+                              >
+                                {i === 0 ? (
+                                  <Link
+                                    href={customerHref(r.acc_id)}
+                                    onClick={(e) => onLinkClick(e, r.acc_id)}
+                                    aria-label={`บัญชี #${r.acc_id}`}
+                                    className="block min-w-0 rounded-control"
+                                  >
+                                    {c.cell(r, ctx)}
+                                  </Link>
+                                ) : (
+                                  c.cell(r, ctx)
+                                )}
                               </td>
                             ))}
                           </tr>
-                        ))
-                      : rows.map((r) => {
-                          const isSelected = selected?.acc_id === r.acc_id;
-                          return (
-                            <tr key={r.acc_id} onClick={(e) => onRowClick(e, r.acc_id)} className="group cursor-pointer">
-                              {tab.columns.map((c, i) => (
-                                <td
-                                  key={c.label}
-                                  className={`${rowH} ${c.right ? "text-right" : ""} ${isSelected ? "xl:bg-active" : ""} ${
-                                    i === 0 ? "sticky left-0 z-[1] max-w-0 bg-surface" : ""
-                                  }`}
-                                >
-                                  {i === 0 ? (
-                                    <Link
-                                      href={customerHref(r.acc_id)}
-                                      onClick={(e) => onLinkClick(e, r.acc_id)}
-                                      aria-label={`บัญชี #${r.acc_id}`}
-                                      className="block min-w-0 rounded-control"
-                                    >
-                                      {c.cell(r, ctx)}
-                                    </Link>
-                                  ) : (
-                                    c.cell(r, ctx)
-                                  )}
-                                </td>
-                              ))}
-                            </tr>
-                          );
-                        })}
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -561,9 +558,8 @@ function PageButton({
       aria-current={current ? "page" : undefined}
       disabled={disabled}
       onClick={onClick}
-      className={`tabular-nums inline-flex h-9 min-w-9 items-center justify-center rounded-control px-2 text-body transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 max-[859px]:h-11 max-[859px]:min-w-11 ${
-        current ? "bg-text font-semibold text-surface" : "text-text hover:bg-raised"
-      }`}
+      className={`tabular-nums inline-flex h-9 min-w-9 items-center justify-center rounded-control px-2 text-body transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 max-[859px]:h-11 max-[859px]:min-w-11 ${current ? "bg-text font-semibold text-surface" : "text-text hover:bg-raised"
+        }`}
     >
       {children}
     </button>
@@ -585,8 +581,8 @@ function CustomerPanel({ row, tab, ctx, href, loading }: { row: PredictionOutput
   const subtitle =
     tab === "paid"
       ? [VALUE_TIER_LABEL[row.customer_value_tier], scored && row.churn_risk_level ? `เสี่ยง${RISK_LABEL[row.churn_risk_level]}` : "ยังไม่มีคะแนน"]
-          .filter(Boolean)
-          .join(" · ")
+        .filter(Boolean)
+        .join(" · ")
       : LIFECYCLE_LABEL[row.lifecycle_stage];
   const lastAccess = row.profile_snapshot?.last_access;
   const factors = (row.churn_factors ?? []).slice(0, 3);

@@ -35,10 +35,10 @@ const INFO = {
   churn: "โอกาสที่ลูกค้าจะเลิกใช้ ปรับเทียบ (calibration) แล้ว อ่านเป็นเปอร์เซ็นต์ได้ตรง ๆ: 78% คือจากลูกค้าลักษณะนี้ 100 ราย คาดว่าจะเลิกใช้ราว 78 ราย",
   factors: "ผลของแต่ละปัจจัยต่อคะแนนของลูกค้ารายนี้ (SHAP) แถบไปทางขวาทำให้เสี่ยงขึ้น ไปทางซ้ายช่วยลดความเสี่ยง ความยาวเทียบกันได้เฉพาะในลูกค้ารายนี้",
   clv: "ยอดที่คาดว่าจะชำระใน 6 เดือนข้างหน้า คิดจากความถี่และยอดเติมเงินที่ผ่านมา ช่วงคาดการณ์คือค่าต่ำสุด–สูงสุดที่น่าจะเป็น",
-  topup: "จำนวนวันที่คาดว่าลูกค้าจะเติมเครดิตครั้งถัดไป นับจากวันตัดข้อมูล ช่วงคาดการณ์บอกว่าอาจเร็วหรือช้าได้แค่ไหน",
+  topup: "จำนวนวันที่คาดว่าเครดิตจะหมดและต้องเติมครั้งถัดไป (Runway) คำนวณจากเครดิตคงเหลือหารด้วยอัตราการใช้รายวัน",
   alive: "ความน่าจะเป็นที่ลูกค้ายังเป็นลูกค้าอยู่ ดูจากความถี่และระยะห่างของการซื้อที่ผ่านมา",
   atRisk: "โอกาสเลิกใช้ × มูลค่าที่คาดว่าจะจ่ายใน 6 เดือน ใช้จัดลำดับว่าควรติดต่อใครก่อน",
-  credit: "เครดิตที่คาดว่าจะใช้ พร้อมช่วงต่ำสุด–สูงสุด",
+  credit: "เครดิตที่คาดว่าจะใช้ พร้อมช่วงต่ำสุด–สูงสุด (p10–p90)",
   ai: "ข้อความอธิบายที่สร้างโดย AI จากข้อมูลของลูกค้ารายนี้",
 };
 
@@ -123,9 +123,8 @@ export function CustomerDetailView({
                     type="button"
                     aria-current={tab === t.key ? "true" : undefined}
                     onClick={() => setTab(t.key)}
-                    className={`-mb-px h-11 border-b-2 text-body transition-colors duration-150 ${
-                      tab === t.key ? "border-text font-medium text-text" : "border-transparent text-muted hover:text-text"
-                    }`}
+                    className={`-mb-px h-11 border-b-2 text-body transition-colors duration-150 ${tab === t.key ? "border-text font-medium text-text" : "border-transparent text-muted hover:text-text"
+                      }`}
                   >
                     {t.label}
                   </button>
@@ -435,9 +434,8 @@ function Predictions({ customer: c }: { customer: PredictionOutput }) {
             type="button"
             aria-pressed={section === s.key}
             onClick={() => setSection(s.key)}
-            className={`h-8 shrink-0 whitespace-nowrap rounded-control px-3 text-body transition-colors duration-150 max-[859px]:h-11 ${
-              section === s.key ? "bg-accent-soft font-semibold text-accent-ink" : "text-text hover:bg-surface"
-            }`}
+            className={`h-8 shrink-0 whitespace-nowrap rounded-control px-3 text-body transition-colors duration-150 max-[859px]:h-11 ${section === s.key ? "bg-accent-soft font-semibold text-accent-ink" : "text-text hover:bg-surface"
+              }`}
           >
             {s.label}
           </button>
@@ -518,7 +516,7 @@ function Predictions({ customer: c }: { customer: PredictionOutput }) {
               ["เครดิต SMS คงเหลือ", formatCount(c.profile_snapshot.credit_sms)],
               ["เครดิต Email คงเหลือ", formatCount(c.profile_snapshot.credit_email)],
             ]}
-            footer="ไม่ใช่วันที่เครดิตหมด"
+            footer="คำนวณจากเครดิตคงเหลือ ÷ อัตราการใช้จริงต่อวัน"
           />
           <PredictionCard
             icon={<Gauge size={16} />}
