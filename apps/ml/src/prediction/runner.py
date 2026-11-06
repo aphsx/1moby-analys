@@ -656,10 +656,11 @@ def _apply_credit(
         frame.loc[credit_mask, "credit_p10_90d"] = np.maximum(q90[0.10], p10_30)
         frame.loc[credit_mask, "credit_p90_90d"] = np.maximum(q90[0.90], p90_30)
         if topup_model is not None:
-            # AFT model trained on the censored days_until_next_topup label —
-            # replaces the balance/burn heuristic (kept as fallback for older
-            # artifacts without the model, see _apply_derived).
-            days = topup_model.predict_days(x)
+            # Data-grounded depletion runway model (balance / daily burn)
+            try:
+                days = topup_model.predict_days(features_raw[credit_mask])
+            except Exception:
+                days = topup_model.predict_days(x)
             frame.loc[credit_mask, "estimated_days_until_topup"] = np.minimum(
                 np.ceil(days), TOPUP_CAP_DAYS
             )

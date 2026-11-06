@@ -1,7 +1,7 @@
 """End-to-end training run orchestrator (TRAINING-PIPELINE §2).
 
 One call = one row in `ml_training_runs` driven to completed/failed:
-gates → labels/features → split → baselines + candidates (Optuna) →
+gates → labels/features → split → baselines + candidates (Dual-GBDT, Hurdle, Quantile) →
 calibration → evaluation → leakage suite → multi-cutoff backtest →
 promotion gate → artifacts + registry + production alias.
 """
@@ -337,7 +337,7 @@ def _train_and_register_churn(
     created_by: str | None,
     progress: Callable[[str, int], None],
 ) -> dict[str, Any]:
-    progress("churn: baselines + candidates (Optuna)", 15)
+    progress("churn: candidates (Dual-GBDT, LightGBM, CatBoost)", 15)
     # Multi-cutoff pooling: older-cutoff rows join the TRAIN split only (val/test
     # stay at the latest cutoff via pool_train_rows, which also drops held-out
     # acc_ids so no split contamination is possible). At ~1.5–2k active-paid rows
@@ -782,7 +782,7 @@ def _train_and_register_clv(
     created_by: str | None,
     progress: Callable[[str, int], None],
 ) -> dict[str, Any]:
-    progress("clv: two-part model + BG-NBD p_alive", 55)
+    progress("clv: Two-Part Hurdle (LightGBM + CatBoost)", 55)
     # Multi-cutoff pooling (train split only; val/test stay at the latest cutoff).
     # BG-NBD collapses duplicate acc_ids so pooling is at worst neutral for it
     # and never leaks (it fits RFM at the primary cutoff and never sees
@@ -1063,7 +1063,7 @@ def _train_and_register_credit(
     created_by: str | None,
     progress: Callable[[str, int], None],
 ) -> dict[str, Any]:
-    progress("credit: quantile models (Optuna)", 75)
+    progress("credit: quantile models (LightGBM)", 75)
     # Multi-cutoff pooling: older-cutoff rows join the train split (validation/
     # test stay at the latest cutoff) so the model sees the same customers in
     # different behavioural regimes instead of one static snapshot.
@@ -1204,12 +1204,12 @@ def _train_and_register_credit(
         },
         "topup_model": (
             {
-                "algorithm": "xgboost_aft",
-                "distribution": result.topup_model.distribution,
-                "scale": result.topup_model.scale,
-                "censor_days": result.topup_model.censor_days,
-                "day_scale": result.topup_model.day_scale,
-                "urgent_day_threshold_raw": result.topup_model.urgent_day_threshold_raw,
+                "algorithm": getattr(result.topup_model, "algorithm", "runway_depletion"),
+                "distribution": getattr(result.topup_model, "distribution", "deterministic"),
+                "scale": getattr(result.topup_model, "scale", 1.0),
+                "censor_days": getattr(result.topup_model, "censor_days", float(horizon_days)),
+                "day_scale": getattr(result.topup_model, "day_scale", 1.0),
+                "urgent_day_threshold_raw": getattr(result.topup_model, "urgent_day_threshold_raw", 14.0),
                 "urgent_topup_precision_test": result.test_metrics.get("urgent_topup_precision"),
                 "urgent_topup_recall_test": result.test_metrics.get("urgent_topup_recall"),
                 "topup_mae_days_observed_test": result.test_metrics.get("topup_mae_days_observed"),

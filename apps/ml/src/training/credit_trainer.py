@@ -85,6 +85,11 @@ class TopupDepletionModel:
     """Data-grounded depletion runway model: balance / daily burn."""
 
     censor_days: float = 180.0
+    algorithm: str = "runway_depletion"
+    distribution: str = "deterministic"
+    scale: float = 1.0
+    day_scale: float = 1.0
+    urgent_day_threshold_raw: float = 14.0
 
     def predict_days(self, x: pd.DataFrame) -> np.ndarray:
         anchor = pd.to_numeric(x.get("anchor_30d", 0.0), errors="coerce").fillna(0.0)
