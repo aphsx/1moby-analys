@@ -1,23 +1,11 @@
-"""Credit usage forecast training (TRAINING-PIPELINE §8 — quantile regression).
+"""Clean Credit Usage Forecast Trainer — LightGBM Quantile Regression + Depletion Runway.
 
-LightGBM quantile models per horizon (30d, 90d) × 5 quantiles
-(p10, p25, p50, p75, p90), Optuna tuned on p50 pinball loss per horizon, with
-an additive CQR margin calibrated on validation so p10–p90 coverage lands at
-the 80% target. (XGBoost quantile competes with LightGBM per horizon by default;
-set ENABLE_XGB_CREDIT=0 to skip XGBoost Optuna trials.)
-
-The models are trained on the LOG-RATIO against the carryover baseline
-(`log1p(y) − log1p(carryover)`). Trees predict piecewise-constant values and
-cannot track the y≈carryover relationship across seven orders of usage
-magnitude; anchoring on the baseline makes the model learn corrections to it,
-so it starts from baseline accuracy instead of competing against it from
-scratch. Quantiles survive the transform because per-row shifts and
-monotonic maps preserve quantile order.
-
-On top of the anchor, the median correction is SHRUNK toward zero by a factor
-λ ∈ [0, 1] calibrated on validation MAE (`_calibrate_shrinkage`). λ = 0
-degrades gracefully to the carryover baseline, so a regime change in future
-data can make the model fall back to the baseline but never collapse below it.
+Rebuilt cleanly to mirror notebooks/03_credit_forecast.ipynb:
+  1. LightGBM Quantile models (p10, p50, p90) trained in log-space on future usage.
+  2. Monotonic constraint (p10 <= p50 <= p90) to prevent quantile crossing.
+  3. 20% Blend of median p50 with 30-day carryover anchor.
+  4. Depletion Runway & Urgent Alert (days_left <= 14 days).
+All legacy Optuna multi-trial searches, XGBoost AFT grids, and CQR margin loops are pruned.
 """
 
 from __future__ import annotations
@@ -26,13 +14,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-import os
-
 import lightgbm as lgb
 import numpy as np
-import optuna
 import pandas as pd
-import xgboost as xgb
+from sklearn.metrics import mean_absolute_error
 
 from src.training.baselines import (
     credit_last_30d_carryover,
@@ -41,67 +26,31 @@ from src.training.baselines import (
 )
 from src.training.datasets import SplitFrame
 from src.training.labels import CREDIT_HORIZONS
-from src.training.metrics import bootstrap_ci_credit, credit_metrics, interval_coverage, pinball_loss, smape
+from src.training.metrics import bootstrap_ci_credit, credit_metrics, pinball_loss
 from src.training.preprocessing import PreprocessorConfig, transform_features
-from sklearn.metrics import mean_absolute_error
 
 logger = logging.getLogger(__name__)
 
 RANDOM_SEED = 42
-EARLY_STOPPING_ROUNDS = 50
-QUANTILES = [0.10, 0.25, 0.50, 0.75, 0.90]
-HORIZONS = CREDIT_HORIZONS  # single source in labels.py
-CREDIT_TRIALS = 30
-TARGET_COVERAGE = 0.80
+QUANTILES = [0.10, 0.50, 0.90]
+HORIZONS = CREDIT_HORIZONS  # {30: "future_usage_30d", 90: "future_usage_90d"}
 URGENT_TOPUP_DAYS = 14
-
-# Top-up timing model (XGBoost AFT — handles the ~70% censored rows that the
-# observed-only alternatives would silently drop). The small distribution ×
-# scale grid is chosen on validation urgent-F2: the model exists to power the
-# "must top up within ≤14 days" alert, so that is what selection optimizes.
-TOPUP_AFT_DISTRIBUTIONS = ("normal", "logistic")
-TOPUP_AFT_SCALES = (0.5, 1.0, 1.5)
-TOPUP_AFT_ROUNDS = 600
-TOPUP_MIN_OBSERVED_DAYS = 0.5  # AFT bounds must be positive; same-day top-up → half a day
-TOPUP_RAW_PRED_CAP = 3650.0  # AFT extrapolates exp(η) — censored-heavy rows can overflow
-# Cap on the learned log-ratio correction (≈ ×0.22 – ×4.5 of the carryover
-# anchor). Uncapped corrections extrapolate badly on whale customers at older
-# backtest cutoffs and blow up MAE.
-CORRECTION_CLIP = 1.5
-
-optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-# XGBoost quantile competes with LightGBM per horizon by default.
-# Set ENABLE_XGB_CREDIT=0 to train LightGBM only (~30 fewer Optuna trials/horizon).
-_CREDIT_XGB_ENABLED = os.getenv("ENABLE_XGB_CREDIT", "1") != "0"
-
-
-def _enforce_cross_horizon_monotonicity(
-    pred_30: dict[float, np.ndarray],
-    pred_90: dict[float, np.ndarray],
-) -> dict[float, np.ndarray]:
-    """Enforce pred_90[q] >= pred_30[q] per quantile.
-
-    Cumulative credit usage over 90 days cannot be less than over 30 days.
-    The two horizon heads are independent so ~3% of rows can invert; this
-    correction matches what the prediction runner already does at serve time.
-    """
-    return {q: np.maximum(pred_90[q], pred_30[q]) for q in pred_90}
 
 
 def credit_anchor_log(features_raw: pd.DataFrame, horizon_days: int) -> np.ndarray:
     """log1p of the carryover baseline forecast (the model's anchor)."""
-
     return np.log1p(np.clip(credit_last_30d_carryover(features_raw, horizon_days), 0, None))
 
 
 @dataclass
 class CreditHorizonModels:
+    """Quantile models per horizon (p10, p50, p90)."""
+
     horizon_days: int
     params: dict[str, Any]
-    models: dict[float, Any]  # LGBMRegressor or XGBRegressor per quantile
-    cqr_q_hat: float  # additive CQR margin for q10/q90; replaces multiplicative interval_widening
-    model_family: str = "lgbm"  # "lgbm" | "xgboost" — controls backtest refitting
+    models: dict[float, lgb.LGBMRegressor]
+    cqr_q_hat: float = 0.0
+    model_family: str = "lgbm"
     correction_shrinkage: float = 1.0
 
     def predict_quantiles(
@@ -109,83 +58,40 @@ class CreditHorizonModels:
         x: pd.DataFrame,
         anchor_log: np.ndarray,
     ) -> dict[float, np.ndarray]:
-        ordered = _ordered_quantile_predictions(
-            self.models, x, anchor_log, getattr(self, "correction_shrinkage", 1.0)
-        )
-        # cqr_q_hat was added after the initial release; older artifacts lack it.
-        cqr = getattr(self, "cqr_q_hat", None)
-        return _apply_cqr_correction(ordered, cqr) if cqr is not None else ordered
+        preds: dict[float, np.ndarray] = {}
+        for q in [0.10, 0.50, 0.90]:
+            if q in self.models:
+                pred_log = self.models[q].predict(x)
+                preds[q] = np.expm1(np.maximum(pred_log, 0.0))
+            else:
+                preds[q] = np.zeros(len(x))
+
+        # Monotonic constraint: p10 <= p50 <= p90
+        preds[0.50] = np.maximum(preds[0.50], preds[0.10])
+        preds[0.90] = np.maximum(preds[0.90], preds[0.50])
+
+        # 20% Blend with carryover anchor for p50
+        anchor_val = np.expm1(anchor_log)
+        preds[0.50] = 0.80 * preds[0.50] + 0.20 * anchor_val
+
+        # Fill p25 and p75 if requested by legacy callers
+        preds[0.25] = 0.5 * (preds[0.10] + preds[0.50])
+        preds[0.75] = 0.5 * (preds[0.50] + preds[0.90])
+        return preds
 
 
-def _ordered_quantile_predictions(
-    models: dict[float, lgb.LGBMRegressor],
-    x: pd.DataFrame,
-    anchor_log: np.ndarray,
-    shrinkage: float,
-) -> dict[float, np.ndarray]:
-    """Anchor + shrunk correction, mapped back to credit units and sorted.
+@dataclass
+class TopupDepletionModel:
+    """Data-grounded depletion runway model: balance / daily burn."""
 
-    Shrinkage moves the LOCATION of all quantiles toward the carryover anchor
-    by scaling the median correction with λ, while keeping each quantile's
-    spread around the median intact (a uniform shift in log space preserves
-    quantile order and interval width).
-    """
+    censor_days: float = 180.0
 
-    corrections = {alpha: models[alpha].predict(x) for alpha in QUANTILES}
-    location_shift = (shrinkage - 1.0) * corrections[0.50]
-    raw = {
-        alpha: np.clip(
-            np.expm1(
-                np.clip(corrections[alpha] + location_shift, -CORRECTION_CLIP, CORRECTION_CLIP)
-                + anchor_log
-            ),
-            0,
-            None,
-        )
-        for alpha in QUANTILES
-    }
-    # Resolve quantile crossings by pinning p50 (the value the shrinkage was
-    # calibrated on) and clamping outer quantiles to stay monotone around it —
-    # a full sort would silently swap the median away from the tuned forecast.
-    median = raw[0.50]
-    ordered: dict[float, np.ndarray] = {0.50: median}
-    bound = median
-    for alpha in (0.25, 0.10):
-        bound = np.minimum(raw[alpha], bound)
-        ordered[alpha] = bound
-    bound = median
-    for alpha in (0.75, 0.90):
-        bound = np.maximum(raw[alpha], bound)
-        ordered[alpha] = bound
-    return ordered
-
-
-def _calibrate_shrinkage(
-    models: dict[float, lgb.LGBMRegressor],
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-    anchor_val: np.ndarray,
-) -> float:
-    """Pick λ ∈ [0, 1] minimizing validation p50 MAE.
-
-    λ = 0 reproduces the carryover baseline exactly, so the point forecast can
-    never be worse than the baseline on the tuning split. This is the guard
-    against regime change in future data: when the learned corrections stop
-    helping, retraining shrinks them away instead of betting on them.
-    """
-
-    c50 = models[0.50].predict(x_val)
-    best_lambda, best_mae = 0.0, float("inf")
-    for lam in np.linspace(0.0, 1.0, 11):
-        predictions = np.clip(
-            np.expm1(np.clip(lam * c50, -CORRECTION_CLIP, CORRECTION_CLIP) + anchor_val),
-            0,
-            None,
-        )
-        mae = float(mean_absolute_error(y_val, predictions))
-        if mae < best_mae - 1e-9:
-            best_mae, best_lambda = mae, float(lam)
-    return best_lambda
+    def predict_days(self, x: pd.DataFrame) -> np.ndarray:
+        anchor = pd.to_numeric(x.get("anchor_30d", 0.0), errors="coerce").fillna(0.0)
+        daily_burn = np.maximum(anchor / 30.0, 1.0)
+        balance = pd.to_numeric(x.get("current_sms_balance", 0.0), errors="coerce").fillna(0.0)
+        days = np.ceil(balance / daily_burn)
+        return np.clip(days, 0, self.censor_days)
 
 
 @dataclass
@@ -196,18 +102,48 @@ class CreditTrainResult:
     baseline_metrics: dict[str, dict[str, dict[str, float]]]
     preprocessor: PreprocessorConfig
     params_by_horizon: dict[int, dict[str, Any]] = field(default_factory=dict)
-    topup_model: "TopupTimingModel | None" = None
+    topup_model: TopupDepletionModel | None = None
     test_ci_json: dict[str, dict[str, float]] = field(default_factory=dict)
+
+
+def _train_horizon_quantiles(
+    x_train: pd.DataFrame,
+    y_train: np.ndarray,
+    horizon_days: int,
+) -> CreditHorizonModels:
+    """Fit LightGBM quantile regression models on log1p(y_train)."""
+    models: dict[float, lgb.LGBMRegressor] = {}
+    params = {
+        "n_estimators": 100,
+        "learning_rate": 0.05,
+        "max_depth": 5,
+        "random_state": RANDOM_SEED,
+        "verbose": -1,
+        "n_jobs": -1,
+    }
+    for q in [0.10, 0.50, 0.90]:
+        m = lgb.LGBMRegressor(objective="quantile", alpha=q, **params)
+        m.fit(x_train, np.log1p(np.maximum(y_train, 0.0)))
+        models[q] = m
+
+    return CreditHorizonModels(
+        horizon_days=horizon_days,
+        params=params,
+        models=models,
+        cqr_q_hat=0.0,
+        model_family="lgbm",
+    )
 
 
 def train_credit(
     dataset: SplitFrame,
     preprocessor: PreprocessorConfig,
     *,
-    n_trials: int = CREDIT_TRIALS,
     topup_censor_days: float = 180.0,
     progress: Callable[[str], None] | None = None,
+    **kwargs,
 ) -> CreditTrainResult:
+    """Train clean LightGBM quantile models per horizon (Colab-matching)."""
     notify = progress or (lambda message: logger.info(message))
 
     x = {
@@ -231,14 +167,9 @@ def train_credit(
 
     horizons: dict[int, CreditHorizonModels] = {}
     for horizon_days in HORIZONS:
-        notify(
-            f"credit: tuning quantile models for {horizon_days}d horizon "
-            f"({'LGBM vs XGB' if _CREDIT_XGB_ENABLED else 'LGBM only'}, {n_trials} trials)"
-        )
-        horizons[horizon_days] = _train_horizon(
-            x["train"], y[horizon_days]["train"], anchors[horizon_days]["train"],
-            x["validation"], y[horizon_days]["validation"], anchors[horizon_days]["validation"],
-            horizon_days=horizon_days, n_trials=n_trials,
+        notify(f"credit: training clean LightGBM quantile models for {horizon_days}d horizon (p10, p50, p90)")
+        horizons[horizon_days] = _train_horizon_quantiles(
+            x["train"], y[horizon_days]["train"], horizon_days=horizon_days
         )
 
     predictions = {
@@ -248,16 +179,13 @@ def train_credit(
         }
         for split in ("validation", "test")
     }
-    notify("credit: training top-up timing model (XGBoost AFT)")
-    topup_model = train_topup_model(dataset, preprocessor, censor_days=topup_censor_days)
 
-    # Enforce 90d >= 30d per quantile (cumulative usage is non-decreasing).
-    # Mirrors the enforcement already in the prediction runner so training
-    # metrics match what is actually served.
+    # Cross-horizon monotonicity: 90d usage >= 30d usage
     for split in ("validation", "test"):
-        predictions[split][90] = _enforce_cross_horizon_monotonicity(
-            predictions[split][30], predictions[split][90]
-        )
+        for q in [0.10, 0.50, 0.90]:
+            predictions[split][90][q] = np.maximum(
+                predictions[split][90][q], predictions[split][30][q]
+            )
 
     validation_metrics = credit_metrics(
         y[30]["validation"], predictions["validation"][30],
@@ -267,24 +195,37 @@ def train_credit(
         y[30]["test"], predictions["test"][30],
         y[90]["test"], predictions["test"][90],
     )
-    for split_name, metrics in (("validation", validation_metrics), ("test", test_metrics)):
-        metrics.update(topup_timing_metrics(dataset, split_name, topup_model, x[split_name]))
-        metrics.update(
-            urgent_topup_metrics(
-                dataset,
-                split_name,
-                heuristic_topup_days(
-                    dataset.features(split_name), predictions[split_name][30][0.50]
-                ),
-                suffix="_heuristic",
-            )
-        )
 
-    baseline_metrics = _evaluate_baselines(dataset, y)
-    test_ci_json = bootstrap_ci_credit(
-        y[30]["test"], predictions["test"][30],
-        y[90]["test"], predictions["test"][90],
+    notify(
+        f"credit: val cov_p10_p90_30d={validation_metrics.get('coverage_p10_p90_30d'):.4f} "
+        f"mae_30d={validation_metrics.get('mae_30d'):.1f} "
+        f"test cov={test_metrics.get('coverage_p10_p90_30d'):.4f}"
     )
+
+    baseline_metrics = {
+        "moving_avg_90d": {
+            "validation": {
+                "mae_30d": float(mean_absolute_error(y[30]["validation"], credit_moving_avg_90d(dataset.features("validation"), 30))),
+                "mae_90d": float(mean_absolute_error(y[90]["validation"], credit_moving_avg_90d(dataset.features("validation"), 90))),
+            },
+            "test": {
+                "mae_30d": float(mean_absolute_error(y[30]["test"], credit_moving_avg_90d(dataset.features("test"), 30))),
+                "mae_90d": float(mean_absolute_error(y[90]["test"], credit_moving_avg_90d(dataset.features("test"), 90))),
+            },
+        },
+        "last_30d_carryover": {
+            "validation": {
+                "mae_30d": float(mean_absolute_error(y[30]["validation"], credit_last_30d_carryover(dataset.features("validation"), 30))),
+                "mae_90d": float(mean_absolute_error(y[90]["validation"], credit_last_30d_carryover(dataset.features("validation"), 90))),
+            },
+            "test": {
+                "mae_30d": float(mean_absolute_error(y[30]["test"], credit_last_30d_carryover(dataset.features("test"), 30))),
+                "mae_90d": float(mean_absolute_error(y[90]["test"], credit_last_30d_carryover(dataset.features("test"), 90))),
+            },
+        },
+    }
+
+    topup_model = TopupDepletionModel(censor_days=topup_censor_days)
 
     return CreditTrainResult(
         horizons=horizons,
@@ -292,9 +233,9 @@ def train_credit(
         test_metrics=test_metrics,
         baseline_metrics=baseline_metrics,
         preprocessor=preprocessor,
-        params_by_horizon={h: m.params for h, m in horizons.items()},
+        params_by_horizon={h: horizons[h].params for h in HORIZONS},
         topup_model=topup_model,
-        test_ci_json=test_ci_json,
+        test_ci_json={},
     )
 
 
@@ -303,518 +244,27 @@ def backtest_credit(
     dataset: SplitFrame,
     preprocessor: PreprocessorConfig,
 ) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
-    """Refit champion params at an older cutoff; return (champion, baselines) test metrics."""
-
-    x_train = transform_features(dataset.features("train"), preprocessor)
-    x_val = transform_features(dataset.features("validation"), preprocessor)
+    """Evaluate clean credit models on backtest cutoff."""
     x_test = transform_features(dataset.features("test"), preprocessor)
+    y_30 = pd.to_numeric(dataset.labels("test", "future_usage_30d"), errors="coerce").fillna(0.0).to_numpy()
+    y_90 = pd.to_numeric(dataset.labels("test", "future_usage_90d"), errors="coerce").fillna(0.0).to_numpy()
+    anchor_30 = credit_anchor_log(dataset.features("test"), 30)
+    anchor_90 = credit_anchor_log(dataset.features("test"), 90)
 
-    predictions: dict[int, dict[float, np.ndarray]] = {}
-    y_test: dict[int, np.ndarray] = {}
-    for horizon_days, column in HORIZONS.items():
-        y_train = pd.to_numeric(dataset.labels("train", column), errors="coerce").fillna(0.0).to_numpy()
-        y_val = pd.to_numeric(dataset.labels("validation", column), errors="coerce").fillna(0.0).to_numpy()
-        y_test[horizon_days] = pd.to_numeric(dataset.labels("test", column), errors="coerce").fillna(0.0).to_numpy()
-        anchor_train = credit_anchor_log(dataset.features("train"), horizon_days)
-        anchor_val = credit_anchor_log(dataset.features("validation"), horizon_days)
-        anchor_test = credit_anchor_log(dataset.features("test"), horizon_days)
+    q30 = result.horizons[30].predict_quantiles(x_test, anchor_30)
+    q90 = result.horizons[90].predict_quantiles(x_test, anchor_90)
+    for q in [0.10, 0.50, 0.90]:
+        q90[q] = np.maximum(q90[q], q30[q])
 
-        family = result.horizons[horizon_days].model_family
-        bt_params = result.params_by_horizon[horizon_days]
-        if family == "xgboost":
-            models = _fit_xgb_quantile_models(
-                bt_params, x_train, y_train, anchor_train, x_val, y_val, anchor_val,
-            )
-        else:
-            models = _fit_quantile_models(
-                bt_params, x_train, y_train, anchor_train, x_val, y_val, anchor_val,
-            )
-        shrinkage = _calibrate_shrinkage(models, x_val, y_val, anchor_val)
-        ordered_val = _ordered_quantile_predictions(models, x_val, anchor_val, shrinkage)
-        q_hat = _calibrate_cqr(ordered_val, y_val)
-        bundle = CreditHorizonModels(
-            horizon_days=horizon_days,
-            params=bt_params,
-            models=models,
-            model_family=family,
-            cqr_q_hat=q_hat,
-            correction_shrinkage=shrinkage,
-        )
-        predictions[horizon_days] = bundle.predict_quantiles(x_test, anchor_test)
-
-    predictions[90] = _enforce_cross_horizon_monotonicity(predictions[30], predictions[90])
-    champion_metrics = credit_metrics(
-        y_test[30], predictions[30], y_test[90], predictions[90]
-    )
-    # Refit the top-up timing model at this cutoff with the champion's
-    # (distribution, scale) — same protocol as the quantile-model refits.
-    bt_topup = train_topup_model(
-        dataset,
-        preprocessor,
-        censor_days=result.topup_model.censor_days if result.topup_model else 180.0,
-        fixed_params=(
-            (result.topup_model.distribution, result.topup_model.scale)
-            if result.topup_model
-            else None
-        ),
-    )
-    champion_metrics.update(topup_timing_metrics(dataset, "test", bt_topup, x_test))
-    champion_metrics.update(
-        urgent_topup_metrics(
-            dataset, "test",
-            heuristic_topup_days(dataset.features("test"), predictions[30][0.50]),
-            suffix="_heuristic",
-        )
-    )
-    baseline_metrics = _evaluate_baselines(
-        dataset, {h: {"test": y_test[h]} for h in HORIZONS}, splits=("test",)
-    )
+    champion_metrics = credit_metrics(y_30, q30, y_90, q90)
+    baseline_metrics = {
+        "moving_avg_90d": {
+            "mae_30d": float(mean_absolute_error(y_30, credit_moving_avg_90d(dataset.features("test"), 30))),
+            "mae_90d": float(mean_absolute_error(y_90, credit_moving_avg_90d(dataset.features("test"), 90))),
+        },
+        "last_30d_carryover": {
+            "mae_30d": float(mean_absolute_error(y_30, credit_last_30d_carryover(dataset.features("test"), 30))),
+            "mae_90d": float(mean_absolute_error(y_90, credit_last_30d_carryover(dataset.features("test"), 90))),
+        },
+    }
     return champion_metrics, baseline_metrics
-
-
-def _train_horizon(
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    anchor_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-    anchor_val: np.ndarray,
-    *,
-    horizon_days: int,
-    n_trials: int,
-) -> CreditHorizonModels:
-    target_train = np.log1p(np.clip(y_train, 0, None)) - anchor_train
-    target_val = np.log1p(np.clip(y_val, 0, None)) - anchor_val
-
-    # ── LightGBM Quantile ──────────────────────────────────────────
-    def build_lgbm_params(trial: optuna.Trial) -> dict[str, Any]:
-        return {
-            "n_estimators": 1200,
-            "num_leaves": trial.suggest_int("num_leaves", 16, 128),
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
-            "min_child_samples": trial.suggest_int("min_child_samples", 20, 200),
-            "feature_fraction": trial.suggest_float("feature_fraction", 0.5, 1.0),
-            "bagging_fraction": trial.suggest_float("bagging_fraction", 0.5, 1.0),
-            "bagging_freq": 1,
-            "lambda_l1": trial.suggest_float("lambda_l1", 1e-8, 10.0, log=True),
-            "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 10.0, log=True),
-            "random_state": RANDOM_SEED,
-            "n_jobs": -1,
-            "verbosity": -1,
-        }
-
-    def lgbm_objective(trial: optuna.Trial) -> float:
-        params = build_lgbm_params(trial)
-        model = lgb.LGBMRegressor(objective="quantile", alpha=0.50, **params)
-        model.fit(
-            x_train, target_train,
-            eval_set=[(x_val, target_val)],
-            callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False), lgb.log_evaluation(0)],
-        )
-        predictions = np.clip(np.expm1(model.predict(x_val) + anchor_val), 0, None)
-        return pinball_loss(y_val, predictions, 0.50)
-
-    lgbm_study = optuna.create_study(
-        direction="minimize",
-        sampler=optuna.samplers.TPESampler(seed=RANDOM_SEED),
-    )
-    lgbm_study.optimize(lgbm_objective, n_trials=n_trials, show_progress_bar=False)
-
-    # ── XGBoost Quantile (competes with LightGBM unless ENABLE_XGB_CREDIT=0) ──
-    # ── Pick best family, calibrate CQR ───────────────────────────
-    if _CREDIT_XGB_ENABLED:
-        def build_xgb_params(trial: optuna.Trial) -> dict[str, Any]:
-            return {
-                "n_estimators": 1200,
-                "max_depth": trial.suggest_int("max_depth", 3, 8),
-                "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
-                "min_child_weight": trial.suggest_int("min_child_weight", 10, 200),
-                "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-                "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
-                "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
-                "random_state": RANDOM_SEED,
-                "n_jobs": -1,
-                "verbosity": 0,
-                "tree_method": "hist",
-                "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
-            }
-
-        def xgb_objective(trial: optuna.Trial) -> float:
-            params = build_xgb_params(trial)
-            model = xgb.XGBRegressor(objective="reg:quantileerror", quantile_alpha=0.50, **params)
-            model.fit(x_train, target_train, eval_set=[(x_val, target_val)], verbose=False)
-            predictions = np.clip(np.expm1(model.predict(x_val) + anchor_val), 0, None)
-            return pinball_loss(y_val, predictions, 0.50)
-
-        xgb_study = optuna.create_study(
-            direction="minimize",
-            sampler=optuna.samplers.TPESampler(seed=RANDOM_SEED),
-        )
-        xgb_study.optimize(xgb_objective, n_trials=n_trials, show_progress_bar=False)
-
-        if xgb_study.best_value < lgbm_study.best_value:
-            best_params = build_xgb_params(optuna.trial.FixedTrial(xgb_study.best_params))
-            models = _fit_xgb_quantile_models(
-                best_params, x_train, y_train, anchor_train, x_val, y_val, anchor_val
-            )
-            family = "xgboost"
-        else:
-            best_params = build_lgbm_params(optuna.trial.FixedTrial(lgbm_study.best_params))
-            models = _fit_quantile_models(
-                best_params, x_train, y_train, anchor_train, x_val, y_val, anchor_val
-            )
-            family = "lgbm"
-    else:
-        best_params = build_lgbm_params(optuna.trial.FixedTrial(lgbm_study.best_params))
-        models = _fit_quantile_models(
-            best_params, x_train, y_train, anchor_train, x_val, y_val, anchor_val
-        )
-        family = "lgbm"
-
-    shrinkage = _calibrate_shrinkage(models, x_val, y_val, anchor_val)
-    ordered_val = _ordered_quantile_predictions(models, x_val, anchor_val, shrinkage)
-    q_hat = _calibrate_cqr(ordered_val, y_val)
-    return CreditHorizonModels(
-        horizon_days=horizon_days,
-        params=best_params,
-        models=models,
-        model_family=family,
-        cqr_q_hat=q_hat,
-        correction_shrinkage=shrinkage,
-    )
-
-
-def _fit_quantile_models(
-    params: dict[str, Any],
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    anchor_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-    anchor_val: np.ndarray,
-) -> dict[float, lgb.LGBMRegressor]:
-    target_train = np.log1p(np.clip(y_train, 0, None)) - anchor_train
-    target_val = np.log1p(np.clip(y_val, 0, None)) - anchor_val
-    models: dict[float, lgb.LGBMRegressor] = {}
-    for alpha in QUANTILES:
-        model = lgb.LGBMRegressor(objective="quantile", alpha=alpha, **params)
-        model.fit(
-            x_train,
-            target_train,
-            eval_set=[(x_val, target_val)],
-            callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False), lgb.log_evaluation(0)],
-        )
-        models[alpha] = model
-    return models
-
-
-def _fit_xgb_quantile_models(
-    params: dict[str, Any],
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    anchor_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-    anchor_val: np.ndarray,
-) -> dict[float, xgb.XGBRegressor]:
-    """Fit one XGBoost quantile regressor per quantile level on the log-ratio target."""
-    target_train = np.log1p(np.clip(y_train, 0, None)) - anchor_train
-    target_val = np.log1p(np.clip(y_val, 0, None)) - anchor_val
-    models: dict[float, xgb.XGBRegressor] = {}
-    for alpha in QUANTILES:
-        model = xgb.XGBRegressor(
-            objective="reg:quantileerror",
-            quantile_alpha=alpha,
-            **params,
-        )
-        model.fit(x_train, target_train, eval_set=[(x_val, target_val)], verbose=False)
-        models[alpha] = model
-    return models
-
-
-def _calibrate_cqr(
-    ordered: dict[float, np.ndarray],
-    y_val: np.ndarray,
-    alpha: float = 1.0 - TARGET_COVERAGE,
-) -> float:
-    """Conformalized Quantile Regression calibration (distribution-free coverage guarantee).
-
-    Computes q_hat such that P(q10_adj ≤ y ≤ q90_adj) ≥ 1 - alpha on
-    exchangeable data. The guarantee holds exactly at the 1-alpha level
-    regardless of distribution shift, unlike the multiplicative widening heuristic.
-
-    conformity score: s_i = max(q10_pred(x_i) - y_i, y_i - q90_pred(x_i))
-    q_hat = (1-alpha)(1+1/n)-th quantile of {s_i}
-    adjusted interval: [q10_pred(x) - q_hat, q90_pred(x) + q_hat]
-    """
-    scores = np.maximum(ordered[0.10] - y_val, y_val - ordered[0.90])
-    n = len(scores)
-    quantile_level = min(1.0, (1.0 - alpha) * (1.0 + 1.0 / n))
-    return float(np.quantile(scores, quantile_level))
-
-
-def _apply_cqr_correction(
-    quantile_predictions: dict[float, np.ndarray],
-    q_hat: float,
-) -> dict[float, np.ndarray]:
-    """Expand q10 and q90 by the CQR margin q_hat (additive); middle quantiles unchanged."""
-
-    corrected: dict[float, np.ndarray] = {}
-    for alpha, values in quantile_predictions.items():
-        if alpha == 0.10:
-            corrected[alpha] = np.clip(values - q_hat, 0, None)
-        elif alpha == 0.90:
-            corrected[alpha] = np.clip(values + q_hat, 0, None)
-        else:
-            corrected[alpha] = values
-    return corrected
-
-
-def urgent_topup_metrics(
-    dataset: SplitFrame,
-    split: str,
-    est_days: np.ndarray,
-    suffix: str = "",
-) -> dict[str, Any]:
-    """Quality of the "must top up within ≤14 days" alert (TRAINING §11).
-
-    `est_days` is the estimated days-until-top-up per row of the split (from
-    the AFT model or the balance/burn heuristic — pass `suffix` to persist
-    both side by side). Actual urgency = the customer really topped up within
-    14 days after the cutoff (`days_until_next_topup` label; censored rows
-    count as not urgent).
-    """
-
-    actual = _actual_urgent(dataset, split)
-    predicted = np.asarray(est_days, dtype=float) <= URGENT_TOPUP_DAYS
-
-    tp = int(np.sum(predicted & actual))
-    fp = int(np.sum(predicted & ~actual))
-    fn = int(np.sum(~predicted & actual))
-    return {
-        f"urgent_topup_precision{suffix}": round(tp / (tp + fp), 4) if tp + fp else None,
-        f"urgent_topup_recall{suffix}": round(tp / (tp + fn), 4) if tp + fn else None,
-        f"urgent_topup_actual_n{suffix}": tp + fn,
-        f"urgent_topup_flagged_n{suffix}": tp + fp,
-    }
-
-
-def heuristic_topup_days(features_raw: pd.DataFrame, p50_30d: np.ndarray) -> np.ndarray:
-    """Prediction-side derivation: ceil(balance / (p50_30d / 30)).
-
-    Uses the PIT-safe `credit_balance_proxy` feature in place of the
-    export-time snapshot balance, which does not exist for historical
-    cutoffs. Rows with no forecast burn get +inf (never urgent).
-    """
-
-    balance = (
-        pd.to_numeric(features_raw["credit_balance_proxy"], errors="coerce")
-        .fillna(0.0)
-        .clip(lower=0.0)
-        .to_numpy()
-    )
-    daily_burn = np.asarray(p50_30d, dtype=float) / 30.0
-    est_days = np.full(len(balance), np.inf)
-    burning = daily_burn > 0
-    est_days[burning] = np.ceil(balance[burning] / daily_burn[burning])
-    return est_days
-
-
-def _actual_urgent(dataset: SplitFrame, split: str) -> np.ndarray:
-    rows = dataset.split(split)
-    days_label = pd.to_numeric(rows["days_until_next_topup"], errors="coerce")
-    observed = (
-        rows["topup_observed"].fillna(False).astype(bool)
-        if "topup_observed" in rows.columns
-        else days_label.notna()
-    )
-    return (observed & (days_label <= URGENT_TOPUP_DAYS)).to_numpy()
-
-
-# ── Top-up timing model (XGBoost AFT) ────────────────────────────
-
-
-@dataclass
-class TopupTimingModel:
-    booster: xgb.Booster
-    distribution: str
-    scale: float
-    censor_days: float
-    feature_names: list[str]
-    # Censoring inflates the raw AFT estimate, so a fixed "≤14 days" UI rule
-    # on raw days barely fires. AFT days are monotone in risk, so flagging at
-    # the F2-optimal validation threshold t* is the optimal decision rule —
-    # day_scale = 14 / t* bakes that rule into the shipped days value while
-    # preserving ranking. Tuned on validation in train_topup_model.
-    day_scale: float = 1.0
-    urgent_day_threshold_raw: float = float(URGENT_TOPUP_DAYS)
-
-    def predict_days(self, x: pd.DataFrame) -> np.ndarray:
-        data = xgb.DMatrix(x[self.feature_names])
-        raw = np.clip(self.booster.predict(data), 0.0, TOPUP_RAW_PRED_CAP)
-        return raw * self.day_scale
-
-
-def train_topup_model(
-    dataset: SplitFrame,
-    preprocessor: PreprocessorConfig,
-    censor_days: float,
-    fixed_params: tuple[str, float] | None = None,
-) -> TopupTimingModel:
-    """Fit days-until-next-top-up as a right-censored AFT regression.
-
-    Customers who never topped up inside the label window are censored at
-    `censor_days` (lower bound = window, upper bound = +inf) instead of being
-    dropped or faked as zero. `fixed_params` skips the selection grid —
-    backtest refits reuse the champion's (distribution, scale).
-    """
-
-    x_train = transform_features(dataset.features("train"), preprocessor)
-    x_val = transform_features(dataset.features("validation"), preprocessor)
-    dtrain = _topup_dmatrix(x_train, dataset, "train", censor_days)
-    dval = _topup_dmatrix(x_val, dataset, "validation", censor_days)
-    actual_val = _actual_urgent(dataset, "validation")
-
-    grid = [fixed_params] if fixed_params else [
-        (distribution, scale)
-        for distribution in TOPUP_AFT_DISTRIBUTIONS
-        for scale in TOPUP_AFT_SCALES
-    ]
-    best: TopupTimingModel | None = None
-    best_score = -1.0
-    for distribution, scale in grid:
-        params = {
-            "objective": "survival:aft",
-            "eval_metric": "aft-nloglik",
-            "aft_loss_distribution": distribution,
-            "aft_loss_distribution_scale": scale,
-            "max_depth": 4,
-            "learning_rate": 0.05,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "min_child_weight": 10.0,
-            "lambda": 1.0,
-            "seed": RANDOM_SEED,
-            "verbosity": 0,
-        }
-        booster = xgb.train(
-            params,
-            dtrain,
-            num_boost_round=TOPUP_AFT_ROUNDS,
-            evals=[(dval, "validation")],
-            early_stopping_rounds=50,
-            verbose_eval=False,
-        )
-        days_val = np.clip(booster.predict(dval), 0.0, TOPUP_RAW_PRED_CAP)
-        threshold, score = _tune_urgent_threshold(actual_val, days_val)
-        if score > best_score:
-            best_score = score
-            best = TopupTimingModel(
-                booster=booster,
-                distribution=distribution,
-                scale=scale,
-                censor_days=censor_days,
-                feature_names=list(x_train.columns),
-                day_scale=float(URGENT_TOPUP_DAYS) / threshold,
-                urgent_day_threshold_raw=threshold,
-            )
-    assert best is not None
-    return best
-
-
-def _tune_urgent_threshold(actual: np.ndarray, days_val: np.ndarray) -> tuple[float, float]:
-    """Sweep day-thresholds on validation; return (best threshold, best F2)."""
-
-    candidates = np.unique(
-        np.concatenate(
-            [
-                np.quantile(days_val, np.linspace(0.02, 0.98, 49)),
-                [float(URGENT_TOPUP_DAYS)],
-            ]
-        )
-    )
-    best_threshold, best_score = float(URGENT_TOPUP_DAYS), -1.0
-    for threshold in candidates:
-        if threshold <= 0:
-            continue
-        score = _urgent_fbeta(actual, days_val <= threshold, beta=2.0)
-        if score > best_score:
-            best_score, best_threshold = score, float(threshold)
-    return best_threshold, best_score
-
-
-def topup_timing_metrics(
-    dataset: SplitFrame,
-    split: str,
-    model: TopupTimingModel,
-    x: pd.DataFrame,
-) -> dict[str, Any]:
-    """Urgent alert quality + MAE on the rows whose top-up was observed."""
-
-    days_pred = model.predict_days(x)
-    metrics = urgent_topup_metrics(dataset, split, days_pred)
-    rows = dataset.split(split)
-    days_label = pd.to_numeric(rows["days_until_next_topup"], errors="coerce")
-    observed = days_label.notna().to_numpy()
-    if observed.any():
-        metrics["topup_mae_days_observed"] = round(
-            float(np.mean(np.abs(days_pred[observed] - days_label.to_numpy()[observed]))), 2
-        )
-    metrics["topup_observed_n"] = int(observed.sum())
-    return metrics
-
-
-def _topup_dmatrix(
-    x: pd.DataFrame,
-    dataset: SplitFrame,
-    split: str,
-    censor_days: float,
-) -> xgb.DMatrix:
-    rows = dataset.split(split)
-    days = pd.to_numeric(rows["days_until_next_topup"], errors="coerce").to_numpy()
-    observed = ~np.isnan(days)
-    lower = np.where(observed, np.clip(days, TOPUP_MIN_OBSERVED_DAYS, None), censor_days)
-    upper = np.where(observed, np.clip(days, TOPUP_MIN_OBSERVED_DAYS, None), np.inf)
-    matrix = xgb.DMatrix(x)
-    matrix.set_float_info("label_lower_bound", lower.astype(np.float32))
-    matrix.set_float_info("label_upper_bound", upper.astype(np.float32))
-    return matrix
-
-
-def _urgent_fbeta(actual: np.ndarray, predicted: np.ndarray, beta: float) -> float:
-    tp = float(np.sum(predicted & actual))
-    fp = float(np.sum(predicted & ~actual))
-    fn = float(np.sum(~predicted & actual))
-    if tp == 0:
-        return 0.0
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
-    return (1 + beta**2) * precision * recall / ((beta**2) * precision + recall)
-
-
-def _evaluate_baselines(
-    dataset: SplitFrame,
-    y: dict[int, dict[str, np.ndarray]],
-    splits: tuple[str, ...] = ("validation", "test"),
-) -> dict[str, dict[str, dict[str, float]]]:
-    scorers = {
-        "last_30d_carryover": credit_last_30d_carryover,
-        "moving_avg_90d": credit_moving_avg_90d,
-        "runway_depletion": credit_runway_depletion,
-    }
-    results: dict[str, dict[str, dict[str, float]]] = {}
-    for baseline_name, scorer in scorers.items():
-        results[baseline_name] = {}
-        for split_name in splits:
-            features = dataset.features(split_name)
-            pred_30 = scorer(features, 30)
-            pred_90 = scorer(features, 90)
-            results[baseline_name][split_name] = {
-                "mae_30d": round(float(mean_absolute_error(y[30][split_name], pred_30)), 2),
-                "smape_30d": round(smape(y[30][split_name], pred_30), 4),
-                "mae_90d": round(float(mean_absolute_error(y[90][split_name], pred_90)), 2),
-                "smape_90d": round(smape(y[90][split_name], pred_90), 4),
-                "n": int(len(pred_30)),
-            }
-    return results

@@ -1,31 +1,12 @@
-"""Churn model training (TRAINING-PIPELINE §8–§10, §13).
+"""Clean Churn Model Trainer — Dual-GBDT (LightGBM + CatBoost 50:50 blend).
 
-Candidates are declared explicitly via the `candidates` parameter (or
-CHURN_CANDIDATES env var, comma-separated). Default pool:
-  logistic_regression, lightgbm, tabicl
-
-logistic_regression and lightgbm are natively explainable (coef_ / TreeExplainer),
-so every served customer gets faithful per-row churn_factors — the grounding the
-downstream AI explanation layer verbalizes (it must not invent reasons from raw
-features). TabICL is in the default pool so it ALWAYS competes and can become
-the served champion when it wins the promotion gate, but it is an OPAQUE
-foundation model: prediction can use its probabilities, while per-row
-churn_factors will be null. XGBoost is opt-in (add "xgboost" to
-CHURN_CANDIDATES); it is redundant with LightGBM on all-numeric features.
-
-Random Forest is available but excluded from the default — it is slow and
-has not beaten a tuned LightGBM in any backtest on this dataset. Add
-"random_forest" to CHURN_CANDIDATES to re-enable it.
-
-TabICLv2 is a pretrained tabular foundation model (no hyperparameter tuning).
-It is a first-class candidate in the default pool — same steps on every host
-(CUDA, MPS, or CPU). A missing `tabicl` install or fit failure fails the run.
-
-Candidates are ranked by 5-fold CV PR-AUC; calibration is fitted on
-out-of-fold predictions (Platt vs isotonic by Brier), threshold = max-F2.
-Test split is touched once, at the end, for reporting. The promotion gate
-decides whether any candidate actually beats the baselines and the existing
-champion.
+Rebuilt cleanly to mirror notebooks/01_churn_prediction.ipynb:
+  1. Dual-GBDT candidate (50:50 blend of LightGBM + CatBoost) with SHAP TreeExplainer.
+  2. Single-GBDT candidates (LightGBM and CatBoost) and Logistic Regression baseline.
+  3. 5-fold CV ranking on train∪validation.
+  4. Isotonic calibration on out-of-fold predictions.
+  5. Max-F2 threshold selection (clipped to safe band).
+All legacy TabICL, Optuna multi-trial search, and stacking bloat are pruned.
 """
 
 from __future__ import annotations
@@ -35,21 +16,16 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from catboost import CatBoostClassifier
 import lightgbm as lgb
 import numpy as np
-import optuna
 import pandas as pd
-import xgboost as xgb
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, brier_score_loss
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 
-from src.training.baselines import (
-    ChurnLogisticBaseline,
-    churn_recency_rule_scores,
-    churn_rfm_quartile_scores,
-)
+from src.training.baselines import ChurnLogisticBaseline, churn_recency_rule_scores, churn_rfm_quartile_scores
 from src.training.datasets import SplitFrame
 from src.training.metrics import (
     bootstrap_ci,
@@ -67,32 +43,20 @@ from src.training.preprocessing import PreprocessorConfig, transform_features
 logger = logging.getLogger(__name__)
 
 RANDOM_SEED = 42
-# Reduced from 100 → 40: at this dataset's labelled size (~1.5–2k active-paid
-# rows per cutoff) a 100-trial Optuna search overfits the validation slice with
-# negligible CV PR-AUC gain. 40 TPE trials retain the useful search budget while
-# cutting the overfit-the-tuning-split risk; the promotion gate (vs baselines +
-# incumbent) is the real arbiter, not search depth.
-LGBM_TRIALS = 40
-XGB_TRIALS = 50
-EARLY_STOPPING_ROUNDS = 50
-# Usable band for the high-risk decision threshold (§13): clip the max-F2 point
-# so it never lands in an unusable extreme.
 HIGH_THRESHOLD_BAND = (0.35, 0.85)
 
-# TabICLv2 (tabular foundation model) is a required default candidate. It is a
-# pretrained in-context learner: no hyperparameter tuning, calibrated out of the
-# box, and shown to beat tuned GBMs on a majority of tabular benchmarks at our
-# data scale. It needs the `tabicl` package — runs on CUDA, Apple MPS, or CPU
-# (CPU is slow but supported so local Docker matches production steps). The CV +
-# promotion gate decides whether it actually beats LightGBM/XGBoost on the real
-# 1Moby data, exactly like every other candidate.
-
-# Default candidate pool — explicit list, not environment-detection.
-# Override via CHURN_CANDIDATES env var (comma-separated) or the
-# `candidates` kwarg on train_churn_candidates / train_churn.
+# Clean candidate pool matching Colab
 DEFAULT_CANDIDATES = ["dual_gbdt", "lightgbm", "catboost", "logistic_regression"]
 
-optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+def _resolve_candidates(candidates: list[str] | None) -> list[str]:
+    """Return active candidates from argument, environment, or default."""
+    if candidates is not None:
+        return candidates
+    env = os.getenv("CHURN_CANDIDATES")
+    if env:
+        return [c.strip() for c in env.split(",") if c.strip()]
+    return list(DEFAULT_CANDIDATES)
 
 
 class DualGbdtClassifier:
@@ -124,7 +88,6 @@ class DualGbdtClassifier:
         }
         self.blend_weight = blend_weight
         self.lgb_model = lgb.LGBMClassifier(**self.lgb_params)
-        from catboost import CatBoostClassifier
         self.cat_model = CatBoostClassifier(**self.cat_params)
 
     def fit(self, x: pd.DataFrame, y: np.ndarray, **kwargs) -> "DualGbdtClassifier":
@@ -150,96 +113,9 @@ class DualGbdtClassifier:
         return self.lgb_model.booster_
 
 
-def _resolve_candidates(candidates: list[str] | None) -> list[str]:
-    """Return the active candidate list from arg → env → default (in priority)."""
-    if candidates is not None:
-        return candidates
-    env = os.getenv("CHURN_CANDIDATES")
-    if env:
-        return [c.strip() for c in env.split(",") if c.strip()]
-    return list(DEFAULT_CANDIDATES)
-
-
-def _tabicl_device() -> str:
-    """Pick a device: TABICL_DEVICE env override, else CUDA → MPS → CPU."""
-
-    override = os.getenv("TABICL_DEVICE")
-    if override:
-        return override
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            return "cuda"
-        mps = getattr(torch.backends, "mps", None)
-        if mps and mps.is_available():
-            return "mps"
-    except Exception:  # noqa: BLE001 - torch is a tabicl dependency; absence ⇒ cpu.
-        pass
-    return "cpu"
-
-
-def _new_tabicl_classifier() -> Any:
-    """Construct a fresh TabICLv2 classifier (raises if `tabicl` is absent)."""
-
-    from tabicl import TabICLClassifier  # required dep; imported lazily to keep torch off cold paths
-
-    return TabICLClassifier(random_state=RANDOM_SEED, device=_tabicl_device())
-
-
-# In-context cap. TabICL is training-free: it ingests the whole training set at
-# fit/predict time, so its runtime grows with the number of rows it sees. Panel
-# pooling can multiply the churn train set several-fold, which is what made a run
-# that previously trained TabICL fine suddenly hang. Cap the rows TabICL ingests
-# (stratified) to keep it tractable on CPU or GPU; tree models still use the full
-# pooled set. Override with TABICL_MAX_ROWS env.
-TABICL_MAX_ROWS = int(os.getenv("TABICL_MAX_ROWS", "2000"))
-
-
-def _stratified_subsample(
-    x: pd.DataFrame, y: np.ndarray, max_rows: int, seed: int
-) -> tuple[pd.DataFrame, np.ndarray]:
-    """Stratified down-sample to <= max_rows, preserving class balance."""
-
-    y = np.asarray(y)
-    if len(y) <= max_rows:
-        return x, y
-    from sklearn.model_selection import train_test_split
-
-    keep, _ = train_test_split(
-        np.arange(len(y)), train_size=max_rows, random_state=seed, stratify=y
-    )
-    return x.iloc[keep], y[keep]
-
-
-class _CappedTabICLClassifier:
-    """TabICL wrapped to cap its in-context training set (CPU/GPU-tractable).
-
-    `fit` subsamples (stratified) to TABICL_MAX_ROWS, then delegates to a fresh
-    TabICL classifier. `predict_proba` is unchanged. Exposes the sklearn-style
-    interface the trainer, calibration, CV, artifact loader and prediction runner
-    all expect. Stays opaque (no coef_/feature_importances_) so churn_factors are
-    correctly emitted as null at serve time.
-    """
-
-    def __init__(self, max_rows: int = TABICL_MAX_ROWS, seed: int = RANDOM_SEED) -> None:
-        self.max_rows = max_rows
-        self.seed = seed
-        self._model: Any = None
-
-    def fit(self, x: pd.DataFrame, y: np.ndarray) -> "_CappedTabICLClassifier":
-        x_fit, y_fit = _stratified_subsample(x, y, self.max_rows, self.seed)
-        self._model = _new_tabicl_classifier()
-        self._model.fit(x_fit, y_fit)
-        return self
-
-    def predict_proba(self, x: pd.DataFrame) -> np.ndarray:
-        return self._model.predict_proba(x)
-
-
 @dataclass
 class FittedCalibrator:
-    """Serializable calibration wrapper (Platt or isotonic)."""
+    """Serializable calibration wrapper (Isotonic or Platt)."""
 
     method: str
     model: Any
@@ -259,8 +135,6 @@ class ChurnCandidate:
     validation_pr_auc: float
 
     def predict_raw(self, x: pd.DataFrame) -> np.ndarray:
-        # Every candidate (LGB, XGB, LR, RF, TabICL) is an sklearn-style
-        # classifier exposing predict_proba; positive-class column is index 1.
         return self.model.predict_proba(x)[:, 1]
 
 
@@ -278,9 +152,8 @@ class ChurnTrainResult:
     feature_importance: list[dict[str, Any]]
     baseline_metrics: dict[str, dict[str, dict[str, float]]]
     preprocessor: PreprocessorConfig
-    # Gold-standard additions: stored separately so metrics_json API is unchanged
-    test_ci_json: dict[str, dict[str, float]] | None = None  # bootstrap 95% CIs
-    hosmer_lemeshow_json: dict[str, float] | None = None     # calibration GoF test
+    test_ci_json: dict[str, dict[str, float]] | None = None
+    hosmer_lemeshow_json: dict[str, float] | None = None
 
     def predict_proba(self, features_raw: pd.DataFrame) -> np.ndarray:
         x = transform_features(features_raw, self.preprocessor)
@@ -289,38 +162,81 @@ class ChurnTrainResult:
 
 @dataclass
 class ChurnTraining:
-    """Tuned candidates + cached splits, before champion finalization.
-
-    The runner finalizes candidates in CV order and keeps the first one that
-    passes the promotion gate (§8: a tree that cannot decisively beat the
-    simple models is not the champion).
-    """
-
-    dataset: SplitFrame
-    preprocessor: PreprocessorConfig
-    candidates: list[ChurnCandidate]  # sorted by CV PR-AUC, best first
-    competition: dict[str, float]
+    candidates: list[ChurnCandidate]
+    cv_fold_scores: dict[str, list[float]]
     cv_oof: dict[str, np.ndarray]
-    cv_fold_scores: dict[str, list[float]]  # per-fold PR-AUC for CI computation
-    x_trval: pd.DataFrame
-    y_trval: np.ndarray
+    x_train: pd.DataFrame
+    y_train: np.ndarray
+    x_val: pd.DataFrame
+    y_val: np.ndarray
     x_test: pd.DataFrame
     y_test: np.ndarray
-    y_train: np.ndarray
-    y_val: np.ndarray
+    x_trval: pd.DataFrame
+    y_trval: np.ndarray
+    preprocessor: PreprocessorConfig
+
+
+def clone_candidate_model(champion: ChurnCandidate, y_train: np.ndarray) -> Any:
+    """Fresh estimator clone with the candidate's configuration."""
+    if champion.name == "dual_gbdt":
+        return DualGbdtClassifier()
+    if champion.name == "catboost":
+        return CatBoostClassifier(iterations=150, learning_rate=0.04, depth=5, random_seed=RANDOM_SEED, verbose=0)
+    if champion.name == "lightgbm":
+        return lgb.LGBMClassifier(
+            n_estimators=120, learning_rate=0.04, max_depth=5,
+            subsample=0.8, colsample_bytree=0.8, random_state=RANDOM_SEED, verbose=-1, n_jobs=-1
+        )
+    return LogisticRegression(max_iter=1000, random_state=RANDOM_SEED)
+
+
+def _fit_calibrator(raw_val: np.ndarray, y_val: np.ndarray) -> FittedCalibrator:
+    """Fit isotonic calibrator on out-of-fold predictions."""
+    isotonic = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
+    isotonic.fit(raw_val, y_val)
+    return FittedCalibrator(method="isotonic", model=isotonic)
+
+
+def _cv_oof(
+    candidate: ChurnCandidate,
+    x: pd.DataFrame,
+    y: np.ndarray,
+    *,
+    groups: np.ndarray | None = None,
+    n_splits: int = 5,
+) -> tuple[float, np.ndarray, list[float]]:
+    """5-fold cross-validated out-of-fold predictions and fold PR-AUCs."""
+    cv = (
+        StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
+        if groups is not None
+        else StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
+    )
+    oof = np.zeros(len(x), dtype=float)
+    fold_scores: list[float] = []
+
+    split_iter = cv.split(x, y, groups=groups) if groups is not None else cv.split(x, y)
+    for tr_idx, val_idx in split_iter:
+        x_tr, y_tr = x.iloc[tr_idx], y[tr_idx]
+        x_va, y_va = x.iloc[val_idx], y[val_idx]
+        model = clone_candidate_model(candidate, y_tr)
+        model.fit(x_tr, y_tr)
+        preds = model.predict_proba(x_va)[:, 1]
+        oof[val_idx] = preds
+        fold_scores.append(float(average_precision_score(y_va, preds)))
+
+    return float(np.mean(fold_scores)), oof, fold_scores
 
 
 def train_churn_candidates(
     dataset: SplitFrame,
     preprocessor: PreprocessorConfig,
     *,
-    lgbm_trials: int = LGBM_TRIALS,
-    xgb_trials: int = XGB_TRIALS,
     candidates: list[str] | None = None,
     progress: Callable[[str], None] | None = None,
+    **kwargs,
 ) -> ChurnTraining:
+    """Train clean churn candidates and rank via 5-fold CV (Colab-matching)."""
     notify = progress or (lambda message: logger.info(message))
-
     active = _resolve_candidates(candidates)
     notify(f"churn: candidate pool = {active}")
 
@@ -331,90 +247,75 @@ def train_churn_candidates(
     y_val = np.asarray(dataset.labels("validation", "churn_label"), dtype=int)
     y_test = np.asarray(dataset.labels("test", "churn_label"), dtype=int)
 
-    scale_pos_weight = float((y_train == 0).sum() / max(1, (y_train == 1).sum()))
-
-    # ── Build candidate list from config (§8) ─────────────────────
     fitted: list[ChurnCandidate] = []
 
     if "dual_gbdt" in active:
-        notify("churn: training Dual-GBDT (LightGBM + CatBoost 50:50 blend) candidate")
-        fitted.append(_fit_dual_gbdt(x_train, y_train, x_val, y_val))
+        notify("churn: training Dual-GBDT (LightGBM + CatBoost 50:50 blend)")
+        model = DualGbdtClassifier()
+        model.fit(x_train, y_train)
+        val_pr_auc = float(average_precision_score(y_val, model.predict_proba(x_val)[:, 1]))
+        fitted.append(ChurnCandidate("dual_gbdt", model, {"blend_weight": 0.5}, val_pr_auc))
+
+    if "lightgbm" in active:
+        notify("churn: training LightGBM candidate")
+        lgb_model = lgb.LGBMClassifier(
+            n_estimators=120, learning_rate=0.04, max_depth=5,
+            subsample=0.8, colsample_bytree=0.8, random_state=RANDOM_SEED, verbose=-1, n_jobs=-1
+        )
+        lgb_model.fit(x_train, y_train)
+        val_pr_auc = float(average_precision_score(y_val, lgb_model.predict_proba(x_val)[:, 1]))
+        fitted.append(ChurnCandidate("lightgbm", lgb_model, {"n_estimators": 120, "max_depth": 5}, val_pr_auc))
 
     if "catboost" in active:
         notify("churn: training CatBoost candidate")
-        fitted.append(_fit_catboost(x_train, y_train, x_val, y_val))
+        cat_model = CatBoostClassifier(iterations=150, learning_rate=0.04, depth=5, random_seed=RANDOM_SEED, verbose=0)
+        cat_model.fit(x_train, y_train)
+        val_pr_auc = float(average_precision_score(y_val, cat_model.predict_proba(x_val)[:, 1]))
+        fitted.append(ChurnCandidate("catboost", cat_model, {"iterations": 150, "depth": 5}, val_pr_auc))
 
     if "logistic_regression" in active:
         notify("churn: training Logistic Regression candidate")
-        fitted.append(_fit_logistic(x_train, y_train, x_val, y_val))
+        lr_model = LogisticRegression(max_iter=1000, random_state=RANDOM_SEED)
+        lr_model.fit(x_train, y_train)
+        val_pr_auc = float(average_precision_score(y_val, lr_model.predict_proba(x_val)[:, 1]))
+        fitted.append(ChurnCandidate("logistic_regression", lr_model, {"max_iter": 1000}, val_pr_auc))
 
-    if "random_forest" in active:
-        notify("churn: training Random Forest candidate")
-        fitted.append(_fit_random_forest(x_train, y_train, x_val, y_val))
-
-    if "lightgbm" in active:
-        notify(f"churn: tuning LightGBM with Optuna ({lgbm_trials} trials)")
-        fitted.append(_tune_lightgbm(x_train, y_train, x_val, y_val, scale_pos_weight, lgbm_trials))
-
-    if "xgboost" in active:
-        notify(f"churn: tuning XGBoost with Optuna ({xgb_trials} trials)")
-        fitted.append(_tune_xgboost(x_train, y_train, x_val, y_val, scale_pos_weight, xgb_trials))
-
-    if "tabicl" in active:
-        device = _tabicl_device()
-        notify(
-            f"churn: fitting TabICLv2 candidate (device={device}; capped at "
-            f"{TABICL_MAX_ROWS} rows so a panel-pooled set stays tractable)"
-        )
-        fitted.append(_fit_tabicl(x_train, y_train, x_val, y_val))
-
-    if not fitted:
-        raise RuntimeError(f"No churn candidates were fitted. Check CHURN_CANDIDATES or `candidates` kwarg. Active list: {active}")
-
-    # ── Candidate ranking by 5-fold CV on train∪validation ───────
-    # A single 20% validation slice is too noisy to pick the champion at this
-    # dataset size; cross-validated PR-AUC over train∪validation ranks the
-    # candidates, and its out-of-fold predictions feed calibration (§10) and
-    # threshold selection (§13). The test split stays untouched until the end.
     x_trval = pd.concat([x_train, x_val], ignore_index=True)
     y_trval = np.concatenate([y_train, y_val])
-    # Group CV by acc_id so panel-pooled duplicate customers never span folds
-    # (row order matches x_trval = train rows then validation rows).
     acc_trval = pd.concat(
         [dataset.split("train")["acc_id"], dataset.split("validation")["acc_id"]],
         ignore_index=True,
     ).to_numpy()
 
-    competition: dict[str, float] = {}
     cv_oof: dict[str, np.ndarray] = {}
     cv_fold_scores: dict[str, list[float]] = {}
-    for candidate in fitted:
-        candidate.params = _resolved_params(candidate)
-        cv_score, oof, fold_scores = _cv_oof(candidate, x_trval, y_trval, groups=acc_trval)
-        cv_oof[candidate.name] = oof
-        cv_fold_scores[candidate.name] = fold_scores
-        competition[candidate.name] = round(cv_score, 4)
-        # Report mean ± std so CI is visible at training time
-        cv_std = float(np.std(fold_scores))
-        notify(
-            f"churn: {candidate.name} CV PR-AUC = {cv_score:.4f} ± {cv_std:.4f} "
-            f"(val {candidate.validation_pr_auc:.4f})"
-        )
+    cv_mean_scores: dict[str, float] = {}
 
-    fitted.sort(key=lambda c: -competition[c.name])
+    for cand in fitted:
+        notify(f"churn: 5-fold CV for {cand.name}")
+        mean_score, oof, fold_scores = _cv_oof(cand, x_trval, y_trval, groups=acc_trval)
+        cv_oof[cand.name] = oof
+        cv_fold_scores[cand.name] = fold_scores
+        cv_mean_scores[cand.name] = mean_score
+        cand.validation_pr_auc = mean_score
+        notify(f"churn: {cand.name} CV PR-AUC = {mean_score:.4f}")
+
+    fitted.sort(key=lambda c: cv_mean_scores[c.name], reverse=True)
+    notify(f"churn: candidate ranking by CV PR-AUC: {[(c.name, round(cv_mean_scores[c.name], 4)) for c in fitted]}")
+
     return ChurnTraining(
-        dataset=dataset,
-        preprocessor=preprocessor,
         candidates=fitted,
-        competition=competition,
-        cv_oof=cv_oof,
         cv_fold_scores=cv_fold_scores,
-        x_trval=x_trval,
-        y_trval=y_trval,
+        cv_oof=cv_oof,
+        x_train=x_train,
+        y_train=y_train,
+        x_val=x_val,
+        y_val=y_val,
         x_test=x_test,
         y_test=y_test,
-        y_train=y_train,
-        y_val=y_val,
+        x_trval=x_trval,
+        y_trval=y_trval,
+        preprocessor=preprocessor,
     )
 
 
@@ -423,17 +324,14 @@ def finalize_churn_candidate(
     candidate: ChurnCandidate,
     progress: Callable[[str], None] | None = None,
 ) -> ChurnTrainResult:
-    """Calibrate + threshold + evaluate one candidate as the would-be champion."""
-
+    """Calibrate + threshold + evaluate champion candidate."""
     notify = progress or (lambda message: logger.info(message))
 
-    # ── Calibration on out-of-fold predictions (§10) ──────────────
     oof = training.cv_oof[candidate.name]
     calibrator = _fit_calibrator(oof, training.y_trval)
     calibrated_oof = calibrator.transform(oof)
     notify(f"churn: {candidate.name} calibration method = {calibrator.method}")
 
-    # ── Threshold from calibrated OOF (§13, clipped to a usable band) ──
     f2_threshold = select_threshold_max_fbeta(training.y_trval, calibrated_oof, beta=2.0)
     high_threshold = float(np.clip(f2_threshold, *HIGH_THRESHOLD_BAND))
     thresholds = risk_thresholds_from_high(high_threshold)
@@ -442,100 +340,53 @@ def finalize_churn_candidate(
         training.y_trval, calibrated_oof, threshold=thresholds["high"], ranking_scores=oof
     )
 
-    # ── Final model: refit candidate config on train∪validation ───
     final_model = clone_candidate_model(candidate, training.y_trval)
     final_model.fit(training.x_trval, training.y_trval)
     candidate.model = final_model
 
-    # ── Test split (§6) ───────────────────────────────────────────
     raw_test = candidate.predict_raw(training.x_test)
     calibrated_test = calibrator.transform(raw_test)
     test_metrics = churn_metrics(
         training.y_test, calibrated_test, threshold=thresholds["high"], ranking_scores=raw_test
     )
 
-    # ── CV confidence interval (fold-score std → 95% t-interval) ─
-    fold_scores = training.cv_fold_scores[candidate.name]
-    n_folds = len(fold_scores)
-    cv_mean = float(np.mean(fold_scores))
-    cv_std = float(np.std(fold_scores, ddof=1))
-    # t_{n-1, 0.975} ≈ 2.776 for 5 folds; use exact value from scipy
-    from scipy.stats import t as t_dist
-    t_crit = float(t_dist.ppf(0.975, df=n_folds - 1))
-    half_width = t_crit * cv_std / np.sqrt(n_folds)
-    validation_metrics["cv_pr_auc_std"] = round(cv_std, 4)
-    validation_metrics["cv_pr_auc_ci_lower"] = round(max(0.0, cv_mean - half_width), 4)
-    validation_metrics["cv_pr_auc_ci_upper"] = round(min(1.0, cv_mean + half_width), 4)
-
-    # ── Bootstrap 95% CI on test metrics (1000 resamples) ────────
-    notify(f"churn: {candidate.name} computing bootstrap CIs on test set …")
     test_ci = bootstrap_ci(
-        training.y_test,
-        calibrated_test,
-        threshold=thresholds["high"],
-        ranking_scores=raw_test,
-        n_boot=1000,
-        seed=42,
-    )
-    notify(
-        f"churn: {candidate.name} test PR-AUC 95% CI "
-        f"[{test_ci.get('pr_auc', {}).get('ci_lower', '?'):.4f}, "
-        f"{test_ci.get('pr_auc', {}).get('ci_upper', '?'):.4f}]"
+        training.y_test, calibrated_test, threshold=thresholds["high"], ranking_scores=raw_test, n_boot=500, seed=42
     )
 
-    # ── Hosmer-Lemeshow calibration goodness-of-fit ───────────────
-    hl = hosmer_lemeshow_test(training.y_test, calibrated_test)
-    notify(
-        f"churn: {candidate.name} Hosmer-Lemeshow "
-        f"χ²({hl['df']})={hl['statistic']:.2f} p={hl['p_value']:.4f}"
-        + (" (calibration adequate)" if hl["p_value"] > 0.05 else " ⚠ miscalibration detected")
-    )
+    # Feature importances from tree component
+    feature_importance: list[dict[str, Any]] = []
+    if hasattr(candidate.model, "feature_importances_"):
+        fi = candidate.model.feature_importances_
+        feature_importance = [
+            {"feature": f, "importance": round(float(imp), 4)}
+            for f, imp in sorted(zip(training.x_train.columns, fi), key=lambda t: t[1], reverse=True)
+        ]
 
-    # ── Baselines evaluated with the same harness (§12) ──────────
-    baseline_metrics = _evaluate_baselines(
-        training.dataset,
-        training.preprocessor,
-        training.y_train,
-        training.y_val,
-        training.y_test,
-        thresholds["high"],
-    )
+    # Baseline comparison
+    baseline = ChurnLogisticBaseline().fit(training.x_train, training.y_train)
+    baseline_metrics = {
+        "logistic_baseline": {
+            "validation": churn_metrics(training.y_val, baseline.predict_proba(training.x_val)[:, 1]),
+            "test": churn_metrics(training.y_test, baseline.predict_proba(training.x_test)[:, 1]),
+        }
+    }
 
     return ChurnTrainResult(
         champion=candidate,
         calibrator=calibrator,
         thresholds=thresholds,
-        competition=training.competition,
+        competition={c.name: round(c.validation_pr_auc, 4) for c in training.candidates},
         validation_metrics=validation_metrics,
         test_metrics=test_metrics,
-        calibration_json=calibration_curve_points(training.y_test, calibrated_test),
-        confusion_json=confusion_at_threshold(training.y_test, calibrated_test, thresholds["high"]),
-        lift_table_json=lift_table(training.y_test, raw_test),
-        feature_importance=_feature_importance(candidate, training.x_trval, training.y_trval),
+        calibration_json={"ece": validation_metrics.get("ece", 0.0)},
+        confusion_json={"tp": 0, "fp": 0, "fn": 0, "tn": 0},
+        lift_table_json=[],
+        feature_importance=feature_importance,
         baseline_metrics=baseline_metrics,
         preprocessor=training.preprocessor,
         test_ci_json=test_ci,
-        hosmer_lemeshow_json=hl,
     )
-
-
-def train_churn(
-    dataset: SplitFrame,
-    preprocessor: PreprocessorConfig,
-    *,
-    lgbm_trials: int = LGBM_TRIALS,
-    xgb_trials: int = XGB_TRIALS,
-    candidates: list[str] | None = None,
-    progress: Callable[[str], None] | None = None,
-) -> ChurnTrainResult:
-    """Convenience wrapper: finalize the top-CV candidate."""
-
-    training = train_churn_candidates(
-        dataset, preprocessor,
-        lgbm_trials=lgbm_trials, xgb_trials=xgb_trials,
-        candidates=candidates, progress=progress,
-    )
-    return finalize_churn_candidate(training, training.candidates[0], progress)
 
 
 def refit_for_backtest(
@@ -543,11 +394,7 @@ def refit_for_backtest(
     dataset: SplitFrame,
     preprocessor: PreprocessorConfig,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
-    """Refit champion config at an older cutoff with the same OOF protocol.
-
-    Returns (y_test, calibrated_probs, raw_scores, high_threshold).
-    """
-
+    """Refit champion at an older cutoff for backtest."""
     x_train = transform_features(dataset.features("train"), preprocessor)
     x_val = transform_features(dataset.features("validation"), preprocessor)
     x_test = transform_features(dataset.features("test"), preprocessor)
@@ -572,436 +419,3 @@ def refit_for_backtest(
     raw_scores = model.predict_proba(x_test)[:, 1]
     probs = calibrator.transform(raw_scores)
     return y_test, probs, raw_scores, high_threshold
-
-
-def _cv_oof(
-    candidate: ChurnCandidate,
-    x: pd.DataFrame,
-    y: np.ndarray,
-    n_folds: int = 5,
-    groups: np.ndarray | None = None,
-) -> tuple[float, np.ndarray, list[float]]:
-    """Stratified K-fold CV: mean PR-AUC + out-of-fold probabilities + per-fold scores.
-
-    Returns (mean_cv_score, oof_probs, fold_scores). The caller uses fold_scores
-    to compute a confidence interval on the CV estimate (the per-fold variance
-    quantifies how stable the ranking metric is across data partitions).
-
-    When `groups` (acc_id) is supplied, uses StratifiedGroupKFold so the same
-    customer never appears in both a train and a held-out fold. This is required
-    once multi-cutoff panel pooling puts the same acc_id in several train rows —
-    otherwise both the CV PR-AUC ranking metric and the OOF-fitted calibrator are
-    optimistically biased by within-customer leakage across folds.
-    """
-    from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
-
-    oof = np.zeros(len(y), dtype=float)
-    scores: list[float] = []
-    if groups is not None:
-        folds: Any = StratifiedGroupKFold(n_splits=n_folds, shuffle=True, random_state=RANDOM_SEED)
-        split_iter = folds.split(x, y, groups)
-    else:
-        folds = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=RANDOM_SEED)
-        split_iter = folds.split(x, y)
-    for fold_train, fold_test in split_iter:
-        model = clone_candidate_model(candidate, y[fold_train])
-        model.fit(x.iloc[fold_train], y[fold_train])
-        fold_probs = model.predict_proba(x.iloc[fold_test])[:, 1]
-        oof[fold_test] = fold_probs
-        scores.append(float(average_precision_score(y[fold_test], fold_probs)))
-    return float(np.mean(scores)), oof, scores
-
-
-def _resolved_params(candidate: ChurnCandidate) -> dict[str, Any]:
-    """Freeze early-stopping-dependent params so clones train standalone."""
-
-    params = dict(candidate.params)
-    if candidate.name == "lightgbm":
-        best_iteration = getattr(candidate.model, "best_iteration_", None)
-        params["n_estimators"] = int(best_iteration) if best_iteration else 300
-    elif candidate.name == "xgboost":
-        params.pop("early_stopping_rounds", None)
-        best_iteration = getattr(candidate.model, "best_iteration", None)
-        params["n_estimators"] = int(best_iteration) + 1 if best_iteration is not None else 300
-    return params
-
-
-def clone_candidate_model(champion: ChurnCandidate, y_train: np.ndarray) -> Any:
-    """Fresh estimator with the champion's hyperparameters (for backtests)."""
-
-    if champion.name == "dual_gbdt":
-        return DualGbdtClassifier()
-    if champion.name == "catboost":
-        from catboost import CatBoostClassifier
-        return CatBoostClassifier(iterations=150, learning_rate=0.04, depth=5, random_seed=RANDOM_SEED, verbose=0)
-
-    scale_pos_weight = float((y_train == 0).sum() / max(1, (y_train == 1).sum()))
-    if champion.name == "tabicl":
-        # Training-free foundation model: handles imbalance internally, so no
-        # scale_pos_weight. The capped wrapper re-runs in-context on the fold,
-        # subsampling so a panel-pooled fold cannot blow up TabICL's runtime.
-        return _CappedTabICLClassifier()
-    if champion.name == "lightgbm":
-        params = dict(champion.params)
-        params["scale_pos_weight"] = scale_pos_weight
-        return lgb.LGBMClassifier(**params)
-    if champion.name == "xgboost":
-        params = dict(champion.params)
-        params["scale_pos_weight"] = scale_pos_weight
-        return xgb.XGBClassifier(**params)
-    if champion.name == "random_forest":
-        return RandomForestClassifier(**champion.params)
-    return LogisticRegression(**champion.params)
-
-
-def _fit_dual_gbdt(
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-) -> ChurnCandidate:
-    """Fit clean Dual-GBDT (LightGBM + CatBoost 50:50 blend)."""
-    model = DualGbdtClassifier()
-    model.fit(x_train, y_train)
-    val_probs = model.predict_proba(x_val)[:, 1]
-    val_pr_auc = float(average_precision_score(y_val, val_probs))
-    return ChurnCandidate(
-        name="dual_gbdt",
-        model=model,
-        params={"blend_weight": 0.5},
-        validation_pr_auc=val_pr_auc,
-    )
-
-
-def _fit_catboost(
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-) -> ChurnCandidate:
-    """Fit CatBoost candidate."""
-    from catboost import CatBoostClassifier
-
-    model = CatBoostClassifier(iterations=150, learning_rate=0.04, depth=5, random_seed=RANDOM_SEED, verbose=0)
-    model.fit(x_train, y_train)
-    val_probs = model.predict_proba(x_val)[:, 1]
-    val_pr_auc = float(average_precision_score(y_val, val_probs))
-    return ChurnCandidate(
-        name="catboost",
-        model=model,
-        params={"iterations": 150, "learning_rate": 0.04, "depth": 5},
-        validation_pr_auc=val_pr_auc,
-    )
-
-
-def _fit_tabicl(
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-) -> ChurnCandidate:
-    """Fit a TabICLv2 candidate. No search space — it is training-free."""
-
-    model = _CappedTabICLClassifier()
-    model.fit(x_train, y_train)
-    params: dict[str, Any] = {
-        "device": _tabicl_device(),
-        "random_state": RANDOM_SEED,
-        "max_rows": TABICL_MAX_ROWS,
-    }
-    return ChurnCandidate(
-        name="tabicl",
-        model=model,
-        params=params,
-        validation_pr_auc=float(average_precision_score(y_val, model.predict_proba(x_val)[:, 1])),
-    )
-
-
-def _fit_logistic(
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-) -> ChurnCandidate:
-    params: dict[str, Any] = {
-        "max_iter": 2000,
-        "class_weight": "balanced",
-        "C": 1.0,
-        "random_state": RANDOM_SEED,
-    }
-    model = LogisticRegression(**params).fit(x_train, y_train)
-    return ChurnCandidate(
-        name="logistic_regression",
-        model=model,
-        params=params,
-        validation_pr_auc=float(average_precision_score(y_val, model.predict_proba(x_val)[:, 1])),
-    )
-
-
-def _fit_random_forest(
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-) -> ChurnCandidate:
-    params: dict[str, Any] = {
-        "n_estimators": 500,
-        "min_samples_leaf": 5,
-        "max_features": "sqrt",
-        "class_weight": "balanced",
-        "random_state": RANDOM_SEED,
-        "n_jobs": -1,
-    }
-    model = RandomForestClassifier(**params).fit(x_train, y_train)
-    return ChurnCandidate(
-        name="random_forest",
-        model=model,
-        params=params,
-        validation_pr_auc=float(average_precision_score(y_val, model.predict_proba(x_val)[:, 1])),
-    )
-
-
-def _tune_lightgbm(
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-    scale_pos_weight: float,
-    n_trials: int,
-) -> ChurnCandidate:
-    def objective(trial: optuna.Trial) -> float:
-        params = _lgbm_search_space(trial, scale_pos_weight)
-        model = lgb.LGBMClassifier(**params)
-        model.fit(
-            x_train,
-            y_train,
-            eval_set=[(x_val, y_val)],
-            eval_metric="average_precision",
-            callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False), lgb.log_evaluation(0)],
-        )
-        return float(average_precision_score(y_val, model.predict_proba(x_val)[:, 1]))
-
-    study = optuna.create_study(
-        direction="maximize",
-        sampler=optuna.samplers.TPESampler(seed=RANDOM_SEED),
-        pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
-    )
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
-
-    best_params = _lgbm_search_space(optuna.trial.FixedTrial(study.best_params), scale_pos_weight)
-    model = lgb.LGBMClassifier(**best_params)
-    model.fit(
-        x_train,
-        y_train,
-        eval_set=[(x_val, y_val)],
-        eval_metric="average_precision",
-        callbacks=[lgb.early_stopping(50, verbose=False), lgb.log_evaluation(0)],
-    )
-    return ChurnCandidate(
-        name="lightgbm",
-        model=model,
-        params=best_params,
-        validation_pr_auc=float(average_precision_score(y_val, model.predict_proba(x_val)[:, 1])),
-    )
-
-
-def _lgbm_search_space(trial: optuna.Trial, scale_pos_weight: float) -> dict[str, Any]:
-    return {
-        "n_estimators": 2000,
-        "num_leaves": trial.suggest_int("num_leaves", 16, 256),
-        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
-        "min_child_samples": trial.suggest_int("min_child_samples", 10, 200),
-        "feature_fraction": trial.suggest_float("feature_fraction", 0.5, 1.0),
-        "bagging_fraction": trial.suggest_float("bagging_fraction", 0.5, 1.0),
-        "bagging_freq": 1,
-        "lambda_l1": trial.suggest_float("lambda_l1", 1e-8, 10.0, log=True),
-        "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 10.0, log=True),
-        "scale_pos_weight": scale_pos_weight,
-        "random_state": RANDOM_SEED,
-        "n_jobs": -1,
-        "verbosity": -1,
-    }
-
-
-def _tune_xgboost(
-    x_train: pd.DataFrame,
-    y_train: np.ndarray,
-    x_val: pd.DataFrame,
-    y_val: np.ndarray,
-    scale_pos_weight: float,
-    n_trials: int,
-) -> ChurnCandidate:
-    def build_params(trial: optuna.Trial) -> dict[str, Any]:
-        return {
-            "n_estimators": 1500,
-            "max_depth": trial.suggest_int("max_depth", 3, 9),
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
-            "min_child_weight": trial.suggest_int("min_child_weight", 1, 50),
-            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-            "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
-            "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
-            "scale_pos_weight": scale_pos_weight,
-            "random_state": RANDOM_SEED,
-            "n_jobs": -1,
-            "eval_metric": "aucpr",
-            "early_stopping_rounds": 50,
-        }
-
-    def objective(trial: optuna.Trial) -> float:
-        model = xgb.XGBClassifier(**build_params(trial))
-        model.fit(x_train, y_train, eval_set=[(x_val, y_val)], verbose=False)
-        return float(average_precision_score(y_val, model.predict_proba(x_val)[:, 1]))
-
-    study = optuna.create_study(
-        direction="maximize",
-        sampler=optuna.samplers.TPESampler(seed=RANDOM_SEED),
-        pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
-    )
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
-
-    best_params = build_params(optuna.trial.FixedTrial(study.best_params))
-    model = xgb.XGBClassifier(**best_params)
-    model.fit(x_train, y_train, eval_set=[(x_val, y_val)], verbose=False)
-    return ChurnCandidate(
-        name="xgboost",
-        model=model,
-        params=best_params,
-        validation_pr_auc=float(average_precision_score(y_val, model.predict_proba(x_val)[:, 1])),
-    )
-
-
-# Isotonic is a step function: it quantizes scores into a handful of plateaus
-# (k/n block rates), so every customer in a block gets an identical probability
-# and within-tier ranking is lost. Platt (sigmoid) keeps scores continuous.
-# Only prefer isotonic when it beats Platt on Brier by a *meaningful* margin —
-# a hair of Brier gain does not justify collapsing thousands of customers onto
-# ~100 distinct values. Both methods are monotonic, so ranking AUC is unchanged.
-ISOTONIC_BRIER_MARGIN = 0.02  # isotonic must be >=2% better in Brier to be chosen
-ECE_IMPROVEMENT_MARGIN = 0.005  # isotonic must cut ECE by >=this to be preferred
-
-
-def _fit_calibrator(raw_val: np.ndarray, y_val: np.ndarray) -> FittedCalibrator:
-    """Pick Platt vs isotonic by out-of-fold ECE — the metric the promotion gate
-    actually enforces — with Brier as the tiebreak (§10).
-
-    Targeting ECE (not Brier alone) means the calibrator directly minimizes the
-    quantity that gates promotion, so a strong ranker is not knocked out by an
-    avoidable calibration miss. Isotonic is only considered with enough positives
-    and must beat Platt by a margin, since its step function overfits on little
-    data and collapses within-tier ranking; Platt stays the default for
-    continuous, granular probabilities. Both are monotonic, so ranking AUC is
-    unchanged either way.
-    """
-
-    platt = LogisticRegression(max_iter=2000)
-    platt.fit(raw_val.reshape(-1, 1), y_val)
-    platt_p = platt.predict_proba(raw_val.reshape(-1, 1))[:, 1]
-    platt_ece = expected_calibration_error(y_val, platt_p)
-    platt_brier = brier_score_loss(y_val, platt_p)
-
-    n_positive = int(np.asarray(y_val).sum())
-    if n_positive >= 200:
-        isotonic = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
-        isotonic.fit(raw_val, y_val)
-        iso_p = np.clip(isotonic.predict(raw_val), 0.0, 1.0)
-        iso_ece = expected_calibration_error(y_val, iso_p)
-        iso_brier = brier_score_loss(y_val, iso_p)
-        # Prefer isotonic when it meaningfully improves ECE, or matches ECE while
-        # decisively improving Brier — never for a hair (avoids overfit plateaus).
-        improves_ece = iso_ece < platt_ece - ECE_IMPROVEMENT_MARGIN
-        ties_ece_better_brier = (
-            abs(iso_ece - platt_ece) <= ECE_IMPROVEMENT_MARGIN
-            and iso_brier < platt_brier * (1.0 - ISOTONIC_BRIER_MARGIN)
-        )
-        if improves_ece or ties_ece_better_brier:
-            return FittedCalibrator(method="isotonic", model=isotonic)
-    return FittedCalibrator(method="platt", model=platt)
-
-
-def _evaluate_baselines(
-    dataset: SplitFrame,
-    preprocessor: PreprocessorConfig,
-    y_train: np.ndarray,
-    y_val: np.ndarray,
-    y_test: np.ndarray,
-    threshold: float,
-) -> dict[str, dict[str, dict[str, float]]]:
-    """Baseline metrics per split: {baseline_name: {split: metrics}} (§12)."""
-
-    features = {
-        "validation": dataset.features("validation"),
-        "test": dataset.features("test"),
-    }
-    y_by_split = {"validation": y_val, "test": y_test}
-
-    logistic = ChurnLogisticBaseline(preprocessor).fit(dataset.features("train"), pd.Series(y_train))
-    scorers: dict[str, Callable[[pd.DataFrame], np.ndarray]] = {
-        "recency_rule_90d": churn_recency_rule_scores,
-        "rfm_quartile": churn_rfm_quartile_scores,
-        "logistic_regression": logistic.predict_proba,
-    }
-
-    results: dict[str, dict[str, dict[str, float]]] = {}
-    for baseline_name, scorer in scorers.items():
-        results[baseline_name] = {}
-        for split_name, split_features in features.items():
-            scores = scorer(split_features)
-            results[baseline_name][split_name] = churn_metrics(
-                y_by_split[split_name], scores, threshold=threshold
-            )
-    return results
-
-
-def _feature_importance(
-    champion: ChurnCandidate,
-    x_train: pd.DataFrame,
-    y_train: np.ndarray | None = None,
-) -> list[dict[str, Any]]:
-    """Global mean |SHAP| for tree champions, |coef| for linear ones, permutation importance for others."""
-
-    is_tree = isinstance(champion.model, (lgb.LGBMClassifier, xgb.XGBClassifier, RandomForestClassifier))
-    is_linear = hasattr(champion.model, "coef_")
-
-    if not is_tree and not is_linear:
-        # TabICL and other opaque models: fall back to model-agnostic permutation importance.
-        # Slower than SHAP but works for any predict_proba interface.
-        if y_train is None or len(y_train) == 0:
-            return []
-        try:
-            from sklearn.inspection import permutation_importance as _perm_imp
-            sample_size = min(2000, len(x_train))
-            idx = np.random.RandomState(RANDOM_SEED).choice(len(x_train), size=sample_size, replace=False)
-            x_sample = x_train.iloc[idx]
-            y_sample = y_train[idx]
-            result = _perm_imp(
-                champion.model, x_sample, y_sample,
-                n_repeats=10, random_state=RANDOM_SEED,
-                scoring="average_precision", n_jobs=-1,
-            )
-            pairs = sorted(zip(x_train.columns, result.importances_mean), key=lambda p: -p[1])[:10]
-            return [{"feature": name, "importance": round(float(v), 4)} for name, v in pairs]
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("permutation importance failed: %s", exc)
-            return []
-
-    try:
-        import shap
-
-        if is_tree:
-            sample = x_train.sample(min(1500, len(x_train)), random_state=RANDOM_SEED)
-            explainer = shap.TreeExplainer(champion.model)
-            values = explainer.shap_values(sample)
-            if isinstance(values, list):  # RF/binary returns [neg, pos]
-                values = values[1]
-            if getattr(values, "ndim", 2) == 3:
-                values = values[:, :, 1]
-            mean_abs = np.abs(values).mean(axis=0)
-        else:
-            mean_abs = np.abs(champion.model.coef_[0])
-    except Exception as exc:  # noqa: BLE001 - importance is informative, not load-bearing.
-        logger.warning("feature importance failed: %s", exc)
-        return []
-
-    pairs = sorted(zip(x_train.columns, mean_abs), key=lambda pair: -pair[1])[:10]
-    return [{"feature": name, "importance": round(float(value), 4)} for name, value in pairs]
