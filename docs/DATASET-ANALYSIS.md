@@ -322,50 +322,108 @@ $$
 
 ---
 
-## 7. Output ที่ควรได้ (Spec)
+## 7. Output ที่ควรได้ (Spec ฉบับสังคายนา: ตัดของมั่ว เพิ่มของที่ใช้จริง)
+
+การสังคายนา Output นี้ยึดหลัก **"Actionable B2B Analytics"** — ทุก Field ที่ออกมาต้องตอบได้ว่า **"ใครเป็นคนใช้ และเห็นตัวเลขนี้แล้วต้องทำอะไรต่อ?"** ถ้าฟิลด์ไหนเป็นโมเดลคณิตศาสตร์ที่ไม่มีคนใช้จริง หรือสร้างความเข้าใจผิด (เช่น นั่งเดาวันเติมเงินโดยไม่ดูยอดเครดิตคงเหลือ หรือเอาเครดิต SMS กับ Email มาบวกกัน) ให้ตัดทิ้งหรือปรับปรุงให้ถูกต้อง
+
+---
+
+### สรุปการเปลี่ยนแปลงสำคัญของ Field (เปรียบเทียบสิ่งที่มีอยู่ vs สิ่งที่ควรเป็น)
+
+| หัวข้อ | ของเดิมในระบบ / โค้ดเก่า | สิ่งที่ปรับปรุงใหม่ (Spec นี้) | เหตุผล |
+|---|---|---|---|
+| **การรวมช่องทางเครดิต** | `predicted_credit_usage_30d/90d` ก้อนเดียว (เอา SMS + Email มาบวกกัน) | แยกเป็น **`predicted_sms_usage_30d/90d`** และ **`predicted_email_usage_30d/90d`** | SMS กับ Email **คนละสินค้า คนละหน่วย และราคาต่างกันมาก** (SMS ~0.40 บาท vs Email ~0.15 บาท) บวกกันตรงๆ ไม่ได้ |
+| **การทำนายวันเติมเงิน** | `estimated_days_until_topup` (ใช้โมเดล Survival AFT เดาสุ่มวันที่เติมจากอดีต) | ยุบรวม/แทนที่ด้วย **`days_until_depletion_sms` (Runway: เครดิตจะหมดในกี่วัน)** | ลูกค้าไม่ได้เติมตามปฏิทิน แต่เติมเพราะ **"เครดิตใกล้หมด"** ค่า Runway (`คงเหลือ ÷ การใช้รายวัน`) คือตัวเลขจริงที่เซลล์ใช้เตือนลูกค้าก่อนระบบ OTP ล่ม |
+| **ยอดเครดิตคงเหลือ** | `credit_balance_total` = credit_sms + credit_email | แยกคงเหลือ **`credit_sms`** และ **`credit_email`** ชัดเจน (ฝั่ง Email ตัด default 2000 ออก) | ไม่เอาตัวเลขคนละสกุลมารวมกัน ป้องกันเซลล์เข้าใจผิดว่าลูกค้ายังมีเครดิตเหลือยิง SMS |
+| **ระดับความเร่งด่วน** | `credit_urgency_level` คำนวณจาก AFT days | `credit_urgency_level` คำนวณจาก **`min(days_until_depletion, days_until_expiry)`** | เร่งด่วนจริงเมื่อ **เครดิตใกล้หมด (< 7 วัน)** หรือ **เครดิตใกล้หมดอายุ (< 15 วัน)** |
+| **การจัดลำดับการโทร** | มี `priority_rank` แต่คำนวณไม่สะท้อนมูลค่าเงิน | **`priority_rank` จัดอันดับตาม `revenue_at_risk` + `credit_urgency`** | เซลล์เปิดหน้าจอมาแล้วรู้ทันทีว่าแถวที่ 1-20 คือใครที่ต้องโทรหาก่อนในเช้าวันนี้ |
+
+---
 
 ### 7.1 ระดับลูกค้า (1 แถว / บัญชี / prediction run)
 
-| Field | ความหมาย | หน่วย | มาจาก |
+ตารางแสดงผลลัพธ์ของลูกค้าแต่ละบัญชี (`ml_prediction_outputs`) แบ่งตาม 5 วัตถุประสงค์การใช้งาน:
+
+#### หมวดที่ 1: ข้อมูลพื้นฐาน & สถานะบัญชี (Identity & Health)
+| Field Name | Type | Unit / Enum | แหล่งที่มา / วิธีคำนวณ | วัตถุประสงค์ / ใครใช้? |
+|---|---|---|---|---|
+| `acc_id` | integer | รหัสบัญชี | Input Primary Key | อ้างอิงบัญชีลูกค้า |
+| `lifecycle_stage` | enum | `Active Paid`, `Active Free`, `Churned`, `Ghost` | กฎความต่อเนื่องของ Activity (ไม่ใช่ ML) | คัดกรองกลุ่มเป้าหมาย (Ghost 77% จะไม่ถูกนำมาคิด) |
+| `sub_stage` | enum | `Active Paid`, `Active Free`, `Churned Paid`, `Churned Free`, `Ghost` | กฎแบ่งย่อยตามประวัติการจ่ายเงิน | CS ใช้แยกแยะลูกค้าทดลองฟรี vs ลูกค้าที่เคยจ่าย |
+| `days_since_last_activity` | integer | วัน | `cutoff_date - max(payment, usage)` | บอกความสดใหม่ของการใช้งาน |
+| `usage_trend` | enum | `growing`, `stable`, `declining`, `dormant` | เทียบ usage 90 วันล่าสุด vs 90 วันก่อนหน้า | สัญญาณเตือนเบื้องต้นว่าลูกค้ากำลังขยายหรือหดตัว |
+
+#### หมวดที่ 2: การทำนายความเสี่ยงการเลิกใช้บริการ (Churn Prediction)
+| Field Name | Type | Unit / Enum | แหล่งที่มา / วิธีคำนวณ | วัตถุประสงค์ / ใครใช้? |
+|---|---|---|---|---|
+| `churn_probability` | numeric(5,4) | 0.0000 – 1.0000 | LightGBM Calibrated Probability (ทำนาย 90 วันข้างหน้า) | ความน่าจะเป็นที่ลูกค้าจะไม่มี Activity เลยใน 90 วัน |
+| `churn_risk_level` | enum | `low`, `medium`, `high`, `critical` | ตัดจาก `churn_probability` ตามเกณฑ์ที่ Calibrate แล้ว | ใช้ฟิลเตอร์บน UI เพื่อหาลูกค้ากลุ่มเสี่ยงสูง |
+| `churn_factors_json` | jsonb | Array of Factors | SHAP values หรือ Top Features ที่ส่งผลลบมากที่สุด | **ให้เซลล์ใช้อ่านก่อนยกหูโทร:** เช่น "ส่งน้อยลง 70%", "ไม่มียอดเติมเงินมา 90 วัน" |
+
+#### หมวดที่ 3: การประเมินมูลค่าทางการเงิน & รายได้ (CLV & Financial Value)
+| Field Name | Type | Unit / Enum | แหล่งที่มา / วิธีคำนวณ | วัตถุประสงค์ / ใครใช้? |
+|---|---|---|---|---|
+| `predicted_clv_6m` | numeric(14,2) | บาท (THB) | Two-Part Model: `P(pay) × E[revenue | pay]` (180 วันข้างหน้า) | คาดการณ์ยอดเงินที่ลูกค้าจะจ่ายให้ 1Moby ในอีก 6 เดือนข้างหน้า |
+| `clv_pay_probability` | numeric(5,4) | 0.0000 – 1.0000 | ส่วนที่ 1 ของ Two-Part Model (โอกาสซื้อซ้ำ) | คัดแยกลูกค้าที่จะเติมเงินแน่ๆ vs ลูกค้าที่จะใช้ของเดิมจนหมด |
+| `p_alive` | numeric(5,4) | 0.0000 – 1.0000 | BG/NBD Model (สถิติพฤติกรรมการซื้อซ้ำ) | สุขภาพความเป็นลูกค้าในระยะยาว (Customer Vitality) |
+| `customer_value_tier` | enum | `whale` (top 1%), `high` (top 10%), `mid`, `low` | จัดกลุ่มตาม Percentile ของ `predicted_clv_6m` | **แบ่งเกรดการดูแล:** Whale ต้องมี Key Account Manager ประกบ |
+| `revenue_at_risk` | numeric(14,2) | บาท (THB) | **`churn_probability × predicted_clv_6m`** | **มูลค่าความเสียหายที่แท้จริง** ใช้จัด Priority สูงสุดในการรักษาลูกค้า |
+
+#### หมวดที่ 4: การพยากรณ์ปริมาณเครดิต & จังหวะการเตือนเติมเงิน (Credit Operations)
+| Field Name | Type | Unit / Enum | แหล่งที่มา / วิธีคำนวณ | วัตถุประสงค์ / ใครใช้? |
+|---|---|---|---|---|
+| `predicted_sms_usage_30d` | numeric(14,2) | เครดิต/ข้อความ | LightGBM Quantile (p50) สำหรับ SMS | วางแผนปริมาณการใช้งาน SMS รายบัญชีใน 1 เดือน |
+| `predicted_sms_usage_90d` | numeric(14,2) | เครดิต/ข้อความ | LightGBM Quantile (p50) สำหรับ SMS | วางแผนปริมาณการใช้งาน SMS รายบัญชีใน 1 ไตรมาส |
+| `predicted_email_usage_30d` | numeric(14,2) | เครดิต/ฉบับ | LightGBM Quantile (p50) สำหรับ Email | วางแผนปริมาณ Email (แยกจาก SMS ชัดเจน) |
+| `predicted_email_usage_90d` | numeric(14,2) | เครดิต/ฉบับ | LightGBM Quantile (p50) สำหรับ Email | วางแผนปริมาณ Email รายไตรมาส |
+| `sms_credit_balance` | numeric(14,2) | เครดิต | ยอดคงเหลือจริงจาก Profile (`credit_sms`) ณ วัน Predict | ข้อมูลอ้างอิงเครดิตคงเหลือปัจจุบัน |
+| `days_until_depletion_sms` | integer | วัน | `credit_sms ÷ (predicted_sms_usage_30d ÷ 30)` | **Runway SMS:** เครดิต SMS จะหมดเกลี้ยงในอีกกี่วัน |
+| `days_until_expiry_sms` | integer | วัน | `expire_sms - cutoff_date` | เครดิต SMS จะหมดอายุในอีกกี่วัน (ถ้ามีวันหมดอายุ) |
+| `credit_urgency_level` | enum | `critical` (<7d), `warning` (7-14d), `monitor` (15-30d), `stable` (>30d) | ประเมินจาก `min(days_until_depletion, days_until_expiry)` | **Trigger ระบบแจ้งเตือนเซลล์:** แจ้งเตือนก่อนระบบส่งข้อความของลูกค้าจะล่ม |
+
+#### หมวดที่ 5: การจัดคิวปฏิบัติการของทีมขาย (Sales Action & Prioritization)
+| Field Name | Type | Unit / Enum | แหล่งที่มา / วิธีคำนวณ | วัตถุประสงค์ / ใครใช้? |
+|---|---|---|---|---|
+| `priority_score` | numeric(5,2) | 0.00 – 100.00 | ถ่วงน้ำหนักระหว่าง `revenue_at_risk` (70%) + `credit_urgency` (30%) | คะแนนรวมความเร่งด่วนในการเข้าดูแล |
+| `priority_rank` | integer | ลำดับ (1, 2, 3...) | จัดอันดับลูกค้าทั้งหมดตาม `priority_score` จากมากไปน้อย | **Call List ของเซลล์:** เปิดงานตอนเช้า โทรไล่จากอันดับ 1 ลงมา |
+| `action_recommendation` | text | ข้อความแนะนำ | Rules Engine จากสถานะรวม (เช่น "Whale เครดิตหมดใน 5 วัน: รีบเปิด PO ด่วน") | สรุปประโยคเดียวให้เซลล์รู้ว่าต้องทำอะไรกับลูกค้ารายนี้ |
+| `needs_review` | boolean | true / false | มีความผิดปกติ เช่น เครดิตติดลบ หรือพฤติกรรมเปลี่ยนฉับพลัน | แจ้งเตือนให้แอดมินหรือหัวหน้าทีมเข้ามาตรวจสอบข้อมูล |
+
+---
+
+### 7.2 ระดับภาพรวม (Run Summary: ต่อ 1 Prediction Run)
+
+ข้อมูลสรุปภาพรวมสำหรับผู้บริหาร (Executive), ผู้จัดการฝ่ายขาย (Sales Lead), และทีมจัดซื้อ Quota (Procurement):
+
+| หมวดหมู่ | Field Name | ความหมาย / สูตรคำนวณ | การนำไปใช้ทางธุรกิจ |
 |---|---|---|---|
-| `lifecycle_stage` | Active Paid / Active Free / Churned / Ghost | enum | กฎ (ไม่ใช่ ML) |
-| `churn_probability` | โอกาสที่จะไม่มี activity เลยใน 90 วันข้างหน้า | 0–1 (calibrated) | Churn |
-| `churn_risk_level` | low / medium / high / critical | enum | ตัดจาก probability |
-| `churn_factors` | 3–5 เหตุผลหลัก (SHAP) เช่น "usage ลดลง 60% ใน 3 เดือน" | json | Churn |
-| `predicted_clv_6m` | รายได้ที่คาดว่าจะได้ใน 180 วัน | บาท | CLV |
-| `clv_pay_probability` | โอกาสที่จะจ่ายเงินอย่างน้อย 1 ครั้งใน 6 เดือน | 0–1 | CLV (ส่วนที่ 1 ของ hurdle) |
-| `clv_interval` | p10 / p90 ของ CLV | บาท | CLV |
-| `p_alive` | โอกาสที่ยังเป็นลูกค้าอยู่ (BG/NBD) | 0–1 | CLV (ส่วนสถิติ) |
-| `customer_value_tier` | high (top 10%) / mid / low / none | enum | ตัดจาก CLV |
-| `revenue_at_risk` | `churn_probability × predicted_clv_6m` | บาท | คำนวณต่อ |
-| `predicted_sms_usage_30d / 90d` | **แยก channel** | เครดิต SMS | Credit A |
-| `predicted_email_usage_30d / 90d` | **แยก channel** | เครดิต Email | Credit A |
-| `usage_interval` | p10 / p50 / p90 | เครดิต | Credit A |
-| `topup_probability_30d` | โอกาสเติมเงินใน 30 วัน | 0–1 | Credit B |
-| `estimated_days_until_topup` | median ของเวลาที่คาดว่าจะเติม | วัน | Credit B |
-| `days_until_depletion` | เครดิต SMS คงเหลือจริง ÷ (usage 30d ที่พยากรณ์ ÷ 30) | วัน | กฎ (predict-only) |
-| `credit_expiry_days` | วันที่เหลือก่อนเครดิตหมดอายุ (`expire`) | วัน | profile |
-| `credit_urgency_level` | stable / monitor / warning / critical จาก min(depletion, expiry) | enum | กฎ |
-| `usage_trend` | growing / stable / declining | enum | กฎ |
+| **พอร์ตโฟลิโอ & ลูกค้า** | `total_customers` | จำนวนบัญชีทั้งหมดในระบบ | ขนาดฐานลูกค้าทั้งหมด |
+| | `active_paid_count` | จำนวนลูกค้าที่ Active และเคยจ่ายเงิน | ขนาดของกลุ่มลูกค้าที่เป็น Core Business |
+| | `expected_churners_90d` | $\sum \text{churn\_probability}$ ของลูกค้า Active Paid | จำนวนลูกค้าที่คาดว่าจะหายไปจริงใน 90 วัน (แม่นยำกว่าการนับหัวดิบ) |
+| | `predicted_churn_rate_90d` | `expected_churners_90d ÷ active_paid_count` | **Benchmark Churn ประจำรอบ** เทียบกับรอบที่แล้วว่าดีขึ้นหรือแย่ลง |
+| **การเงิน & ความเสี่ยง** | `expected_revenue_6m` | $\sum \text{predicted\_clv\_6m}$ ของทุกลูกค้า | **Sales Pipeline Forecast:** คาดการณ์เงินที่จะเข้าบริษัทใน 6 เดือนข้างหน้า |
+| | `total_revenue_at_risk` | $\sum \text{revenue\_at\_risk}$ | เม็ดเงินรวมที่บริษัทกำลังสุ่มเสี่ยงจะสูญเสียหากไม่มีการรักษาลูกค้า |
+| | `high_risk_exposure` | $\sum \text{revenue\_at\_risk}$ เฉพาะกลุ่ม `high` และ `critical` | เม็ดเงินเสี่ยงสูงที่ต้องจัดงบประมาณหรือโปรโมชันลงไปกู้วิกฤต |
+| **การวางแผนซื้อ Quota** | `total_predicted_sms_30d` | $\sum \text{predicted\_sms\_usage\_30d}$ | **Telco Procurement:** ปริมาณ SMS ที่ต้องสั่งซื้อ/ทำสัญญากับ AIS/True/Dtac ในเดือนถัดไป |
+| *(แยก Channel ชัดเจน)* | `total_predicted_sms_90d` | $\sum \text{predicted\_sms\_usage\_90d}$ | ปริมาณ SMS สำหรับวางแผนต้นทุนรายไตรมาส |
+| | `total_predicted_email_30d` | $\sum \text{predicted\_email\_usage\_30d}$ | ปริมาณ Email Server/Relay ที่ต้องจัดสรรในเดือนถัดไป |
+| **การแจ้งเตือนด่วน** | `critical_depletion_count_7d` | จำนวนลูกค้าที่เครดิต SMS จะหมดภายใน 7 วัน | **Hot List ประจำสัปดาห์:** ทีมขายต้องติดต่อปิดยอดเติมเงินให้ทันสัปดาห์นี้ |
+| | `topup_due_count_30d` | จำนวนลูกค้าที่เครดิตจะหมดภายใน 30 วัน | คิวเตรียมส่งใบเสนอราคา (Quotation) ประจำเดือน |
+| | `high_value_at_risk_count` | จำนวนลูกค้าระดับ Whale/High ที่อยู่ใน Risk ระดับ High/Critical | รายชื่อลูกค้าที่ผู้บริหารหรือ Account Manager ต้องเข้าพบโดยตรง |
+| **Matrix สุขภาพพอร์ต** | `value_risk_matrix` | ตาราง 2 มิติ: `customer_value_tier` × `churn_risk_level` | หน้าจอหลัก Dashboard แสดงการกระจายตัวของลูกค้าตามมูลค่าและความเสี่ยง |
 
-### 7.2 ระดับภาพรวม (ต่อ 1 prediction run)
+---
 
-| Field | สูตร |
-|---|---|
-| `expected_churners_90d` | Σ churn_probability (ได้ตัวเลขที่คาดว่าจะ churn จริง ถ้าโมเดล calibrated) |
-| `predicted_churn_rate_90d` | expected_churners ÷ จำนวนประชากร (เทียบกับค่าที่เกิดจริงในหัวข้อ 4.2 ได้) |
-| `expected_revenue_6m` | Σ predicted_clv_6m |
-| `total_revenue_at_risk` | Σ revenue_at_risk |
-| `expected_sms_demand_30d / 90d` | Σ predicted_sms_usage (ใช้วางแผนซื้อ SMS จากผู้ให้บริการเครือข่าย) |
-| `customers_needing_topup_30d` | จำนวนบัญชีที่ days_until_depletion ≤ 30 |
+### 7.3 Realized outcome (วัดหลังเกิดเหตุการณ์จริง เพื่อประเมินความแม่นยำของระบบ)
 
-### 7.3 Realized outcome (วัดหลังเกิดเหตุการณ์จริง เพื่อเช็คว่าโมเดลแม่นไหม)
+หลังจากเวลาผ่านไปตาม Horizon (90 วันสำหรับ Churn / 180 วันสำหรับ CLV) ระบบจะรัน Outcome Backfill เพื่อวัดผลจริง:
 
-| โมเดล | สิ่งที่วัด |
-|---|---|
-| Churn | PR-AUC, Brier, predicted rate vs actual rate |
-| CLV | Spearman, top-decile capture, % error ของยอดรวม |
-| Credit | WAPE, coverage ของ p10–p90 |
+| โมเดล | สิ่งที่วัดเทียบจริง (Ground Truth) | ตัวชี้วัดความแม่นยำ (Metrics) | เกณฑ์ที่ยอมรับได้ในระดับสากล |
+|---|---|---|---|
+| **Churn** | ลูกค้าไม่มี Activity ใน 90 วันหลัง Cutoff จริงหรือไม่ | • **PR-AUC** (แม่นยำกว่า ROC-AUC ในข้อมูล Imbalance)<br>• **Brier Score** (วัดความตรงของ Probability)<br>• **Predicted vs Actual Churn Rate Gap** | PR-AUC $\ge 0.65$<br>Brier $\le 0.18$<br>Rate Gap ไม่เกิน $\pm 3\%$ |
+| **CLV** | ยอดเงินรวมที่จ่ายจริงใน 180 วัน (`actual_revenue_6m`) | • **Top 10% Revenue Capture** (% รายได้จริงที่จับได้จากกลุ่มทายว่าสูง)<br>• **Spearman Rank Correlation**<br>• **Aggregate Revenue Error %** (ทายยอดรวมทั้งบริษัทคลาดเคลื่อนกี่ %) | Top 10% Capture $\ge 80\%$<br>Spearman $\ge 0.40$<br>Total Error ไม่เกิน $\pm 15\%$ |
+| **Credit** | ปริมาณการใช้งานจริงใน 30 และ 90 วัน (`actual_usage`) | • **WAPE** (Weighted Absolute Percentage Error)<br>• **Empirical Coverage p10–p90** (% ของลูกค้าที่ใช้จริงอยู่ในช่วงที่ทาย) | WAPE $\le 0.45$<br>Coverage อยู่ระหว่าง 75% – 85% |
+| **Depletion** | วันที่เครดิตหมดจริง เทียบกับ `days_until_depletion` ที่ทายไว้ | • **Depletion Lead-Time Error (MAE วัน)**<br>• **Early Warning Recall** (กี่ % ของลูกค้าที่เครดิตหมด ถูกเตือนล่วงหน้า $\ge 7$ วัน) | Early Warning Recall $\ge 90\%$ |
 
 ---
 
