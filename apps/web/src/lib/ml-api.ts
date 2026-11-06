@@ -6,6 +6,8 @@
  */
 
 import type {
+  CustomerContact,
+  CustomerContactInput,
   PredictionRun,
   PredictionOutput,
   RunSummary,
@@ -172,4 +174,12 @@ export async function createTrainingRun(input: {
   horizon_days?: number;
 }): Promise<TrainingRun> {
   return requestJson("/api/training-runs", { method: "POST", body: input });
+}
+
+export async function fetchCustomerContacts(accId: number | string): Promise<CustomerContact[]> {
+  return requestJson(`/api/customers/${accId}/contacts`);
+}
+
+export async function createCustomerContact(accId: number | string, body: CustomerContactInput): Promise<CustomerContact> {
+  return requestJson(`/api/customers/${accId}/contacts`, { method: "POST", body });
 }

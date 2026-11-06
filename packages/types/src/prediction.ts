@@ -115,20 +115,40 @@ export interface RunSummary {
   revenue: {
     expected_at_risk: number;
     high_risk_exposure: number;
+    /** The 24 months before the cutoff, oldest first, so this year can be drawn against last year. */
     monthly_actual: { month: string; amount: number; n_payments: number }[];
   };
-  value_risk_matrix: { value_tier: ValueTier; risk_level: RiskLevel; count: number; clv_sum: number }[];
+  /** Active Paid customers only, the same scope as `revenue.expected_at_risk`, so the cells sum to it. */
+  value_risk_matrix: {
+    value_tier: ValueTier;
+    risk_level: RiskLevel;
+    count: number;
+    clv_sum: number;
+    revenue_at_risk: number;
+  }[];
+  /**
+   * Active Paid customers by usage trend. `declining` overcounts when the cutoff is a month start
+   * (docs/ui/REFACTOR-PLAN.md §4.2); show `no_usage` only until the ML window fix lands.
+   */
+  usage_trend: Record<PredictionOutput["usage_trend"], number>;
   credit: {
     demand_30d: number;
     by_urgency: Record<UrgencyLevel, number>;
     topup_due_7d: number;
   };
+  /** "ต้องโทรก่อน": high value tier × high/critical risk, largest revenue_at_risk first. */
   top_priority: {
     acc_id: number;
     lifecycle_stage: LifecycleStage;
     churn_probability: number | null;
+    churn_risk_level: RiskLevel | null;
+    customer_value_tier: ValueTier | null;
     predicted_clv_6m: number | null;
+    revenue_at_risk: number | null;
+    estimated_days_until_topup: number | null;
     priority_score: number;
+    /** First of `churn_factors`, the main reason. */
+    top_factor: ChurnFactor | null;
   }[];
   model_versions: { churn: string; clv: string; credit: string };
 }
@@ -139,7 +159,8 @@ export interface OutputsQuery {
   sort?: string;
   search?: string;
   lifecycle_stage?: LifecycleStage | "";
-  churn_risk_level?: RiskLevel | "";
+  /** One level, or several joined with commas ("high,critical"). */
+  churn_risk_level?: RiskLevel | `${RiskLevel},${RiskLevel}` | "";
   customer_value_tier?: ValueTier | "";
   credit_urgency_level?: UrgencyLevel | "";
   ever_paid?: "true" | "false" | "";
@@ -149,6 +170,8 @@ export interface OutputsQuery {
 
 export interface OutputsPage {
   total: number;
+  /** Sum of revenue_at_risk over every row matching the filters, not just this page. */
+  revenue_at_risk_sum: number;
   page: number;
   page_size: number;
   data: PredictionOutput[];

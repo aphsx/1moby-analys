@@ -1,5 +1,4 @@
 import { RefreshCw } from "lucide-react";
-import { IMPORT_PROGRESS_BG } from "./training-utils";
 
 export function ProgressCard({
   training,
@@ -13,27 +12,27 @@ export function ProgressCard({
   phase: "raw" | "clean" | null;
 }) {
   const label = training
-    ? "Training models"
+    ? "กำลังเทรนโมเดล"
     : phase === "clean"
-      ? "Cleaning imported data"
-      : "Importing raw data";
+      ? "กำลังจัดเตรียมข้อมูล"
+      : "กำลังนำเข้าข้อมูล";
 
   return (
-    <div className="mt-5 rounded-2xl border border-[color:var(--moby-200)] bg-white p-4">
+    <div className="mt-5 rounded-card border border-accent-track bg-surface p-4">
       <div className="flex items-center gap-3">
-        <span className="shrink-0 text-[color:var(--moby-600)]">
+        <span className="shrink-0 text-accent">
           <RefreshCw size={15} className="animate-spin" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[13px] font-semibold text-[color:var(--ink-1)]">{label}</p>
+            <p className="text-small font-semibold text-text">{label}</p>
             {!training && (
-              <span className="num text-[13px] font-semibold text-[color:var(--moby-600)]">
+              <span className="num text-small font-semibold text-accent">
                 {progress}%
               </span>
             )}
           </div>
-          <p className="mt-0.5 truncate text-[12px] text-[color:var(--ink-4)]">
+          <p className="mt-0.5 truncate text-micro text-muted">
             {training
               ? "Refreshing active models after training completes."
               : step || "Processing..."}
@@ -59,20 +58,11 @@ function GradientProgressBar({
   indeterminate?: boolean;
 }) {
   return (
-    <div className="relative h-2 overflow-hidden rounded-full bg-[rgba(13,17,35,0.08)]">
+    <div className="relative h-2 overflow-hidden rounded-full bg-raised">
+      {/* flat fill; an unknown amount shows a full track-coloured bar instead of a pulse */}
       <div
-        className={`h-full rounded-full transition-[width,opacity] duration-300 ease-out ${indeterminate ? "animate-pulse" : ""}`}
-        style={{
-          width: indeterminate ? "100%" : `${Math.max(0, Math.min(100, value))}%`,
-          backgroundImage: IMPORT_PROGRESS_BG,
-          boxShadow: "0 0 18px rgba(0,107,255,0.18)",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-20"
-        style={{
-          backgroundImage: "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.38) 50%, transparent 82%)",
-        }}
+        className={`h-full rounded-full transition-[width] duration-300 ease-out ${indeterminate ? "bg-accent-track" : "bg-accent"}`}
+        style={{ width: indeterminate ? "100%" : `${Math.max(0, Math.min(100, value))}%` }}
       />
     </div>
   );

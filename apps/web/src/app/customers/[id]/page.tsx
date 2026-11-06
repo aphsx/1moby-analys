@@ -1,26 +1,32 @@
 import type { Metadata } from "next";
+import { pageTitle } from "@/lib/nav";
 import { CustomerDetailClient } from "@/features/customers/customer-detail-client";
 
-export const metadata: Metadata = { title: "Customer 360 · 1Moby Intelligence" };
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return { title: pageTitle(`/customers/${id}`) };
+}
 
 type CustomerDetailSearchParams = {
   run?: string | string[];
-  lifecycle_stage?: string | string[];
+  tab?: string | string[];
   search?: string | string[];
   customer_value_tier?: string | string[];
   churn_risk_level?: string | string[];
   credit_urgency_level?: string | string[];
+  ever_paid?: string | string[];
   sort?: string | string[];
   page?: string | string[];
 };
 
 const CUSTOMER_LIST_QUERY_KEYS = [
   "run",
-  "lifecycle_stage",
+  "tab",
   "search",
   "customer_value_tier",
   "churn_risk_level",
   "credit_urgency_level",
+  "ever_paid",
   "sort",
   "page",
 ] as const;

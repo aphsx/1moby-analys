@@ -1,594 +1,763 @@
 "use client";
-
-import { type OutputsQuery, type PredictionOutput } from "@moby/types";
-import { useState, type MouseEvent } from "react";
+/**
+ * Customer list (CUSTOMER-PAGES.md §2). Answers "who needs attention first, and why": one tab per
+ * lifecycle stage, each with its own columns, presets and sorts from TABS, and from 1280px up a side
+ * panel that summarises the selected row.
+ */
+import type { LifecycleStage, OutputsPage, OutputsQuery, PredictionOutput, ProfileSnapshot, RunSummary } from "@moby/types";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  RotateCcw,
-  Search,
-} from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Building2, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
-import { StatusDialog } from "@/components/status-dialog";
-import { Skeleton } from "@/components/ui";
-import { formatCurrency } from "@/lib/format";
-import { CREDIT_PALETTE } from "@/features/dashboard/palette";
-import { shouldConfirmAiOverwrite } from "./customer-ai";
+import { RunScope } from "@/components/run-selector";
+import { Select } from "@/components/select";
+import { BUTTON, InfoTip, Skeleton, StatusPill, type PillTone } from "@/components/ui";
+import { formatBaht, formatBahtCompact, formatCount, formatDate, formatDaysAgo, formatDaysAhead, formatPercent } from "@/lib/format";
+import { CHANNEL_LABEL, LIFECYCLE_HELP, LIFECYCLE_LABEL, RISK_LABEL, URGENCY_LABEL, VALUE_TIER_HELP, VALUE_TIER_LABEL } from "@/lib/labels";
 import { EXPORT_ROW_CAP, exportOutputsCsv } from "./export-csv";
-import { GenAiButton } from "./gen-ai-button";
-import {
-  CUSTOMER_ROW_GRID,
-  CUSTOMER_ROW_HEADER_GRID,
-  HighValueMedal,
-  isHighValueTier,
-  LifecycleRowPill,
-  MetricCell,
-} from "./customer-row-ui";
+import { pageItems } from "./page-items";
+import { humanizeFeature } from "./reasoning";
 
-export const STAGES = ["Active Paid", "Active Free", "Churned", "Ghost"];
+export const TAB_KEYS = ["paid", "free", "churned", "ghost"] as const;
+export type TabKey = (typeof TAB_KEYS)[number];
+/** Raw filters kept in the URL; presets set them, and dashboard links can set any combination. */
+export const FILTER_KEYS = ["customer_value_tier", "churn_risk_level", "credit_urgency_level", "ever_paid"] as const;
+export type FilterKey = (typeof FILTER_KEYS)[number];
+export type ListFilters = Record<FilterKey, string>;
+export const EMPTY_FILTERS: ListFilters = { customer_value_tier: "", churn_risk_level: "", credit_urgency_level: "", ever_paid: "" };
 
-export type CustomerRow = Pick<
-  PredictionOutput,
-  | "acc_id"
-  | "lifecycle_stage"
-  | "sub_stage"
-  | "churn_probability"
-  | "predicted_clv_6m"
-  | "customer_value_tier"
-  | "n_purchases"
-  | "total_revenue"
-  | "revenue_at_risk"
-  | "credit_urgency_level"
-  | "estimated_days_until_topup"
-  | "days_since_last_activity"
-  | "priority_score"
-  | "ai_status"
-  | "ai_explanation"
->;
-
-export type CustomerSortKey =
-  | "acc_id"
-  | "lifecycle_stage"
-  | "churn_probability"
-  | "priority_score"
-  | "predicted_clv_6m"
-  | "total_revenue"
-  | "revenue_at_risk"
-  | "estimated_days_until_topup"
-  | "days_since_last_activity"
-  | "ai_status";
-
-export type CustomerSortDirection = "asc" | "desc";
-
-export interface CustomerSort {
-  key: CustomerSortKey;
-  direction: CustomerSortDirection;
-}
-
-export interface CustomerFilters {
-  lifecycle_stage: string;
+export interface ListState {
+  tab: TabKey;
   search: string;
-  customer_value_tier: string;
-  churn_risk_level: string;
-  credit_urgency_level: string;
+  filters: ListFilters;
+  /** "column:direction"; empty means the tab's default sort */
+  sort: string;
+  page: number;
 }
 
-const EMPTY_FILTERS: CustomerFilters = {
-  lifecycle_stage: "",
-  search: "",
-  customer_value_tier: "",
-  churn_risk_level: "",
-  credit_urgency_level: "",
-};
+interface Ctx {
+  /** cutoff of the run, epoch ms */
+  cutoff: number | null;
+  /** churn probability where "critical" starts */
+  critical: number | null;
+}
 
-/** Quick preset = one click sets filters + sort together (single URL update). */
-export interface CustomerPreset {
+interface Column {
+  label: string;
+  tip?: (ctx: Ctx) => string;
+  right?: boolean;
+  cell: (r: PredictionOutput, ctx: Ctx) => ReactNode;
+}
+
+interface Preset {
   key: string;
   label: string;
-  filters: CustomerFilters;
-  sort: CustomerSort | null;
+  title: string;
+  help: string;
+  filters: Partial<ListFilters>;
+  sort?: string;
 }
 
-// Server filters are single-value (eq), so "เสี่ยงสูง" pins churn_risk_level to
-// "high" and surfaces critical rows via the revenue_at_risk sort.
-export const CUSTOMER_PRESETS: CustomerPreset[] = [
-  {
-    key: "high_value_high_risk",
-    label: "มูลค่าสูง + เสี่ยงสูง",
-    filters: { ...EMPTY_FILTERS, customer_value_tier: "high", churn_risk_level: "high" },
-    sort: { key: "revenue_at_risk", direction: "desc" },
-  },
-  {
-    key: "credit_running_out",
-    label: "เครดิตใกล้หมด",
-    filters: { ...EMPTY_FILTERS, credit_urgency_level: "critical" },
-    sort: { key: "estimated_days_until_topup", direction: "asc" },
-  },
-  {
-    key: "long_inactive",
-    label: "หายไปนาน",
-    filters: { ...EMPTY_FILTERS },
-    sort: { key: "days_since_last_activity", direction: "desc" },
-  },
-  {
-    key: "all",
-    label: "ทั้งหมด",
-    filters: { ...EMPTY_FILTERS },
-    sort: null,
-  },
-];
-
-function presetIsActive(
-  preset: CustomerPreset,
-  filters: CustomerFilters,
-  sort: CustomerSort | null
-): boolean {
-  const filterKeys = Object.keys(EMPTY_FILTERS) as Array<keyof CustomerFilters>;
-  const filtersMatch = filterKeys.every((key) =>
-    key === "search" ? true : filters[key] === preset.filters[key]
-  );
-  const sortMatch =
-    preset.sort === null
-      ? sort === null
-      : sort !== null && sort.key === preset.sort.key && sort.direction === preset.sort.direction;
-  return filtersMatch && sortMatch;
+interface TabConfig {
+  stage: LifecycleStage;
+  count: (s: RunSummary) => number;
+  note?: string;
+  /** the first is the default */
+  sorts: { value: string; label: string }[];
+  presets: Preset[];
+  columns: Column[];
 }
 
-/** Build the server outputs query for the current view (shared with CSV export). */
-export function toOutputsQuery(
-  filters: CustomerFilters,
-  sort: CustomerSort | null
-): Omit<OutputsQuery, "page" | "page_size"> {
-  return {
-    sort: sort ? `${sort.key}:${sort.direction}` : undefined,
-    search: filters.search.trim() || undefined,
-    lifecycle_stage: filters.lifecycle_stage as OutputsQuery["lifecycle_stage"],
-    customer_value_tier: filters.customer_value_tier as OutputsQuery["customer_value_tier"],
-    churn_risk_level: filters.churn_risk_level as OutputsQuery["churn_risk_level"],
-    credit_urgency_level: filters.credit_urgency_level as OutputsQuery["credit_urgency_level"],
-  };
-}
+const DAY_MS = 86_400_000;
+/** Top-ups and expiries this close are the urgent ones (URGENCY_CRITICAL_DAYS in apps/ml/src/constants.py). */
+const URGENT_DAYS = 14;
+export const PAGE_SIZE = 10;
 
-// Same colours as the dashboard's credit urgency card.
-const URGENCY_COLORS: Record<string, string> = {
-  critical: CREDIT_PALETTE.Critical,
-  warning: CREDIT_PALETTE.Warning,
-  monitor: CREDIT_PALETTE.Monitor,
-  stable: CREDIT_PALETTE.Stable,
+const RISK_TONE: Record<string, PillTone> = { critical: "negative", high: "warning", medium: "neutral", low: "neutral" };
+
+const daysFromCutoff = (iso: string | null | undefined, ctx: Ctx) =>
+  iso && ctx.cutoff != null ? Math.round((Date.parse(iso) - ctx.cutoff) / DAY_MS) : null;
+
+const acctColumn = (sub?: (r: PredictionOutput) => string): Column => ({
+  label: sub ? "บัญชี · เหตุผลหลัก" : "บัญชี",
+  cell: (r) => (
+    <>
+      <span className="tabular-nums block font-semibold text-text group-hover:underline">#{r.acc_id}</span>
+      {sub ? <span className="block truncate text-small text-muted">{sub(r)}</span> : null}
+    </>
+  ),
+});
+
+const topupColumn: Column = {
+  label: "เติมครั้งถัดไป",
+  tip: () => "วันที่คาดว่าจะเติมเครดิตครั้งถัดไป นับจากวันตัดข้อมูล",
+  cell: (r) => <TopUp days={r.estimated_days_until_topup} />,
 };
 
-interface CustomersViewProps {
-  rows: CustomerRow[];
-  total: number;
-  page: number;
-  pageSize: number;
-  pending: boolean;
-  runId: string;
-  filters: CustomerFilters;
-  sort: CustomerSort | null;
-  onFiltersChange: (filters: CustomerFilters) => void;
-  onSortChange: (sort: CustomerSort | null) => void;
-  /** Applies filters + sort atomically (one URL update) — used by presets. */
-  onPresetApply: (filters: CustomerFilters, sort: CustomerSort | null) => void;
-  onPageChange: (page: number) => void;
-  onGenerateAi: (accId: number, options?: { force?: boolean }) => Promise<void>;
-  aiError?: string | null;
+const revenueColumn: Column = { label: "ยอดชำระรวม", right: true, cell: (r) => <Money value={r.total_revenue} /> };
+
+export const TABS: Record<TabKey, TabConfig> = {
+  paid: {
+    stage: "Active Paid",
+    count: (s) => s.lifecycle.active_paid,
+    sorts: [
+      { value: "revenue_at_risk:desc", label: "รายได้เสี่ยงหาย" },
+      { value: "churn_probability:desc", label: "โอกาสเลิกใช้" },
+      { value: "predicted_clv_6m:desc", label: "มูลค่า 6 เดือน" },
+      { value: "estimated_days_until_topup:asc", label: "เติมครั้งถัดไป" },
+    ],
+    presets: [
+      { key: "all", label: "ทั้งหมด", title: "ลูกค้าที่จ่ายเงินทั้งหมด", help: LIFECYCLE_HELP["Active Paid"], filters: {} },
+      {
+        key: "critical",
+        label: "ต้องติดต่อด่วน",
+        title: "ต้องติดต่อด่วน",
+        help: "โอกาสเลิกใช้ระดับวิกฤต เรียงตามรายได้ที่เสี่ยงหาย",
+        filters: { churn_risk_level: "critical" },
+      },
+      {
+        key: "high",
+        label: "เสี่ยงสูง",
+        title: "เสี่ยงสูง",
+        help: "โอกาสเลิกใช้ระดับสูง รองจากวิกฤต",
+        filters: { churn_risk_level: "high" },
+      },
+      {
+        key: "credit",
+        label: "ต้องเติมใน 14 วัน",
+        title: "ต้องเติมเครดิตใน 14 วัน",
+        help: "คาดว่าจะเติมเครดิตครั้งถัดไปภายใน 14 วันนับจากวันตัดข้อมูล (โมเดลทำนายวันชำระครั้งถัดไป ไม่ได้ทำนายว่าเครดิตหมด)",
+        filters: { credit_urgency_level: "critical" },
+        sort: "estimated_days_until_topup:asc",
+      },
+      { key: "value", label: "มูลค่าสูง", title: "ลูกค้ามูลค่าสูง", help: VALUE_TIER_HELP.high, filters: { customer_value_tier: "high" } },
+    ],
+    columns: [
+      acctColumn(reason),
+      {
+        label: "โอกาสเลิกใช้",
+        tip: (ctx) =>
+          `ความน่าจะเป็นที่จะเลิกใช้ใน 90 วัน${ctx.critical != null ? ` · วิกฤตตั้งแต่ ${formatPercent(ctx.critical)}` : ""} · ลูกค้าใหม่กว่า 90 วันยังไม่มีคะแนน`,
+        cell: (r) => <Risk row={r} />,
+      },
+      { label: "มูลค่า 6 ด.", tip: () => "ยอดที่คาดว่าจะจ่ายใน 6 เดือนข้างหน้า", right: true, cell: (r) => <Money value={r.predicted_clv_6m} muted /> },
+      { label: "รายได้เสี่ยงหาย", tip: () => "โอกาสเลิกใช้ × มูลค่า 6 เดือน", right: true, cell: (r) => <Money value={r.revenue_at_risk} strong /> },
+      topupColumn,
+    ],
+  },
+  free: {
+    stage: "Active Free",
+    count: (s) => s.lifecycle.active_free,
+    sorts: [
+      { value: "days_since_last_activity:asc", label: "ใช้งานล่าสุด" },
+      { value: "estimated_days_until_topup:asc", label: "เติมครั้งถัดไป" },
+    ],
+    presets: [
+      { key: "all", label: "ทั้งหมด", title: "ใช้งานแต่ไม่ได้เติมเงิน", help: LIFECYCLE_HELP["Active Free"], filters: {} },
+      {
+        key: "soon",
+        label: "ต้องเติมใน 14 วัน",
+        title: "ต้องเติมเครดิตใน 14 วัน",
+        help: "คาดว่าจะเติมเครดิตครั้งถัดไปภายใน 14 วันนับจากวันตัดข้อมูล",
+        filters: { credit_urgency_level: "critical" },
+        sort: "estimated_days_until_topup:asc",
+      },
+    ],
+    columns: [
+      acctColumn(),
+      {
+        label: "เครดิตคงเหลือ",
+        tip: () => "เครดิต SMS ที่เหลือในบัญชี ณ วันตัดข้อมูล",
+        right: true,
+        cell: (r) =>
+          r.profile_snapshot?.credit_sms != null ? (
+            <span className="tabular-nums">
+              {formatCount(r.profile_snapshot.credit_sms)} <span className="text-small text-muted">เครดิต</span>
+            </span>
+          ) : (
+            <Dash />
+          ),
+      },
+      {
+        label: "หมดอายุ",
+        tip: () => `วันหมดอายุของเครดิต SMS · สีส้มเมื่อจะหมดอายุภายใน ${URGENT_DAYS} วัน · สีเทาเมื่อหมดอายุแล้ว`,
+        right: true,
+        cell: (r, ctx) => {
+          const expiry = r.profile_snapshot?.expire_sms;
+          const days = daysFromCutoff(expiry, ctx);
+          if (!expiry) return <Dash />;
+          // Orange only for credit about to expire; credit that already expired is history, so grey
+          const tone = days == null ? "" : days < 0 ? "text-muted" : days <= URGENT_DAYS ? "font-medium text-negative" : "";
+          return <span className={`tabular-nums ${tone}`}>{formatDate(expiry)}</span>;
+        },
+      },
+      { label: "ส่งข้อความล่าสุด", right: true, cell: (r) => <DateCell iso={r.profile_snapshot?.last_send} /> },
+      topupColumn,
+    ],
+  },
+  churned: {
+    stage: "Churned",
+    count: (s) => s.lifecycle.churned,
+    sorts: [
+      { value: "total_revenue:desc", label: "ยอดชำระรวม" },
+      { value: "days_since_last_activity:asc", label: "เพิ่งหยุดใช้" },
+    ],
+    presets: [
+      { key: "all", label: "ทั้งหมด", title: "ลูกค้าที่หยุดใช้ทั้งหมด", help: LIFECYCLE_HELP.Churned, filters: {} },
+      { key: "paid", label: "เคยเติมเงิน", title: "หยุดใช้ · เคยเติมเงิน", help: "เคยชำระเงินมาก่อน เหมาะกับการชวนกลับ", filters: { ever_paid: "true" } },
+      { key: "never", label: "ไม่เคยเติม", title: "หยุดใช้ · ไม่เคยเติม", help: "ไม่เคยชำระเงิน เหมาะกับแคมเปญอัตโนมัติ", filters: { ever_paid: "false" } },
+    ],
+    columns: [
+      acctColumn(),
+      revenueColumn,
+      {
+        label: "หยุดใช้มา",
+        tip: () => "จำนวนวันที่ไม่มีการใช้งานหรือชำระเงิน นับถึงวันตัดข้อมูล",
+        right: true,
+        cell: (r) => (r.days_since_last_activity != null ? <span className="tabular-nums">{formatCount(r.days_since_last_activity)} วัน</span> : <Dash />),
+      },
+      { label: "ช่องทางหลัก", cell: (r) => mainChannel(r.profile_snapshot) ?? <Dash /> },
+    ],
+  },
+  ghost: {
+    stage: "Ghost",
+    count: (s) => s.lifecycle.ghost,
+    note: "ไม่มีการใช้งานหรือชำระเงินเลยในช่วงข้อมูล ส่วนใหญ่เป็นบัญชีเก่า ใช้สำหรับแคมเปญอัตโนมัติ ไม่ใช่งานรักษาลูกค้า",
+    sorts: [
+      { value: "acc_id:desc", label: "บัญชีใหม่สุด" },
+      { value: "total_revenue:desc", label: "ยอดชำระรวม" },
+    ],
+    presets: [{ key: "all", label: "ทั้งหมด", title: "บัญชีที่ไม่มีกิจกรรม", help: LIFECYCLE_HELP.Ghost, filters: {} }],
+    columns: [acctColumn(), { label: "สมัครเมื่อ", right: true, cell: (r) => <DateCell iso={r.profile_snapshot?.join_date} /> }, revenueColumn],
+  },
+};
+
+export const effectiveSort = (s: ListState) => s.sort || TABS[s.tab].sorts[0].value;
+
+/** The server query for the current view (shared with CSV export). */
+export function toOutputsQuery(s: ListState): Omit<OutputsQuery, "page" | "page_size"> {
+  const filters = Object.fromEntries(FILTER_KEYS.filter((k) => s.filters[k]).map((k) => [k, s.filters[k]]));
+  return { sort: effectiveSort(s), search: s.search.trim() || undefined, lifecycle_stage: TABS[s.tab].stage, ...filters };
 }
 
-export function CustomersView({
-  rows,
-  total,
-  page,
-  pageSize,
-  pending,
-  runId,
-  filters,
-  sort,
-  onFiltersChange,
-  onSortChange,
-  onPresetApply,
-  onPageChange,
-  onGenerateAi,
-  aiError = null,
-}: CustomersViewProps) {
+export const presetFilters = (p: Preset): ListFilters => ({ ...EMPTY_FILTERS, ...p.filters });
+const sameFilters = (a: ListFilters, b: ListFilters) => FILTER_KEYS.every((k) => a[k] === b[k]);
+
+interface CustomersViewProps {
+  state: ListState;
+  summary: RunSummary | null;
+  /** rows per preset of the current tab, counted by the server with the same filters */
+  presetCounts: Record<string, number> | null;
+  runId: string;
+  cutoff: string | null;
+  data: OutputsPage | null;
+  pending: boolean;
+  error: string | null;
+  onRetry: () => void;
+  /** Merges into the URL state; the page goes back to 1 unless `page` is given. */
+  onChange: (next: Partial<ListState>) => void;
+  customerHref: (accId: number) => string;
+}
+
+export function CustomersView({ state, summary, presetCounts, runId, cutoff, data, pending, error, onRetry, onChange, customerHref }: CustomersViewProps) {
   const router = useRouter();
+  const tab = TABS[state.tab];
+  const ctx: Ctx = { cutoff: cutoff ? Date.parse(cutoff) : null, critical: summary?.churn.thresholds.critical ?? null };
+  const rows = data?.data ?? [];
+  // Two-line account cells (paid tab) need the taller pitch; one-line tabs keep the table default
+  const rowH = state.tab === "paid" ? "!h-[68px]" : "!h-[52px]";
+  const total = data?.total ?? 0;
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const selected = rows.find((r) => r.acc_id === selectedId) ?? rows[0] ?? null;
 
-  const [generatingAccIds, setGeneratingAccIds] = useState<Set<number>>(() => new Set());
-  const [pendingOverwriteAccId, setPendingOverwriteAccId] = useState<number | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState<{ loaded: number; total: number } | null>(
-    null
-  );
+  useEffect(() => {
+    setSelectedId(null);
+  }, [data]);
 
-  const setFilter = (key: keyof CustomerFilters, value: string) => {
-    onFiltersChange({ ...filters, [key]: value });
+  const activePreset = tab.presets.find((p) => sameFilters(presetFilters(p), state.filters));
+  const chips = activePreset ? [] : filterChips(state.filters);
+  const title = activePreset?.title ?? "ลูกค้าที่ตรงตัวกรอง";
+  const help = activePreset?.help ?? LIFECYCLE_HELP[tab.stage];
+  const unscored = summary ? summary.lifecycle.active_paid - summary.churn.eligible_count : 0;
+  const summaryLine = [
+    `${formatCount(total)} ราย`,
+    state.tab === "paid" ? `รายได้ที่เสี่ยงหายรวม ${formatBahtCompact(data?.revenue_at_risk_sum ?? 0)}` : null,
+    state.tab === "paid" && activePreset?.key === "all" && unscored > 0 ? `${formatCount(unscored)} รายยังไม่มีคะแนน` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const startRow = total === 0 ? 0 : (state.page - 1) * PAGE_SIZE + 1;
+  const endRow = Math.min(total, (state.page - 1) * PAGE_SIZE + rows.length);
+
+  // From 1280px a row click fills the side panel; narrower screens have no panel, so it opens the page.
+  const wide = () => window.matchMedia("(min-width: 1280px)").matches;
+  const onRowClick = (e: MouseEvent, accId: number) => {
+    if ((e.target as HTMLElement).closest("a")) return;
+    if (wide()) setSelectedId(accId);
+    else router.push(customerHref(accId));
   };
-  const clearAll = () => onFiltersChange(EMPTY_FILTERS);
-  const cycleSort = (key: CustomerSortKey) => {
-    if (!sort || sort.key !== key) {
-      onSortChange({ key, direction: "asc" });
-      return;
-    }
-    if (sort.direction === "asc") {
-      onSortChange({ key, direction: "desc" });
-      return;
-    }
-    onSortChange(null);
-  };
-
-  const runAiGeneration = async (accId: number, force = false) => {
-    setGeneratingAccIds((current) => new Set(current).add(accId));
-    try {
-      await onGenerateAi(accId, { force });
-    } finally {
-      setGeneratingAccIds((current) => {
-        const next = new Set(current);
-        next.delete(accId);
-        return next;
-      });
-    }
-  };
-
-  const handleGenAiClick = (event: MouseEvent<HTMLButtonElement>, row: CustomerRow) => {
-    event.stopPropagation();
-    if (shouldConfirmAiOverwrite(row)) {
-      setPendingOverwriteAccId(row.acc_id);
-      return;
-    }
-    void runAiGeneration(row.acc_id);
-  };
-
-  const handleExport = async () => {
-    if (exporting) return;
-    setExporting(true);
-    setExportProgress(null);
-    try {
-      const result = await exportOutputsCsv(runId, toOutputsQuery(filters, sort), (loaded, t) =>
-        setExportProgress({ loaded, total: t })
-      );
-      if (result.capped) {
-        notifyStatusDialog({
-          tone: "warning",
-          title: `Export ถูกตัดที่ ${EXPORT_ROW_CAP.toLocaleString()} แถว`,
-          message: `ผลลัพธ์ที่ตรงเงื่อนไขมี ${result.total.toLocaleString()} แถว — ไฟล์ CSV มีเฉพาะ ${result.rows.toLocaleString()} แถวแรกตามการเรียงปัจจุบัน กรุณา filter ให้แคบลงถ้าต้องการครบทุกแถว`,
-        });
-      }
-    } catch (e: unknown) {
-      notifyStatusDialog({
-        tone: "error",
-        title: "Export CSV ไม่สำเร็จ",
-        message: e instanceof Error ? e.message : "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
-      });
-    } finally {
-      setExporting(false);
-      setExportProgress(null);
-    }
-  };
-
-  const activeFilters = Object.entries(filters).filter(([_, value]) => value).length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const startRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const endRow = Math.min(total, (page - 1) * pageSize + rows.length);
-  const customerHref = (accId: number) => {
-    const params = new URLSearchParams({ run: runId });
-    Object.entries(filters).forEach(([key, value]) => {
-      const trimmed = value.trim();
-      if (trimmed) params.set(key, trimmed);
-    });
-    // Carried through so the detail page's back link returns to this exact list view.
-    if (sort) params.set("sort", `${sort.key}:${sort.direction}`);
-    if (page > 1) params.set("page", String(page));
-    return `/customers/${accId}?${params.toString()}`;
+  const onLinkClick = (e: MouseEvent, accId: number) => {
+    if (!wide() || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    setSelectedId(accId);
   };
 
   return (
-    <main className="min-w-0 px-4 py-5 pb-10 sm:px-6 sm:py-6 lg:px-8 lg:pb-12">
-        {aiError ? (
-          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-            {aiError}
+    <div className="pb-12">
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border px-4 py-4 sm:px-6 lg:px-8 min-[860px]:py-5">
+        <nav aria-label="ตำแหน่งในระบบ" className="flex items-center gap-2 text-[20px] leading-tight">
+          <span className="text-muted">ลูกค้า</span>
+          <ChevronRight size={16} aria-hidden className="text-faint" />
+          <h1 className="text-[20px] font-semibold text-text">รายชื่อลูกค้า</h1>
+        </nav>
+        <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 min-[860px]:w-auto">
+          <input
+            type="search"
+            value={state.search}
+            onChange={(e) => onChange({ search: e.target.value })}
+            placeholder="ค้นหาเลขบัญชี"
+            aria-label="ค้นหาเลขบัญชี"
+            inputMode="numeric"
+            className="h-9 w-full min-w-0 rounded-control border border-control bg-surface px-3 text-body text-text placeholder:text-faint max-[859px]:h-11 min-[860px]:w-56"
+          />
+          {/* max-w-full lets the run name truncate instead of pushing past the phone edge */}
+          <div className="min-w-0 max-w-full">
+            <RunScope />
           </div>
-        ) : null}
-        <section className="surface-elev overflow-hidden">
-          <div className="border-b border-gray-100 p-4">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 focus-within:border-[color:var(--moby-200)]">
-                <Search size={15} className="text-[color:var(--ink-5)]" />
-                <input
-                  value={filters.search}
-                  onChange={event => setFilter("search", event.target.value)}
-                  placeholder="Search account ID..."
-                  className="h-11 min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[color:var(--ink-5)]"
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <FilterChip active={!filters.lifecycle_stage} onClick={() => setFilter("lifecycle_stage", "")}>
-                  All
-                </FilterChip>
-                {STAGES.map((stage) => (
-                  <FilterChip
-                    key={stage}
-                    active={filters.lifecycle_stage === stage}
-                    onClick={() => setFilter("lifecycle_stage", stage)}
+        </div>
+      </header>
+
+      <div className="grid gap-6 px-4 sm:px-6 lg:px-8 xl:grid-cols-[minmax(0,1fr)_336px] xl:items-start">
+        <section aria-labelledby="customer-group" className="min-w-0">
+          <nav aria-label="สถานะลูกค้า" className="overflow-x-auto border-b border-border">
+            <ul className="flex min-w-max gap-7">
+              {TAB_KEYS.map((key) => {
+                const active = state.tab === key;
+                return (
+                  <li key={key}>
+                    <button
+                      type="button"
+                      aria-current={active ? "true" : undefined}
+                      onClick={() => onChange({ tab: key, filters: EMPTY_FILTERS, sort: "" })}
+                      className={`-mb-px flex h-14 items-center gap-2 border-b-2 px-0.5 text-[15px] transition-colors duration-150 ${
+                        active ? "border-text font-semibold text-text" : "border-transparent text-muted hover:text-text"
+                      }`}
+                    >
+                      {LIFECYCLE_LABEL[TABS[key].stage]}
+                      {summary ? <span className="tabular-nums text-small font-normal text-muted">{formatCount(TABS[key].count(summary))}</span> : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+
+          {tab.note ? <p className="mt-5 rounded-card bg-raised px-4 py-3 text-body text-text">{tab.note}</p> : null}
+
+          {tab.presets.length > 1 ? (
+            <div role="group" aria-label="ตัวกรองด่วน" className="mt-5 flex gap-1 overflow-x-auto rounded-card bg-raised p-1.5 min-[860px]:flex-wrap">
+              {tab.presets.map((p) => {
+                const active = p === activePreset;
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => onChange({ filters: presetFilters(p), sort: p.sort ?? "" })}
+                    className={`flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3.5 text-body transition-colors duration-150 max-[859px]:h-11 ${
+                      active ? "bg-accent-soft font-semibold text-accent-ink" : "text-text hover:bg-surface"
+                    }`}
                   >
-                    {stage}
-                  </FilterChip>
-                ))}
-                {filters.customer_value_tier && (
-                  <FilterChip active onClick={() => setFilter("customer_value_tier", "")}>
-                    Tier: {filters.customer_value_tier} ✕
-                  </FilterChip>
-                )}
-                {filters.churn_risk_level && (
-                  <FilterChip active onClick={() => setFilter("churn_risk_level", "")}>
-                    Risk: {filters.churn_risk_level} ✕
-                  </FilterChip>
-                )}
-                {filters.credit_urgency_level && (
-                  <FilterChip active onClick={() => setFilter("credit_urgency_level", "")}>
-                    Urgency: {filters.credit_urgency_level} ✕
-                  </FilterChip>
-                )}
-                {activeFilters > 0 && (
+                    {p.label}
+                    {presetCounts?.[p.key] != null ? <span className="tabular-nums text-micro font-normal opacity-80">{formatCount(presetCounts[p.key])}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <h2 id="customer-group" className="flex items-center gap-0.5 text-[18px] font-semibold text-text">
+                {title}
+                <InfoTip label={title}>{help}</InfoTip>
+              </h2>
+              <p className="tabular-nums text-body text-muted">{data ? summaryLine : "กำลังโหลด…"}</p>
+              {chips.length > 0 ? (
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {chips.map((chip) => (
+                    <li key={chip.key}>
+                      <button
+                        type="button"
+                        onClick={() => onChange({ filters: { ...state.filters, [chip.key]: "" } })}
+                        aria-label={`ล้างตัวกรอง ${chip.label}`}
+                        className="inline-flex h-7 items-center gap-1 rounded-full bg-accent-soft px-2.5 text-micro font-medium text-accent-ink max-[859px]:h-11"
+                      >
+                        {chip.label}
+                        <X size={12} aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={effectiveSort(state)}
+                onChange={(sort) => onChange({ sort })}
+                options={tab.sorts.map((s) => ({ value: s.value, label: `เรียงตาม: ${s.label}` }))}
+                leftIcon={<ArrowUpDown size={14} aria-hidden />}
+                aria-label="เรียงตาม"
+                className="min-w-[200px]"
+              />
+              <ExportButton runId={runId} state={state} disabled={total === 0} />
+            </div>
+          </div>
+
+          <div className="surface mt-4 overflow-hidden">
+            {error ? (
+              <p role="alert" className="flex flex-wrap items-center gap-x-3 px-5 py-6 text-body text-text">
+                โหลดรายชื่อลูกค้าไม่สำเร็จ · {error}
+                <button type="button" onClick={onRetry} className="font-medium text-accent-ink underline underline-offset-2">
+                  ลองอีกครั้ง
+                </button>
+              </p>
+            ) : data && rows.length === 0 ? (
+              <p className="px-5 py-6 text-body text-text">
+                ไม่พบลูกค้าที่ตรงเงื่อนไข{" "}
+                {state.search || !activePreset || activePreset.key !== "all" ? (
                   <button
                     type="button"
-                    onClick={clearAll}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-[12px] font-semibold text-[color:var(--ink-4)] hover:bg-gray-50 hover:text-[color:var(--danger)]"
+                    onClick={() => onChange({ search: "", filters: EMPTY_FILTERS, sort: "" })}
+                    className="font-medium text-accent-ink underline underline-offset-2"
                   >
-                    <RotateCcw size={13} /> Reset
+                    ล้างตัวกรอง
                   </button>
-                )}
+                ) : null}
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className={`data-table min-w-[680px] transition-opacity duration-150 ${pending && data ? "opacity-60" : ""}`} aria-busy={pending}>
+                  <thead>
+                    <tr>
+                      {tab.columns.map((c, i) => {
+                        const tip = c.tip ? (
+                          <InfoTip label={c.label} align={i === tab.columns.length - 1 || c.right ? "right" : "left"}>
+                            {c.tip(ctx)}
+                          </InfoTip>
+                        ) : null;
+                        // `th.num` is the table's right-align rule; the label sits on the column's text edge and the ⓘ goes on the inside
+                        return (
+                          <th key={c.label} className={`h-12 whitespace-nowrap ${c.right ? "num" : ""} ${i === 0 ? "sticky left-0 z-[2] w-[36%]" : ""}`}>
+                            <span className="inline-flex items-center gap-0.5 text-small">
+                              {c.right ? tip : null}
+                              {c.label}
+                              {c.right ? null : tip}
+                            </span>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {!data
+                      ? Array.from({ length: PAGE_SIZE }, (_, i) => (
+                          <tr key={i}>
+                            {tab.columns.map((c, j) => (
+                              <td key={c.label} className={rowH}>
+                                <Skeleton className={`h-4 ${j === 0 ? "w-32" : "ml-auto w-16"}`} />
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      : rows.map((r) => {
+                          const isSelected = selected?.acc_id === r.acc_id;
+                          return (
+                            <tr key={r.acc_id} onClick={(e) => onRowClick(e, r.acc_id)} className="group cursor-pointer">
+                              {tab.columns.map((c, i) => (
+                                <td
+                                  key={c.label}
+                                  className={`${rowH} ${c.right ? "text-right" : ""} ${isSelected ? "xl:bg-active" : ""} ${
+                                    i === 0 ? "sticky left-0 z-[1] max-w-0 bg-surface" : ""
+                                  }`}
+                                >
+                                  {i === 0 ? (
+                                    <Link
+                                      href={customerHref(r.acc_id)}
+                                      onClick={(e) => onLinkClick(e, r.acc_id)}
+                                      aria-label={`บัญชี #${r.acc_id}`}
+                                      className="block min-w-0 rounded-control"
+                                    >
+                                      {c.cell(r, ctx)}
+                                    </Link>
+                                  ) : (
+                                    c.cell(r, ctx)
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                  </tbody>
+                </table>
               </div>
-            </div>
+            )}
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)]">
-                มุมมองด่วน
-              </span>
-              {CUSTOMER_PRESETS.map((preset) => (
-                <FilterChip
-                  key={preset.key}
-                  active={presetIsActive(preset, filters, sort)}
-                  onClick={() =>
-                    onPresetApply({ ...preset.filters, search: filters.search }, preset.sort)
-                  }
-                >
-                  {preset.label}
-                </FilterChip>
-              ))}
-              <div className="ml-auto">
-                <button
-                  type="button"
-                  onClick={() => void handleExport()}
-                  disabled={exporting || total === 0}
-                  title="ดาวน์โหลดทุกแถวที่ตรง filter ปัจจุบันเป็น CSV (UTF-8, เปิดใน Excel ได้)"
-                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-[12px] font-semibold text-[color:var(--moby-600)] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  <Download size={13} className={exporting ? "animate-bounce" : undefined} />
-                  {exporting
-                    ? exportProgress
-                      ? `กำลัง export… ${exportProgress.loaded.toLocaleString()}/${Math.min(exportProgress.total, EXPORT_ROW_CAP).toLocaleString()}`
-                      : "กำลัง export…"
-                    : "Export CSV"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <div className="xl:min-w-[1220px]">
-              <div className={`grid gap-4 border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] max-xl:hidden ${CUSTOMER_ROW_HEADER_GRID}`}>
-                <SortableHeader label="Account" sortKey="acc_id" activeSort={sort} onSort={cycleSort} />
-                <SortableHeader label="Lifecycle" sortKey="lifecycle_stage" activeSort={sort} onSort={cycleSort} />
-                <SortableHeader label="Churn" sortKey="churn_probability" activeSort={sort} onSort={cycleSort} />
-                <SortableHeader label="Score" sortKey="priority_score" activeSort={sort} onSort={cycleSort} alignRight />
-                <SortableHeader label="CLV 6m" sortKey="predicted_clv_6m" activeSort={sort} onSort={cycleSort} alignRight />
-                <SortableHeader label="Revenue" sortKey="total_revenue" activeSort={sort} onSort={cycleSort} alignRight />
-                <SortableHeader label="At risk" sortKey="revenue_at_risk" activeSort={sort} onSort={cycleSort} alignRight />
-                <SortableHeader label="Credit" sortKey="estimated_days_until_topup" activeSort={sort} onSort={cycleSort} alignRight />
-                <SortableHeader label="Inactive" sortKey="days_since_last_activity" activeSort={sort} onSort={cycleSort} alignRight />
-                <SortableHeader label="AI" sortKey="ai_status" activeSort={sort} onSort={cycleSort} alignRight />
-              </div>
-
-              <div className="divide-y divide-gray-100">
-                {pending && [...Array(8)].map((_, i) => (
-                  <div key={i} className="px-5 py-4"><Skeleton className="h-10" /></div>
-                ))}
-                {!pending && rows.map((r) => (
-                  <CustomerTableRow
-                    key={r.acc_id}
-                    row={r}
-                    href={customerHref(r.acc_id)}
-                    inFlight={generatingAccIds.has(r.acc_id)}
-                    onNavigate={(href) => router.push(href)}
-                    onGenAiClick={(event) => handleGenAiClick(event, r)}
-                  />
-                ))}
-                {!pending && rows.length === 0 && (
-                  <div className="px-5 py-12 text-center">
-                    <p className="text-[15px] font-semibold text-[color:var(--ink-2)]">No customers match this view</p>
-                    <p className="mt-1 text-[13px] text-[color:var(--ink-4)]">Reset filters or search another account ID.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="num text-[12px] text-[color:var(--ink-4)]">
-              {pending
-                ? "Loading customers..."
-                : `${startRow.toLocaleString()}-${endRow.toLocaleString()} of ${total.toLocaleString()} matching`}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onPageChange(page - 1)}
-                disabled={pending || page <= 1}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] font-semibold text-[color:var(--ink-4)] hover:bg-gray-50 hover:text-[color:var(--ink-2)] disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <ChevronLeft size={13} /> Previous
-              </button>
-              <span className="num min-w-[76px] text-center text-[12px] text-[color:var(--ink-4)]">
-                Page {page.toLocaleString()} / {totalPages.toLocaleString()}
-              </span>
-              <button
-                type="button"
-                onClick={() => onPageChange(page + 1)}
-                disabled={pending || page >= totalPages}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] font-semibold text-[color:var(--ink-4)] hover:bg-gray-50 hover:text-[color:var(--ink-2)] disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                Next <ChevronRight size={13} />
-              </button>
-            </div>
+            {total > 0 ? (
+              <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-rule px-5 py-3">
+                <p className="tabular-nums text-small text-muted">
+                  แสดง {formatCount(startRow)}–{formatCount(endRow)} จาก {formatCount(total)} ราย
+                </p>
+                <nav aria-label="เลือกหน้า" className="flex items-center gap-1">
+                  <PageButton label="หน้าก่อน" disabled={state.page <= 1} onClick={() => onChange({ page: state.page - 1 })}>
+                    <ChevronLeft size={16} aria-hidden />
+                  </PageButton>
+                  {pageItems(state.page, totalPages).map((p, i) =>
+                    p === "…" ? (
+                      <span key={`gap-${i}`} className="w-6 text-center text-muted">
+                        …
+                      </span>
+                    ) : (
+                      <PageButton key={p} current={p === state.page} onClick={() => onChange({ page: p })}>
+                        {formatCount(p)}
+                      </PageButton>
+                    )
+                  )}
+                  <PageButton label="หน้าถัดไป" disabled={state.page >= totalPages} onClick={() => onChange({ page: state.page + 1 })}>
+                    <ChevronRight size={16} aria-hidden />
+                  </PageButton>
+                </nav>
+              </footer>
+            ) : null}
           </div>
         </section>
 
-      {pendingOverwriteAccId != null && (
-        <StatusDialog
-          open
-          tone="warning"
-          title="มีข้อมูลจาก AI อยู่แล้ว"
-          message={`Account ${pendingOverwriteAccId} มีเหตุผลที่ได้จาก AI อยู่แล้ว ต้องการ generate ใหม่และเขียนทับข้อมูลเดิมไหม?`}
-          confirmLabel="เขียนทับ"
-          cancelLabel="ยกเลิก"
-          onCancel={() => setPendingOverwriteAccId(null)}
-          onConfirm={() => {
-            void runAiGeneration(pendingOverwriteAccId, true);
-            setPendingOverwriteAccId(null);
-          }}
-        />
-      )}
-    </main>
-  );
-}
-
-function CustomerTableRow({
-  row: r,
-  href,
-  inFlight,
-  onNavigate,
-  onGenAiClick,
-}: {
-  row: CustomerRow;
-  href: string;
-  inFlight: boolean;
-  onNavigate: (href: string) => void;
-  onGenAiClick: (event: MouseEvent<HTMLButtonElement>) => void;
-}) {
-  const churnPct = r.churn_probability != null ? r.churn_probability * 100 : null;
-  const urgency = r.credit_urgency_level;
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      className={`grid w-full cursor-pointer gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 xl:items-center xl:gap-4 ${CUSTOMER_ROW_GRID}`}
-      onClick={() => onNavigate(href)}
-      onKeyDown={(event) => { if (event.key === "Enter") onNavigate(href); }}
-    >
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] xl:hidden">Account</p>
-        <div className="flex items-center gap-2">
-          <p className="num text-[18px] font-semibold text-[color:var(--ink-2)]">{r.acc_id}</p>
-          {isHighValueTier(r.customer_value_tier) ? <HighValueMedal /> : null}
-        </div>
-        <p className="mt-0.5 text-[11.5px] text-[color:var(--ink-5)]">{r.n_purchases ?? 0} purchases</p>
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <LifecycleRowPill stage={r.lifecycle_stage ?? "—"} />
-        {r.sub_stage && <span className="truncate text-[12px] text-[color:var(--ink-4)]">{r.sub_stage}</span>}
-      </div>
-      <MetricCell label="Churn" value={churnPct != null ? `${churnPct.toFixed(1)}%` : "—"} valueColor="#fc4c02" />
-      <MetricCell label="Score" value={r.priority_score.toFixed(0)} alignRight />
-      <MetricCell label="CLV 6m" value={r.predicted_clv_6m != null ? formatCurrency(r.predicted_clv_6m) : "—"} alignRight />
-      <MetricCell label="Revenue" value={r.total_revenue != null ? formatCurrency(r.total_revenue) : "—"} alignRight />
-      <MetricCell
-        label="At risk"
-        value={r.revenue_at_risk != null ? formatCurrency(r.revenue_at_risk) : "—"}
-        valueColor={r.revenue_at_risk != null && r.revenue_at_risk > 0 ? "#fc4c02" : undefined}
-        alignRight
-      />
-      <div className="xl:text-right">
-        <p className="text-[11px] font-semibold uppercase tracking-[.12em] text-[color:var(--ink-5)] xl:hidden">
-          Credit
-        </p>
-        <p
-          className="num mt-0.5 text-[14px] font-semibold xl:mt-0"
-          style={urgency ? { color: URGENCY_COLORS[urgency] ?? undefined } : undefined}
-        >
-          {urgency ?? "—"}
-        </p>
-        {r.estimated_days_until_topup != null && (
-          <p className="text-[11px] text-[color:var(--ink-5)]">topup ~{r.estimated_days_until_topup} วัน</p>
-        )}
-      </div>
-      <MetricCell
-        label="Inactive"
-        value={r.days_since_last_activity != null ? `${r.days_since_last_activity} วัน` : "—"}
-        alignRight
-      />
-      <div className="flex justify-start xl:justify-end">
-        <GenAiButton ai={r} inFlight={inFlight} onClick={onGenAiClick} />
+        <CustomerPanel row={selected} tab={state.tab} ctx={ctx} href={selected ? customerHref(selected.acc_id) : null} loading={!data} />
       </div>
     </div>
   );
 }
 
-function SortableHeader({
-  label,
-  sortKey,
-  activeSort,
-  onSort,
-  alignRight = false,
-}: {
-  label: string;
-  sortKey: CustomerSortKey;
-  activeSort: CustomerSort | null;
-  onSort: (key: CustomerSortKey) => void;
-  alignRight?: boolean;
-}) {
-  const isActive = activeSort?.key === sortKey;
-  const direction = isActive ? activeSort.direction : null;
-  const Icon = direction === "desc" ? ArrowDown : ArrowUp;
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSort(sortKey)}
-      className={`inline-flex items-center gap-1.5 rounded-lg py-1 transition-colors hover:text-[color:var(--ink-2)] ${
-        alignRight ? "justify-end text-right" : "justify-start text-left"
-      } ${isActive ? "text-[color:var(--moby-600)]" : ""}`}
-      title="Click to sort ascending, descending, then reset"
-    >
-      <span>{label}</span>
-      <Icon size={12} className={isActive ? "opacity-100" : "opacity-25"} />
-    </button>
-  );
-}
-
-function FilterChip({
-  active,
-  onClick,
+function PageButton({
   children,
+  label,
+  current = false,
+  disabled = false,
+  onClick,
 }: {
-  active: boolean;
+  children: ReactNode;
+  label?: string;
+  current?: boolean;
+  disabled?: boolean;
   onClick: () => void;
-  children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
+      aria-label={label}
+      aria-current={current ? "page" : undefined}
+      disabled={disabled}
       onClick={onClick}
-      className={`inline-flex h-10 items-center rounded-xl border px-3 text-[12px] font-semibold transition-colors ${
-        active
-          ? "border-[color:var(--moby-100)] bg-[color:var(--moby-50)] text-[color:var(--moby-600)]"
-          : "border-gray-200 bg-white text-[color:var(--ink-4)] hover:bg-gray-50 hover:text-[color:var(--ink-2)]"
+      className={`tabular-nums inline-flex h-9 min-w-9 items-center justify-center rounded-control px-2 text-body transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 max-[859px]:h-11 max-[859px]:min-w-11 ${
+        current ? "bg-text font-semibold text-surface" : "text-text hover:bg-raised"
       }`}
     >
       {children}
     </button>
   );
+}
+
+/** Side panel (≥1280px): who the selected customer is, the tab's facts, and why the model scored them. */
+function CustomerPanel({ row, tab, ctx, href, loading }: { row: PredictionOutput | null; tab: TabKey; ctx: Ctx; href: string | null; loading: boolean }) {
+  const shell = "surface sticky top-6 mt-6 hidden p-6 xl:block";
+  if (!row || !href) {
+    return (
+      <aside aria-label="ลูกค้าที่เลือก" className={shell}>
+        {loading ? <Skeleton className="h-[420px]" /> : <p className="text-body text-muted">ไม่มีลูกค้าในมุมมองนี้</p>}
+      </aside>
+    );
+  }
+
+  const scored = row.churn_probability != null && row.churn_risk_level != null;
+  const subtitle =
+    tab === "paid"
+      ? [VALUE_TIER_LABEL[row.customer_value_tier], scored && row.churn_risk_level ? `เสี่ยง${RISK_LABEL[row.churn_risk_level]}` : "ยังไม่มีคะแนน"]
+          .filter(Boolean)
+          .join(" · ")
+      : LIFECYCLE_LABEL[row.lifecycle_stage];
+  const lastAccess = row.profile_snapshot?.last_access;
+  const factors = (row.churn_factors ?? []).slice(0, 3);
+
+  return (
+    <aside aria-label="ลูกค้าที่เลือก" className={shell}>
+      <div className="flex flex-col items-center text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-raised text-muted">
+          <Building2 size={22} aria-hidden />
+        </span>
+        <h2 className="tabular-nums mt-3 text-[20px] font-semibold leading-tight text-text">บัญชี #{row.acc_id}</h2>
+        <p className="mt-1 text-small text-muted">{subtitle}</p>
+        {lastAccess ? (
+          <p className="tabular-nums mt-3 text-small text-muted">
+            เข้าระบบล่าสุด <span className="font-medium text-text">{formatDate(lastAccess)}</span>
+          </p>
+        ) : null}
+      </div>
+
+      <section className="mt-5 border-t border-border pt-5">
+        <h3 className="text-small text-muted">ตัวเลขสำคัญ</h3>
+        <dl className="mt-3 space-y-3">
+          {TABS[tab].columns.slice(1).map((c) => (
+            <div key={c.label} className="flex items-baseline justify-between gap-3">
+              <dt className="text-body text-muted">{c.label}</dt>
+              <dd className="text-right text-body">{c.cell(row, ctx)}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      {tab === "paid" ? (
+        <section className="mt-5 border-t border-border pt-5">
+          <h3 className="text-small text-muted">เหตุผลหลักจากโมเดล</h3>
+          {!scored ? (
+            <p className="mt-2 text-body text-text">ยังไม่มีคะแนน · ลูกค้าใหม่กว่า 90 วัน</p>
+          ) : factors.length === 0 ? (
+            <p className="mt-2 text-body text-muted">รอบนี้ไม่มีคำอธิบายจากโมเดล</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {factors.map((f) => {
+                const up = f.direction === "up";
+                const Icon = up ? ArrowUp : ArrowDown;
+                return (
+                  <li key={f.feature} className="flex gap-3">
+                    <Icon size={16} aria-hidden className={`mt-0.5 shrink-0 ${up ? "text-negative" : "text-accent"}`} />
+                    <div className="min-w-0">
+                      <p className="text-body text-text">{humanizeFeature(f.feature)}</p>
+                      <p className="text-micro text-muted">{up ? "ทำให้เสี่ยงขึ้น" : "ช่วยลดความเสี่ยง"}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      <Link
+        href={href}
+        className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-card bg-text text-body font-semibold text-surface transition-opacity duration-150 hover:opacity-90"
+      >
+        เปิดหน้าลูกค้า
+        <ArrowRight size={16} aria-hidden />
+      </Link>
+    </aside>
+  );
+}
+
+function ExportButton({ runId, state, disabled }: { runId: string; state: ListState; disabled: boolean }) {
+  const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const run = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const result = await exportOutputsCsv(runId, toOutputsQuery(state), (loaded, total) => setProgress({ loaded, total }));
+      if (result.capped) {
+        notifyStatusDialog({
+          tone: "warning",
+          title: `ไฟล์ถูกตัดที่ ${formatCount(EXPORT_ROW_CAP)} แถว`,
+          message: `มีลูกค้าที่ตรงเงื่อนไข ${formatCount(result.total)} ราย ไฟล์ CSV มีเฉพาะ ${formatCount(result.rows)} แถวแรกตามการเรียงปัจจุบัน กรองให้แคบลงถ้าต้องการครบทุกแถว`,
+        });
+      }
+    } catch (e: unknown) {
+      notifyStatusDialog({
+        tone: "error",
+        title: "ดาวน์โหลด CSV ไม่สำเร็จ",
+        message: e instanceof Error ? e.message : "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง",
+      });
+    } finally {
+      setExporting(false);
+      setProgress(null);
+    }
+  };
+
+  return (
+    <button type="button" onClick={() => void run()} disabled={exporting || disabled} className={`${BUTTON.secondary} h-9`}>
+      <Download size={14} aria-hidden />
+      {exporting
+        ? progress
+          ? `กำลังดาวน์โหลด ${formatCount(progress.loaded)}/${formatCount(Math.min(progress.total, EXPORT_ROW_CAP))}`
+          : "กำลังดาวน์โหลด…"
+        : "ส่งออก CSV"}
+    </button>
+  );
+}
+
+/**
+ * Second line under the account: the strongest churn factor when the run has SHAP; otherwise the
+ * value tier with the customer's own activity, so the line differs from row to row.
+ */
+function reason(r: PredictionOutput): string {
+  const factor = r.churn_factors?.[0];
+  if (factor) return `${humanizeFeature(factor.feature)}${factor.direction === "up" ? " ทำให้เสี่ยงขึ้น" : " ช่วยลดความเสี่ยง"}`;
+  const activity = r.days_since_last_activity != null ? `ใช้งานล่าสุด ${formatDaysAgo(r.days_since_last_activity)}` : null;
+  const tier = r.customer_value_tier && r.customer_value_tier !== "none" ? VALUE_TIER_LABEL[r.customer_value_tier] : null;
+  return [tier, activity].filter(Boolean).join(" · ") || "—";
+}
+
+/** Email when it carries most of the usage, else the biggest SMS channel. */
+function mainChannel(p: ProfileSnapshot | null | undefined): string | null {
+  if (!p) return null;
+  if (p.email_usage_share > p.sms_usage_share) return CHANNEL_LABEL.email;
+  const [key, share] = (["bc", "api", "otp"] as const)
+    .map((k) => [k, p[`${k}_usage_share`]] as const)
+    .reduce((a, b) => (b[1] > a[1] ? b : a));
+  return share > 0 ? CHANNEL_LABEL[key] : null;
+}
+
+function Risk({ row }: { row: PredictionOutput }) {
+  // Only Active Paid customers are scored; under 90 days of tenure the model abstains
+  if (row.churn_probability == null || !row.churn_risk_level) return <StatusPill tone="neutral">ยังไม่มีคะแนน</StatusPill>;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="tabular-nums min-w-[2rem] text-right font-semibold text-text">{formatPercent(row.churn_probability)}</span>
+      <StatusPill tone={RISK_TONE[row.churn_risk_level]}>{RISK_LABEL[row.churn_risk_level]}</StatusPill>
+    </span>
+  );
+}
+
+function Money({ value, strong = false, muted = false }: { value: number | null; strong?: boolean; muted?: boolean }) {
+  if (value == null) return <Dash />;
+  return <span className={`tabular-nums ${strong ? "font-semibold text-text" : muted ? "text-muted" : "text-text"}`}>{formatBaht(value)}</span>;
+}
+
+function DateCell({ iso }: { iso: string | null | undefined }) {
+  return iso ? <span className="tabular-nums">{formatDate(iso)}</span> : <Dash />;
+}
+
+function TopUp({ days }: { days: number | null }) {
+  if (days == null) return <Dash />;
+  return <span className={`tabular-nums ${days <= URGENT_DAYS ? "font-medium text-negative" : ""}`}>{formatDaysAhead(days)}</span>;
+}
+
+function Dash() {
+  return <span className="text-faint">—</span>;
+}
+
+function filterChips(filters: ListFilters): { key: FilterKey; label: string }[] {
+  const chips: { key: FilterKey; label: string }[] = [];
+  const tier = filters.customer_value_tier as keyof typeof VALUE_TIER_LABEL;
+  if (VALUE_TIER_LABEL[tier]) chips.push({ key: "customer_value_tier", label: VALUE_TIER_LABEL[tier] });
+  const risks = filters.churn_risk_level
+    .split(",")
+    .filter((r): r is keyof typeof RISK_LABEL => r in RISK_LABEL)
+    .map((r) => RISK_LABEL[r]);
+  if (risks.length) chips.push({ key: "churn_risk_level", label: `ความเสี่ยง${risks.join(", ")}` });
+  const urgency = filters.credit_urgency_level as keyof typeof URGENCY_LABEL;
+  if (URGENCY_LABEL[urgency]) chips.push({ key: "credit_urgency_level", label: URGENCY_LABEL[urgency] });
+  if (filters.ever_paid) chips.push({ key: "ever_paid", label: filters.ever_paid === "true" ? "เคยเติมเงิน" : "ไม่เคยเติม" });
+  return chips;
 }

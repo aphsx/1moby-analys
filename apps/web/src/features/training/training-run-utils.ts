@@ -25,7 +25,7 @@ export function primaryResultSummary(results: TrainingRunResult[] | null): strin
   if (!results || results.length === 0) return null;
   const primary = results.find((r) => r.model_type === "churn") ?? results[0];
   return `${primary.model_type} ${primary.primary_metric_name} ${formatMetric(primary.primary_metric_value)} ${
-    beatsBaseline(primary) ? "✓" : "✗"
+    beatsBaseline(primary) ? "ดีกว่า baseline" : "ไม่ดีกว่า baseline"
   }`;
 }
 

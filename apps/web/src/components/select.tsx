@@ -30,21 +30,21 @@ export type SelectOption = {
 type SelectSize = "sm" | "md" | "lg";
 
 const SIZE_CLS: Record<SelectSize, string> = {
-  sm: "h-8 rounded-lg pl-2.5 pr-7 text-[11.5px]",
-  md: "h-9 rounded-lg pl-3 pr-9 text-[13px]",
-  lg: "h-11 rounded-2xl pl-3.5 pr-10 text-[13px] shadow-[var(--shadow-1)]",
+  sm: "h-8 rounded-lg pl-2.5 pr-7 text-micro",
+  md: "h-9 rounded-lg pl-3 pr-9 text-small",
+  lg: "h-11 rounded-card pl-3.5 pr-10 text-small",
 };
 
 const MENU_RADIUS: Record<SelectSize, string> = {
   sm: "rounded-lg",
-  md: "rounded-xl",
-  lg: "rounded-2xl",
+  md: "rounded-control",
+  lg: "rounded-card",
 };
 
 const OPTION_PAD: Record<SelectSize, string> = {
-  sm: "px-2.5 py-1.5 text-[11.5px]",
-  md: "px-3 py-2 text-[13px]",
-  lg: "px-3.5 py-2.5 text-[13px]",
+  sm: "px-2.5 py-1.5 text-micro",
+  md: "px-3 py-2 text-small",
+  lg: "px-3.5 py-2.5 text-small",
 };
 
 type MenuPos = { top: number; left: number; width: number; placement: "above" | "below" };
@@ -214,13 +214,13 @@ export function Select({
             }
             style={menuStyle}
             className={clsx(
-              "max-h-60 overflow-auto border border-gray-200 bg-white py-1",
+              "max-h-60 overflow-auto border border-border bg-surface py-1",
               "shadow-[var(--shadow-3)]",
               MENU_RADIUS[size]
             )}
           >
             {options.length === 0 ? (
-              <li className={clsx(OPTION_PAD[size], "text-[color:var(--ink-5)]")}>
+              <li className={clsx(OPTION_PAD[size], "text-faint")}>
                 ไม่มีตัวเลือก
               </li>
             ) : (
@@ -239,11 +239,11 @@ export function Select({
                       "flex cursor-pointer items-center gap-2",
                       OPTION_PAD[size],
                       opt.disabled && "cursor-not-allowed opacity-45",
-                      !opt.disabled && isActive && "bg-[color:var(--moby-50)]",
-                      !opt.disabled && !isActive && "hover:bg-gray-50",
+                      !opt.disabled && isActive && "bg-accent-soft",
+                      !opt.disabled && !isActive && "hover:bg-raised",
                       isSelected
-                        ? "font-medium text-[color:var(--moby-700)]"
-                        : "text-[color:var(--ink-2)]"
+                        ? "font-medium text-accent"
+                        : "text-text"
                     )}
                     onMouseEnter={() => !opt.disabled && setHighlight(i)}
                     onMouseDown={(e) => {
@@ -255,7 +255,7 @@ export function Select({
                     {isSelected ? (
                       <Check
                         size={size === "sm" ? 12 : 14}
-                        className="shrink-0 text-[color:var(--moby-600)]"
+                        className="shrink-0 text-accent"
                       />
                     ) : (
                       <span className="w-3.5 shrink-0" aria-hidden />
@@ -282,11 +282,11 @@ export function Select({
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={onTriggerKeyDown}
         className={clsx(
-          "relative flex w-full min-w-0 items-center border border-gray-200 bg-white text-left outline-none transition-colors",
-          "text-[color:var(--ink-2)] hover:border-[color:var(--moby-200)]",
-          "focus-visible:border-[color:var(--moby-500)]",
+          "relative flex w-full min-w-0 items-center border border-border bg-surface text-left outline-none transition-colors",
+          "text-text hover:border-accent-track",
+          "focus-visible:border-accent",
           "disabled:cursor-not-allowed disabled:opacity-50",
-          open && "border-[color:var(--moby-500)]",
+          open && "border-accent",
           SIZE_CLS[size],
           hasLeft && (size === "sm" ? "pl-7" : size === "md" ? "pl-9" : "pl-10")
         )}
@@ -294,7 +294,7 @@ export function Select({
         {leftIcon ? (
           <span
             className={clsx(
-              "pointer-events-none absolute top-1/2 -translate-y-1/2 text-[color:var(--ink-4)]",
+              "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted",
               size === "sm" ? "left-2" : "left-3"
             )}
           >
@@ -304,7 +304,7 @@ export function Select({
         <span
           className={clsx(
             "min-w-0 flex-1 truncate",
-            !selected && "text-[color:var(--ink-5)]"
+            !selected && "text-faint"
           )}
         >
           {selected?.label ?? placeholder}
@@ -312,7 +312,7 @@ export function Select({
         <ChevronDown
           size={size === "sm" ? 12 : 14}
           className={clsx(
-            "pointer-events-none absolute top-1/2 -translate-y-1/2 text-[color:var(--ink-4)] transition-transform",
+            "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted transition-transform",
             size === "sm" ? "right-2" : "right-3",
             open && "rotate-180"
           )}
