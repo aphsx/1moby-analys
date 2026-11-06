@@ -72,7 +72,7 @@ def fit_preprocessor(
 
     numeric = feature_df_train[feature_names].apply(pd.to_numeric, errors="coerce")
     imputation_values = {
-        feature_name: _imputation_value(numeric[feature_name], schema[feature_name])
+        feature_name: _imputation_value(numeric[feature_name], schema[feature_name], feature_name)
         for feature_name in feature_names
     }
     imputed = numeric.fillna(imputation_values)
@@ -216,10 +216,12 @@ def check_preprocessing_safety(
     )
 
 
-def _imputation_value(series: pd.Series, metadata: dict[str, Any]) -> float:
+def _imputation_value(series: pd.Series, metadata: dict[str, Any], feature_name: str = "") -> float:
     configured_default = metadata.get("default")
     if configured_default is not None:
         return float(configured_default)
+    if feature_name.startswith("days_since_"):
+        return 999.0
 
     median = pd.to_numeric(series, errors="coerce").median()
     if pd.isna(median):

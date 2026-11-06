@@ -25,35 +25,43 @@ BASE_TIER_A_FEATURES = [
     "total_revenue_all",
     "total_revenue_180d",
     "avg_transaction_value",
-    "payment_interval_mean_days",
-    "payment_overdue_ratio",
-    "payment_amount_cv",
     "usage_total_180d",
     "usage_recent_90d",
-    "usage_prev_90d",
-    "usage_change_90d_pct",
-    "usage_decay_ratio",
-    "usage_slope_6m",
+    "usage_recent_30d",
     "usage_active_months_180d",
-    "usage_consistency_ratio",
-    "sms_usage_share",
-    "email_usage_share",
-    "bc_usage_share",
-    "api_usage_share",
-    "otp_usage_share",
-    "channel_hhi",
-    "multichannel_flag",
+    "usage_trend_pct",
+    "payment_to_usage_ratio",
 ]
 CREDIT_TIER_A_FEATURES = [
     *BASE_TIER_A_FEATURES,
     "credit_added_180d",
     "credit_balance_proxy",
+    "current_sms_balance",
+    "anchor_30d",
+]
+# Additional columns retained on the feature dataframe for UI display snapshots
+# and legacy diagnostics without polluting the core ML training matrices.
+DISPLAY_COLUMNS = [
+    "sms_usage_share",
+    "email_usage_share",
+    "bc_usage_share",
+    "api_usage_share",
+    "otp_usage_share",
+    "usage_change_90d_pct",
+    "channel_hhi",
+    "multichannel_flag",
+    "payment_interval_mean_days",
+    "payment_overdue_ratio",
+    "payment_amount_cv",
+    "usage_prev_90d",
+    "usage_decay_ratio",
+    "usage_slope_6m",
+    "usage_consistency_ratio",
     "credit_runway_months",
     "credit_usage_decel",
 ]
-# Churn/CLV intentionally keep the original compact Tier A contract. Credit
-# uses the extended contract because balance/runway features are directly tied
-# to future usage but add avoidable noise to churn and CLV backtests.
+# Churn/CLV intentionally keep the clean 15-feature intuitive contract. Credit
+# adds point-in-time balance and usage anchor.
 MINIMUM_TIER_A_FEATURES = BASE_TIER_A_FEATURES
 
 ZERO_DEFAULT_FEATURES = {
@@ -61,14 +69,18 @@ ZERO_DEFAULT_FEATURES = {
     "payment_count_180d",
     "total_revenue_all",
     "total_revenue_180d",
+    "avg_transaction_value",
     "usage_total_180d",
     "usage_recent_90d",
+    "usage_recent_30d",
     "usage_prev_90d",
+    "usage_trend_pct",
     "usage_change_90d_pct",
     "usage_decay_ratio",
     "usage_slope_6m",
     "usage_active_months_180d",
     "usage_consistency_ratio",
+    "payment_to_usage_ratio",
     "sms_usage_share",
     "email_usage_share",
     "bc_usage_share",
@@ -78,8 +90,16 @@ ZERO_DEFAULT_FEATURES = {
     "multichannel_flag",
     "credit_added_180d",
     "credit_balance_proxy",
+    "current_sms_balance",
+    "anchor_30d",
     "credit_runway_months",
     "credit_usage_decel",
+}
+
+RECENCY_DEFAULT_FEATURES = {
+    "days_since_last_activity": 999.0,
+    "days_since_last_payment": 999.0,
+    "days_since_last_usage": 999.0,
 }
 
 NULLABLE_CONTRACT_FEATURES = {
@@ -87,7 +107,6 @@ NULLABLE_CONTRACT_FEATURES = {
     "days_since_last_activity",
     "days_since_last_payment",
     "days_since_last_usage",
-    "avg_transaction_value",
     "payment_interval_mean_days",
     "payment_overdue_ratio",
     "payment_amount_cv",
@@ -279,6 +298,36 @@ FEATURE_METADATA: FeatureSchema = {
         "lookback_window": "180d_before_cutoff",
         "formula": "signed_log1p((usage_recent_90d/3 - usage_prev_90d/3) / (usage_prev_90d/3 + ε)) — relative change in monthly usage burn-rate (deceleration/acceleration of usage)",
         "null_handling": "0 when no prior usage exists",
+    },
+    "usage_recent_30d": {
+        "source": "usage.usage",
+        "lookback_window": "1 calendar month before cutoff",
+        "formula": "sum(usage in last 30 days)",
+        "null_handling": "0 when no usage exists in window",
+    },
+    "usage_trend_pct": {
+        "source": "usage.usage",
+        "lookback_window": "3 calendar months before cutoff",
+        "formula": "(usage_recent_30d * 3.0 - usage_recent_90d) / (usage_recent_90d + 1.0)",
+        "null_handling": "0 when no usage exists",
+    },
+    "payment_to_usage_ratio": {
+        "source": "payments.amount + usage.usage",
+        "lookback_window": "180d_before_cutoff",
+        "formula": "total_revenue_180d / (usage_total_180d + 1.0)",
+        "null_handling": "0 when no payment exists in window",
+    },
+    "current_sms_balance": {
+        "source": "payments.credit_add - usage.usage",
+        "lookback_window": "point_in_time_before_cutoff",
+        "formula": "max(credit_balance_proxy, 0.0)",
+        "null_handling": "0.0 when no prior transactions",
+    },
+    "anchor_30d": {
+        "source": "usage.usage",
+        "lookback_window": "1 calendar month before cutoff",
+        "formula": "usage_recent_30d",
+        "null_handling": "0 when no usage exists in window",
     },
 }
 
@@ -554,16 +603,20 @@ def build_usage_features(usage: pd.DataFrame, cutoff_date: pd.Timestamp) -> pd.D
     rows = pd.DataFrame({"acc_id": sorted(history["acc_id"].dropna().unique())})
     rows["days_since_last_usage"] = rows["acc_id"].map((cutoff - last_usage).dt.days)
 
-    recent_180 = history[history["period"] >= cutoff - pd.Timedelta(days=180)]
-    recent_90 = history[history["period"] >= cutoff - pd.Timedelta(days=90)]
+    recent_180 = history[history["period"] >= cutoff - pd.DateOffset(months=6)]
+    recent_90 = history[history["period"] >= cutoff - pd.DateOffset(months=3)]
+    recent_30 = history[history["period"] >= cutoff - pd.DateOffset(months=1)]
     prev_90 = history[
-        (history["period"] >= cutoff - pd.Timedelta(days=180))
-        & (history["period"] < cutoff - pd.Timedelta(days=90))
+        (history["period"] >= cutoff - pd.DateOffset(months=6))
+        & (history["period"] < cutoff - pd.DateOffset(months=3))
     ]
 
-    rows["usage_total_180d"] = rows["acc_id"].map(recent_180.groupby("acc_id")["usage"].sum())
-    rows["usage_recent_90d"] = rows["acc_id"].map(recent_90.groupby("acc_id")["usage"].sum())
-    rows["usage_prev_90d"] = rows["acc_id"].map(prev_90.groupby("acc_id")["usage"].sum())
+    rows["days_since_last_usage"] = rows["acc_id"].map((cutoff - last_usage).dt.days).fillna(999.0)
+    rows["usage_total_180d"] = rows["acc_id"].map(recent_180.groupby("acc_id")["usage"].sum()).fillna(0.0)
+    rows["usage_recent_90d"] = rows["acc_id"].map(recent_90.groupby("acc_id")["usage"].sum()).fillna(0.0)
+    rows["usage_recent_30d"] = rows["acc_id"].map(recent_30.groupby("acc_id")["usage"].sum()).fillna(0.0)
+    rows["usage_prev_90d"] = rows["acc_id"].map(prev_90.groupby("acc_id")["usage"].sum()).fillna(0.0)
+    rows["usage_trend_pct"] = (rows["usage_recent_30d"] * 3.0 - rows["usage_recent_90d"]) / (rows["usage_recent_90d"] + 1.0)
     # Signed log1p compression: these ratios explode when the prior-90d usage is
     # tiny (a customer ramping from ~0 yields values in the tens of thousands),
     # which dominates a linear model and falsely flags fast-growing customers as
@@ -577,16 +630,16 @@ def build_usage_features(usage: pd.DataFrame, cutoff_date: pd.Timestamp) -> pd.D
     )
     rows["usage_active_months_180d"] = rows["acc_id"].map(
         recent_180[recent_180["usage"] > 0].groupby("acc_id")["period"].nunique()
-    )
+    ).fillna(0).astype(int)
     # Divisor = the number of monthly usage buckets the 180d window can actually
     # contain, derived from the window itself. A hardcoded 6.0 is wrong: a
     # month-aligned 180d span holds ~5 month-start stamps (not 6), and an
     # unaligned span can touch 7 — so /6.0 let the ratio under- or over-shoot 1.0.
-    window_start = cutoff - pd.Timedelta(days=180)
+    window_start = cutoff - pd.DateOffset(months=6)
     window_months = pd.date_range(window_start.normalize(), cutoff, freq="MS")
     n_window_months = int(((window_months >= window_start) & (window_months < cutoff)).sum())
     rows["usage_consistency_ratio"] = rows["usage_active_months_180d"] / max(n_window_months, 1)
-    rows["usage_slope_6m"] = rows["acc_id"].map(_usage_slope_6m(history, cutoff))
+    rows["usage_slope_6m"] = rows["acc_id"].map(_usage_slope_6m(history, cutoff)).fillna(0.0)
 
     return rows[
         [
@@ -594,7 +647,9 @@ def build_usage_features(usage: pd.DataFrame, cutoff_date: pd.Timestamp) -> pd.D
             "days_since_last_usage",
             "usage_total_180d",
             "usage_recent_90d",
+            "usage_recent_30d",
             "usage_prev_90d",
+            "usage_trend_pct",
             "usage_change_90d_pct",
             "usage_decay_ratio",
             "usage_slope_6m",
@@ -658,10 +713,10 @@ def build_credit_features(
     recent_topups = payment_history[
         payment_history["payment_date"] >= cutoff - pd.Timedelta(days=180)
     ]
-    recent_usage_90 = usage_history[usage_history["period"] >= cutoff - pd.Timedelta(days=90)]
+    recent_usage_90 = usage_history[usage_history["period"] >= cutoff - pd.DateOffset(months=3)]
     prev_usage_90 = usage_history[
-        (usage_history["period"] >= cutoff - pd.Timedelta(days=180))
-        & (usage_history["period"] < cutoff - pd.Timedelta(days=90))
+        (usage_history["period"] >= cutoff - pd.DateOffset(months=6))
+        & (usage_history["period"] < cutoff - pd.DateOffset(months=3))
     ]
 
     rows = pd.DataFrame({"acc_id": acc_ids})
@@ -695,7 +750,21 @@ def build_credit_features(
     ).fillna(0.0) / 3.0
     rows["credit_usage_decel"] = _signed_log1p((recent_mo - prev_mo) / (prev_mo + EPSILON))
 
-    return rows[["acc_id", "credit_added_180d", "credit_balance_proxy", "credit_runway_months", "credit_usage_decel"]]
+    rows["current_sms_balance"] = np.maximum(rows["credit_balance_proxy"], 0.0)
+    recent_usage_30 = usage_history[usage_history["period"] >= cutoff - pd.DateOffset(months=1)]
+    rows["anchor_30d"] = rows["acc_id"].map(recent_usage_30.groupby("acc_id")["usage"].sum()).fillna(0.0)
+
+    return rows[
+        [
+            "acc_id",
+            "credit_added_180d",
+            "credit_balance_proxy",
+            "current_sms_balance",
+            "anchor_30d",
+            "credit_runway_months",
+            "credit_usage_decel",
+        ]
+    ]
 
 
 def build_activity_features(
@@ -747,6 +816,18 @@ def build_interaction_features(feature_df: pd.DataFrame) -> pd.DataFrame:
     )
     feature_df["channel_hhi"] = (sms**2 + email**2).astype("float64")
     feature_df["multichannel_flag"] = ((sms > 0) & (email > 0)).astype("float64")
+
+    rev_180 = (
+        pd.to_numeric(feature_df["total_revenue_180d"], errors="coerce").fillna(0.0)
+        if "total_revenue_180d" in feature_df.columns
+        else pd.Series(0.0, index=feature_df.index)
+    )
+    use_180 = (
+        pd.to_numeric(feature_df["usage_total_180d"], errors="coerce").fillna(0.0)
+        if "usage_total_180d" in feature_df.columns
+        else pd.Series(0.0, index=feature_df.index)
+    )
+    feature_df["payment_to_usage_ratio"] = (rev_180 / (use_180 + 1.0)).astype("float64")
     return feature_df
 
 
@@ -1065,6 +1146,9 @@ def _apply_feature_defaults(feature_df: pd.DataFrame) -> pd.DataFrame:
     for feature_name in ZERO_DEFAULT_FEATURES:
         if feature_name in feature_df.columns:
             feature_df[feature_name] = feature_df[feature_name].fillna(0.0)
+    for feature_name, default_val in RECENCY_DEFAULT_FEATURES.items():
+        if feature_name in feature_df.columns:
+            feature_df[feature_name] = feature_df[feature_name].fillna(default_val)
     return feature_df
 
 

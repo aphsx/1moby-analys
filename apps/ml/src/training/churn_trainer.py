@@ -90,13 +90,64 @@ HIGH_THRESHOLD_BAND = (0.35, 0.85)
 # Default candidate pool — explicit list, not environment-detection.
 # Override via CHURN_CANDIDATES env var (comma-separated) or the
 # `candidates` kwarg on train_churn_candidates / train_churn.
-# TabICL is in the default pool on every host (CUDA/MPS/CPU). In-context rows are
-# capped (TABICL_MAX_ROWS) so panel-pooled churn sets stay tractable; tree models
-# still use the full pooled set. If it wins the gate it is served as production
-# churn; per-row churn_factors are null at serve time (predictions unaffected).
-DEFAULT_CANDIDATES = ["logistic_regression", "lightgbm", "tabicl"]
+DEFAULT_CANDIDATES = ["dual_gbdt", "lightgbm", "catboost", "logistic_regression"]
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+
+class DualGbdtClassifier:
+    """Clean Dual-GBDT (LightGBM + CatBoost 50:50 blend) with native SHAP TreeExplainer support."""
+
+    def __init__(
+        self,
+        lgb_params: dict[str, Any] | None = None,
+        cat_params: dict[str, Any] | None = None,
+        blend_weight: float = 0.5,
+    ):
+        self.lgb_params = lgb_params or {
+            "n_estimators": 120,
+            "learning_rate": 0.04,
+            "max_depth": 5,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "random_state": RANDOM_SEED,
+            "verbose": -1,
+            "n_jobs": -1,
+        }
+        self.cat_params = cat_params or {
+            "iterations": 150,
+            "learning_rate": 0.04,
+            "depth": 5,
+            "random_seed": RANDOM_SEED,
+            "verbose": 0,
+            "thread_count": -1,
+        }
+        self.blend_weight = blend_weight
+        self.lgb_model = lgb.LGBMClassifier(**self.lgb_params)
+        from catboost import CatBoostClassifier
+        self.cat_model = CatBoostClassifier(**self.cat_params)
+
+    def fit(self, x: pd.DataFrame, y: np.ndarray, **kwargs) -> "DualGbdtClassifier":
+        self.lgb_model.fit(x, y)
+        self.cat_model.fit(x, y)
+        return self
+
+    def predict_proba(self, x: pd.DataFrame) -> np.ndarray:
+        p_lgb = self.lgb_model.predict_proba(x)[:, 1]
+        p_cat = self.cat_model.predict_proba(x)[:, 1]
+        p_blend = self.blend_weight * p_lgb + (1.0 - self.blend_weight) * p_cat
+        return np.column_stack([1.0 - p_blend, p_blend])
+
+    def predict(self, x: pd.DataFrame) -> np.ndarray:
+        return (self.predict_proba(x)[:, 1] >= 0.5).astype(int)
+
+    @property
+    def feature_importances_(self) -> np.ndarray:
+        return self.lgb_model.feature_importances_
+
+    @property
+    def booster_(self):
+        return self.lgb_model.booster_
 
 
 def _resolve_candidates(candidates: list[str] | None) -> list[str]:
@@ -284,6 +335,14 @@ def train_churn_candidates(
 
     # ── Build candidate list from config (§8) ─────────────────────
     fitted: list[ChurnCandidate] = []
+
+    if "dual_gbdt" in active:
+        notify("churn: training Dual-GBDT (LightGBM + CatBoost 50:50 blend) candidate")
+        fitted.append(_fit_dual_gbdt(x_train, y_train, x_val, y_val))
+
+    if "catboost" in active:
+        notify("churn: training CatBoost candidate")
+        fitted.append(_fit_catboost(x_train, y_train, x_val, y_val))
 
     if "logistic_regression" in active:
         notify("churn: training Logistic Regression candidate")
@@ -570,6 +629,12 @@ def _resolved_params(candidate: ChurnCandidate) -> dict[str, Any]:
 def clone_candidate_model(champion: ChurnCandidate, y_train: np.ndarray) -> Any:
     """Fresh estimator with the champion's hyperparameters (for backtests)."""
 
+    if champion.name == "dual_gbdt":
+        return DualGbdtClassifier()
+    if champion.name == "catboost":
+        from catboost import CatBoostClassifier
+        return CatBoostClassifier(iterations=150, learning_rate=0.04, depth=5, random_seed=RANDOM_SEED, verbose=0)
+
     scale_pos_weight = float((y_train == 0).sum() / max(1, (y_train == 1).sum()))
     if champion.name == "tabicl":
         # Training-free foundation model: handles imbalance internally, so no
@@ -587,6 +652,46 @@ def clone_candidate_model(champion: ChurnCandidate, y_train: np.ndarray) -> Any:
     if champion.name == "random_forest":
         return RandomForestClassifier(**champion.params)
     return LogisticRegression(**champion.params)
+
+
+def _fit_dual_gbdt(
+    x_train: pd.DataFrame,
+    y_train: np.ndarray,
+    x_val: pd.DataFrame,
+    y_val: np.ndarray,
+) -> ChurnCandidate:
+    """Fit clean Dual-GBDT (LightGBM + CatBoost 50:50 blend)."""
+    model = DualGbdtClassifier()
+    model.fit(x_train, y_train)
+    val_probs = model.predict_proba(x_val)[:, 1]
+    val_pr_auc = float(average_precision_score(y_val, val_probs))
+    return ChurnCandidate(
+        name="dual_gbdt",
+        model=model,
+        params={"blend_weight": 0.5},
+        validation_pr_auc=val_pr_auc,
+    )
+
+
+def _fit_catboost(
+    x_train: pd.DataFrame,
+    y_train: np.ndarray,
+    x_val: pd.DataFrame,
+    y_val: np.ndarray,
+) -> ChurnCandidate:
+    """Fit CatBoost candidate."""
+    from catboost import CatBoostClassifier
+
+    model = CatBoostClassifier(iterations=150, learning_rate=0.04, depth=5, random_seed=RANDOM_SEED, verbose=0)
+    model.fit(x_train, y_train)
+    val_probs = model.predict_proba(x_val)[:, 1]
+    val_pr_auc = float(average_precision_score(y_val, val_probs))
+    return ChurnCandidate(
+        name="catboost",
+        model=model,
+        params={"iterations": 150, "learning_rate": 0.04, "depth": 5},
+        validation_pr_auc=val_pr_auc,
+    )
 
 
 def _fit_tabicl(

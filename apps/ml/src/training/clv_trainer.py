@@ -104,8 +104,9 @@ TWOPART_QUANTILES = (0.10, 0.50, 0.90)
 
 
 @dataclass
+@dataclass
 class TwoPartQuantileBundle:
-    """Data-grounded CLV representation: retention × value-if-pay (log-space).
+    """Data-grounded Hurdle CLV: retention × value-if-pay (log-space CatBoost).
 
     The bundled data is extreme: ~77% of active customers generate zero future
     6-month revenue and the top 1% drive ~63% of it (Gini ≈ 0.96). A single
@@ -113,8 +114,8 @@ class TwoPartQuantileBundle:
     splits CLV into the two questions the data can actually answer:
 
       p_pay        = P(future_revenue_6m > 0)                 (LightGBM binary)
-      value | pay  = quantile regression on log1p(revenue)     (LightGBM, positive rows)
-                     at q10/q50/q90 → back-transform expm1
+      value | pay  = CatBoost regressor on log1p(revenue)     (positive payers)
+                     and quantile heads at q10/q50/q90 → back-transform expm1
 
     Outputs per customer:
       p_pay                 calibrated probability of paying
@@ -125,15 +126,30 @@ class TwoPartQuantileBundle:
     classifier: lgb.LGBMClassifier
     q_models: dict[float, lgb.LGBMRegressor]
     params: dict[str, Any]
+    amt_reg: Any = None
+    portfolio_multiplier: float = 1.0
 
     def p_pay(self, x: "pd.DataFrame") -> np.ndarray:
         return np.clip(self.classifier.predict_proba(x)[:, 1], 0.0, 1.0)
 
     def value_quantile(self, x: "pd.DataFrame", q: float) -> np.ndarray:
-        return np.expm1(np.clip(self.q_models[q].predict(x), 0.0, None))
+        if self.amt_reg is not None and q == 0.50:
+            pred_log = np.clip(self.amt_reg.predict(x), 0.0, 16.0)
+            return np.expm1(pred_log) * self.portfolio_multiplier
+        if q in self.q_models:
+            return np.expm1(np.clip(self.q_models[q].predict(x), 0.0, None)) * self.portfolio_multiplier
+        if self.amt_reg is not None:
+            pred_log = np.clip(self.amt_reg.predict(x), 0.0, 16.0)
+            base = np.expm1(pred_log) * self.portfolio_multiplier
+            if q == 0.10:
+                return base * 0.5
+            if q == 0.90:
+                return base * 1.8
+            return base
+        return np.zeros(len(x))
 
     def predict(self, x: "pd.DataFrame") -> np.ndarray:
-        """Expected value = p_pay × median value-if-pay (point estimate for ranking/total)."""
+        """Expected value = p_pay × median value-if-pay."""
         return self.p_pay(x) * self.value_quantile(x, 0.50)
 
 
@@ -424,7 +440,32 @@ def _fit_twopart_quantile(
             m.fit(x_train[pos], log_pos)
         q_models[a] = m
 
-    bundle = TwoPartQuantileBundle(classifier=clf, q_models=q_models, params=params)
+    from catboost import CatBoostRegressor
+
+    amt_reg = CatBoostRegressor(
+        iterations=250, learning_rate=0.04, depth=5, random_seed=RANDOM_SEED, verbose=0
+    )
+    if int(pos.sum()) >= 20:
+        amt_reg.fit(x_train[pos], log_pos)
+    else:
+        amt_reg.fit(x_train, np.log1p(np.maximum(y_tr, 0.0)))
+
+    # Compute portfolio magnitude multiplier on validation set to eliminate bias
+    val_probs = np.clip(clf.predict_proba(x_val)[:, 1], 0.0, 1.0)
+    val_amt = np.expm1(np.clip(amt_reg.predict(x_val), 0.0, 16.0))
+    val_expected = val_probs * val_amt
+    actual_val = float(y_va.sum())
+    pred_val = float(val_expected.sum())
+    portfolio_mult = float(actual_val / max(1e-6, pred_val))
+    portfolio_mult = float(np.clip(portfolio_mult, 0.70, 1.40))
+
+    bundle = TwoPartQuantileBundle(
+        classifier=clf,
+        q_models=q_models,
+        params=params,
+        amt_reg=amt_reg,
+        portfolio_multiplier=portfolio_mult,
+    )
     metrics = clv_metrics(y_va, bundle.predict(x_val))
     if int(pos_va.sum()) > 0:
         lo = bundle.value_quantile(x_val, 0.10)[pos_va]

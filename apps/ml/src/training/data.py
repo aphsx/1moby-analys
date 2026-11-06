@@ -191,6 +191,11 @@ def _normalize_payments(payments: pd.DataFrame) -> pd.DataFrame:
 
 
 def _normalize_usage(usage: pd.DataFrame) -> pd.DataFrame:
+    # Deduplication guard: In 1Moby workbook, SMS_usage (OTP) is a 100% duplicate of SMS_usage (API).
+    # If both are present, drop the OTP duplicate rows so SMS usage is not doubled.
+    if (usage["channel"].str.lower() == "sms").any() and (usage["usage_source"].str.lower() == "otp").any():
+        is_sms_otp = (usage["channel"].str.lower() == "sms") & (usage["usage_source"].str.lower() == "otp")
+        usage = usage[~is_sms_otp].copy()
     usage = usage.copy()
     usage["acc_id"] = _to_nullable_int(usage["acc_id"])
     usage["year"] = _to_nullable_int(usage["year"])

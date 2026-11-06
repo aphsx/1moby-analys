@@ -445,6 +445,16 @@ def _churn_shap_factors(
             # Linear champion: SHAP of a linear model on standardized features
             # is exactly coef_j × x_ij (relative to the feature mean).
             values = np.asarray(x) * np.asarray(model.coef_[0])
+        elif hasattr(model, "lgb_model"):
+            # Dual-GBDT champion: explain via the LightGBM component tree
+            import shap
+
+            explainer = shap.TreeExplainer(model.lgb_model)
+            values = explainer.shap_values(x)
+            if isinstance(values, list):
+                values = values[1]
+            if getattr(values, "ndim", 2) == 3:
+                values = values[:, :, 1]
         elif hasattr(model, "feature_importances_"):
             # Tree champion (LightGBM / XGBoost / RandomForest): TreeExplainer is
             # exact and fast enough to run on the full eligible population.
@@ -681,8 +691,10 @@ def _apply_descriptive(
         np.nan,
     )
 
-    # usage_trend (§3.3) from usage_change_90d_pct
-    change = pd.to_numeric(frame["usage_change_90d_pct"], errors="coerce").fillna(0.0)
+    # usage_trend (§3.3) from usage_trend_pct / usage_change_90d_pct
+    change = pd.to_numeric(
+        frame.get("usage_trend_pct", frame.get("usage_change_90d_pct", 0.0)), errors="coerce"
+    ).fillna(0.0)
     total_180 = pd.to_numeric(frame["usage_total_180d"], errors="coerce").fillna(0.0)
     frame["usage_trend"] = np.select(
         [total_180 <= 0, change > DerivedThresholds.MOMENTUM_BAND, change < -DerivedThresholds.MOMENTUM_BAND],
@@ -705,7 +717,7 @@ def _apply_descriptive(
 
     # Dict lookup + records iteration instead of iterrows()/.loc per row (perf).
     snap_map = snapshot_source.to_dict("index")
-    snapshot_cols = ["acc_id", "customer_age_days", "usage_total_180d", *share_columns]
+    snapshot_cols = [c for c in ["acc_id", "customer_age_days", "usage_total_180d", *share_columns] if c in frame.columns]
     snapshots: list[dict[str, Any]] = []
     for row in frame[snapshot_cols].to_dict("records"):
         customer = snap_map.get(int(row["acc_id"]))

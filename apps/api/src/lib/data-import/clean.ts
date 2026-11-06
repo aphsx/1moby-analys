@@ -109,6 +109,11 @@ export async function cleanFromRaw(
     }
 
     for (const [i, sheet] of USAGE_SHEET_NAMES.entries()) {
+      // Deduplicate: in 1Moby dataset, SMS_usage (OTP) is a 100% duplicate of SMS_usage (API)
+      if (sheet === "SMS_usage (OTP)") {
+        warnings.push("Skipped SMS_usage (OTP) duplicate of SMS_usage (API)");
+        continue;
+      }
       const { channel, usageSource } = USAGE_SHEET_CHANNEL[sheet];
       const usage = mapRows(
         await readRaw(raw[sheet]),
