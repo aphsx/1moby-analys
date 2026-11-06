@@ -61,6 +61,7 @@ archive/
 # Office lock files
 ~$*
 .~*
+*.csv
 
 # Golden run dumps (apps/ml/scripts/golden_run.sh)
 apps/ml/golden/
