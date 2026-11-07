@@ -179,8 +179,35 @@ def _fit_twopart_quantile(
         amt_reg=amt_reg,
         portfolio_multiplier=portfolio_mult,
     )
-    metrics = clv_metrics(y_va, bundle.predict(x_val))
+    metrics = _evaluate_clv_split(y_va, x_val, bundle)
     return bundle, metrics
+
+
+def _evaluate_clv_split(
+    y_true: np.ndarray,
+    x: pd.DataFrame,
+    bundle: TwoPartQuantileBundle,
+) -> dict[str, float]:
+    """Compute full CLV + P(pay) + range_coverage + composite metrics for a split."""
+    y_arr = np.asarray(y_true, dtype=float)
+    pred = bundle.predict(x)
+    metrics = clv_metrics(y_arr, pred)
+    metrics.update(clv_p_pay_metrics(y_arr, bundle.p_pay(x)))
+
+    pos = y_arr > 0
+    if int(pos.sum()) > 0:
+        v10 = bundle.value_quantile(x, 0.10)
+        v50 = bundle.value_quantile(x, 0.50)
+        v90 = bundle.value_quantile(x, 0.90)
+        lo = np.minimum(v10, v50)
+        hi = np.maximum(v90, v50)
+        in_range = (y_arr[pos] >= lo[pos]) & (y_arr[pos] <= hi[pos])
+        metrics["range_coverage"] = round(float(np.mean(in_range)), 4)
+    else:
+        metrics["range_coverage"] = 0.0
+
+    metrics["clv_composite"] = clv_composite_score(metrics)
+    return metrics
 
 
 def train_clv(
@@ -205,13 +232,9 @@ def train_clv(
     x_test = transform_features(dataset.features("test"), preprocessor)
 
     twopart_bundle, validation_metrics = _fit_twopart_quantile(x_train, y_train, x_val, y_val)
-    val_composite = clv_composite_score(validation_metrics)
-    validation_metrics["clv_composite"] = val_composite
+    val_composite = validation_metrics["clv_composite"]
 
-    test_metrics = clv_metrics(y_test.to_numpy(), twopart_bundle.predict(x_test))
-    p_pay_test = clv_p_pay_metrics(y_test.to_numpy(), twopart_bundle.p_pay(x_test))
-    test_metrics.update(p_pay_test)
-    test_metrics["clv_composite"] = clv_composite_score(test_metrics)
+    test_metrics = _evaluate_clv_split(y_test.to_numpy(), x_test, twopart_bundle)
     test_ci_json = bootstrap_ci_regression(y_test.to_numpy(), twopart_bundle.predict(x_test))
 
     notify(

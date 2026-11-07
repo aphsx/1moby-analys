@@ -74,7 +74,7 @@ export async function getTrainCutoffSuggestion(
       SELECT GREATEST(
         (SELECT MAX(payment_date)::date
          FROM train_clean_payments WHERE source_id = ${sourceId}),
-        (SELECT MAX(make_date(year, month, 1))
+        (SELECT (MAX(make_date(year, month, 1)) + INTERVAL '1 month' - INTERVAL '1 day')::date
          FROM train_clean_usage
          WHERE source_id = ${sourceId} AND year IS NOT NULL AND month IS NOT NULL)
       ) AS latest
@@ -94,7 +94,7 @@ export async function getPredictCutoffSuggestion(
       SELECT GREATEST(
         (SELECT MAX(payment_date)::date
          FROM predict_clean_payments WHERE source_id = ${sourceId}),
-        (SELECT MAX(make_date(year, month, 1))
+        (SELECT (MAX(make_date(year, month, 1)) + INTERVAL '1 month' - INTERVAL '1 day')::date
          FROM predict_clean_usage
          WHERE source_id = ${sourceId} AND year IS NOT NULL AND month IS NOT NULL)
       ) AS latest

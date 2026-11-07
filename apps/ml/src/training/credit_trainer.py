@@ -17,7 +17,7 @@ from typing import Any, Callable
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import f1_score, mean_absolute_error, precision_score, recall_score
 
 from src.training.baselines import (
     credit_last_30d_carryover,
@@ -80,23 +80,63 @@ class CreditHorizonModels:
         return preds
 
 
+def calculate_runway(
+    balances: np.ndarray,
+    predicted_usage_30d: np.ndarray,
+    max_days: float = 999.0,
+) -> np.ndarray:
+    """Calculate Days Until Depletion = Current Balance / Predicted Daily Burn (Colab 03)."""
+    daily_burn = np.asarray(predicted_usage_30d, dtype=float) / 30.0
+    bal = np.maximum(np.asarray(balances, dtype=float), 0.0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        days_left = np.where(daily_burn > 0, np.ceil(bal / daily_burn), max_days)
+    return np.clip(days_left, 0.0, max_days)
+
+
 @dataclass
 class TopupDepletionModel:
-    """Data-grounded depletion runway model: balance / daily burn."""
+    """Data-grounded depletion runway model: balance / daily burn (Colab 03)."""
 
-    censor_days: float = 180.0
+    censor_days: float = 999.0
     algorithm: str = "runway_depletion"
     distribution: str = "deterministic"
     scale: float = 1.0
     day_scale: float = 1.0
     urgent_day_threshold_raw: float = 14.0
 
-    def predict_days(self, x: pd.DataFrame) -> np.ndarray:
-        anchor = pd.to_numeric(x.get("anchor_30d", 0.0), errors="coerce").fillna(0.0)
-        daily_burn = np.maximum(anchor / 30.0, 1.0)
-        balance = pd.to_numeric(x.get("current_sms_balance", 0.0), errors="coerce").fillna(0.0)
-        days = np.ceil(balance / daily_burn)
-        return np.clip(days, 0, self.censor_days)
+    def predict_days(
+        self,
+        x: pd.DataFrame,
+        predicted_usage_30d: np.ndarray | None = None,
+    ) -> np.ndarray:
+        balance = pd.to_numeric(x.get("current_sms_balance", 0.0), errors="coerce").fillna(0.0).to_numpy()
+        if predicted_usage_30d is not None:
+            usage_30d = np.asarray(predicted_usage_30d, dtype=float)
+        else:
+            usage_30d = pd.to_numeric(x.get("anchor_30d", 0.0), errors="coerce").fillna(0.0).to_numpy()
+        return calculate_runway(balance, usage_30d, max_days=self.censor_days)
+
+
+def _urgent_topup_metrics(
+    balances: np.ndarray,
+    pred_usage_30d: np.ndarray,
+    actual_usage_30d: np.ndarray,
+) -> dict[str, float]:
+    """Urgent top-up alert metrics (days_left <= 14) matching Colab 03 Cell 13."""
+    pred_days = calculate_runway(balances, pred_usage_30d)
+    actual_days = calculate_runway(balances, actual_usage_30d)
+    pred_urgent = (pred_days <= URGENT_TOPUP_DAYS).astype(int)
+    actual_urgent = (actual_days <= URGENT_TOPUP_DAYS).astype(int)
+    prec = round(float(precision_score(actual_urgent, pred_urgent, zero_division=0)), 4)
+    rec = round(float(recall_score(actual_urgent, pred_urgent, zero_division=0)), 4)
+    f1 = round(float(f1_score(actual_urgent, pred_urgent, zero_division=0)), 4)
+    return {
+        "urgent_topup_precision": prec,
+        "urgent_topup_recall": rec,
+        "urgent_topup_f1": f1,
+        "urgent_precision": prec,
+        "urgent_recall": rec,
+    }
 
 
 @dataclass
@@ -196,9 +236,18 @@ def train_credit(
         y[30]["validation"], predictions["validation"][30],
         y[90]["validation"], predictions["validation"][90],
     )
+    val_bal = pd.to_numeric(dataset.features("validation").get("current_sms_balance", 0.0), errors="coerce").fillna(0.0).to_numpy()
+    validation_metrics.update(
+        _urgent_topup_metrics(val_bal, predictions["validation"][30][0.50], y[30]["validation"])
+    )
+
     test_metrics = credit_metrics(
         y[30]["test"], predictions["test"][30],
         y[90]["test"], predictions["test"][90],
+    )
+    test_bal = pd.to_numeric(dataset.features("test").get("current_sms_balance", 0.0), errors="coerce").fillna(0.0).to_numpy()
+    test_metrics.update(
+        _urgent_topup_metrics(test_bal, predictions["test"][30][0.50], y[30]["test"])
     )
 
     notify(
@@ -262,6 +311,8 @@ def backtest_credit(
         q90[q] = np.maximum(q90[q], q30[q])
 
     champion_metrics = credit_metrics(y_30, q30, y_90, q90)
+    test_bal = pd.to_numeric(dataset.features("test").get("current_sms_balance", 0.0), errors="coerce").fillna(0.0).to_numpy()
+    champion_metrics.update(_urgent_topup_metrics(test_bal, q30[0.50], y_30))
     baseline_metrics = {
         "moving_avg_90d": {
             "mae_30d": float(mean_absolute_error(y_30, credit_moving_avg_90d(dataset.features("test"), 30))),

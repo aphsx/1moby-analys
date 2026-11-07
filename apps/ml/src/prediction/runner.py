@@ -596,6 +596,8 @@ def _apply_clv(
         v10_cal = np.clip(mag_slope * v10, 0.0, None)
         v50_cal = np.clip(mag_slope * v50, 0.0, None)
         v90_cal = np.clip(mag_slope * v90, 0.0, None)
+        v50_cal = np.maximum(v50_cal, v10_cal)
+        v90_cal = np.maximum(v90_cal, v50_cal)
         for i, fp in enumerate(np.flatnonzero(clv_mask)):
             clv_interval[fp] = {
                 "p10": round(float(v10_cal[i]), 2),
@@ -656,8 +658,10 @@ def _apply_credit(
         frame.loc[credit_mask, "credit_p10_90d"] = np.maximum(q90[0.10], p10_30)
         frame.loc[credit_mask, "credit_p90_90d"] = np.maximum(q90[0.90], p90_30)
         if topup_model is not None:
-            # Data-grounded depletion runway model (balance / daily burn)
+            # Data-grounded depletion runway model (balance / predicted daily burn)
             try:
+                days = topup_model.predict_days(features_raw[credit_mask], predicted_usage_30d=p50_30)
+            except TypeError:
                 days = topup_model.predict_days(features_raw[credit_mask])
             except Exception:
                 days = topup_model.predict_days(x)
@@ -815,21 +819,25 @@ def _apply_derived(
         churn_prob.notna() & clv.notna(), (churn_prob * clv).round(2), np.nan
     )
 
-    # estimated days until top-up (§3.6) — primary source is the AFT model
-    # (set in _apply_credit); the balance/burn heuristic only fills rows the
-    # model left empty (older artifacts without a topup_model).
+    # estimated days until top-up (§3.6) — matching Colab 03 Depletion Runway:
+    # balance / (predicted_credit_usage_30d / 30). Uses profile snapshot balance
+    # (credit_balance_total) when positive, falling back to current_sms_balance proxy.
     p50_30 = pd.to_numeric(frame["predicted_credit_usage_30d"], errors="coerce")
     daily_burn = p50_30 / 30.0
-    credit_balance = pd.to_numeric(
+    snap_balance = pd.to_numeric(
         frame["credit_balance_total"], errors="coerce"
     ).fillna(0.0)
+    proxy_balance = pd.to_numeric(
+        frame.get("current_sms_balance", 0.0), errors="coerce"
+    ).fillna(0.0)
+    credit_balance = np.where(snap_balance > 0, snap_balance, np.maximum(proxy_balance, 0.0))
     heuristic_days = np.where(
         daily_burn > 0,
         np.minimum(np.ceil(credit_balance / daily_burn), TOPUP_CAP_DAYS),
         np.nan,
     )
     model_days = pd.to_numeric(frame["estimated_days_until_topup"], errors="coerce")
-    days = np.where(model_days.notna(), model_days, heuristic_days)
+    days = np.where(heuristic_days == heuristic_days, heuristic_days, model_days)
     frame["estimated_days_until_topup"] = days
 
     urgency = pd.Series([None] * len(frame), index=frame.index, dtype="object")

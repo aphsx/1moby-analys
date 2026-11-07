@@ -687,12 +687,12 @@ def build_credit_features(
     payments: pd.DataFrame,
     usage: pd.DataFrame,
     cutoff_date: pd.Timestamp,
+    customers: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Build point-in-time credit balance/runway features.
 
-    The snapshot columns on customers (credit_sms/credit_email/expire_*)
-    reflect the export date, not the cutoff, so the balance is reconstructed
-    from pre-cutoff top-ups minus pre-cutoff usage instead.
+    Reconstructs pre-cutoff balance from top-ups minus usage, falling back to
+    snapshot credit_sms when proxy balance is non-positive (matching Colab 03).
     """
 
     cutoff = _timestamp(cutoff_date)
@@ -750,7 +750,19 @@ def build_credit_features(
     ).fillna(0.0) / 3.0
     rows["credit_usage_decel"] = _signed_log1p((recent_mo - prev_mo) / (prev_mo + EPSILON))
 
-    rows["current_sms_balance"] = np.maximum(rows["credit_balance_proxy"], 0.0)
+    proxy_balance = np.maximum(rows["credit_balance_proxy"], 0.0)
+    if customers is not None and "credit_sms" in customers.columns:
+        snap_src = customers[customers["acc_id"].notna()].copy()
+        snap_src["acc_id"] = snap_src["acc_id"].astype(int)
+        snap_bal = pd.to_numeric(
+            rows["acc_id"].map(
+                snap_src.drop_duplicates("acc_id", keep="last").set_index("acc_id")["credit_sms"]
+            ),
+            errors="coerce",
+        ).fillna(0.0)
+        rows["current_sms_balance"] = np.where(proxy_balance > 0, proxy_balance, np.maximum(snap_bal, 0.0))
+    else:
+        rows["current_sms_balance"] = proxy_balance
     recent_usage_30 = usage_history[usage_history["period"] >= cutoff - pd.DateOffset(months=1)]
     rows["anchor_30d"] = rows["acc_id"].map(recent_usage_30.groupby("acc_id")["usage"].sum()).fillna(0.0)
 
@@ -877,7 +889,7 @@ def _build_feature_df(
         build_channel_features(usage, cutoff),
         build_source_features(usage, cutoff),
         build_activity_features(payments, usage, cutoff),
-        build_credit_features(payments, usage, cutoff),
+        build_credit_features(payments, usage, cutoff, customers),
     ]:
         feature_df = feature_df.merge(part, on="acc_id", how="left")
 
