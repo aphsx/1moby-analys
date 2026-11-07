@@ -862,7 +862,13 @@ def _apply_derived(
     # declining), so a human looks before we treat the low churn score as safe.
     risk_level = frame["churn_risk_level"].astype("object")
     p_alive = pd.to_numeric(frame["p_alive"], errors="coerce")
-    usage_change = pd.to_numeric(frame.get("usage_change_90d_pct"), errors="coerce")
+    usage_change = (
+        pd.to_numeric(frame["usage_trend_pct"], errors="coerce")
+        if "usage_trend_pct" in frame
+        else pd.to_numeric(frame["usage_change_90d_pct"], errors="coerce")
+        if "usage_change_90d_pct" in frame
+        else pd.Series(0.0, index=frame.index)
+    ).fillna(0.0)
     valuable = frame["customer_value_tier"].isin([ValueTier.HIGH, ValueTier.MID])
     churn_at_risk = risk_level.isin([RiskLevel.HIGH, RiskLevel.CRITICAL])
     silent_decline = (
@@ -886,9 +892,13 @@ def _apply_segments(frame: pd.DataFrame, p_alive_cuts: tuple[float, float]) -> p
     tier = frame["customer_value_tier"]
     risk = frame["churn_risk_level"].astype("object")
     p_alive = pd.to_numeric(frame["p_alive"], errors="coerce")
-    change = pd.to_numeric(frame.get("usage_change_90d_pct"), errors="coerce").fillna(
-        0.0
-    )
+    change = (
+        pd.to_numeric(frame["usage_trend_pct"], errors="coerce")
+        if "usage_trend_pct" in frame
+        else pd.to_numeric(frame["usage_change_90d_pct"], errors="coerce")
+        if "usage_change_90d_pct" in frame
+        else pd.Series(0.0, index=frame.index)
+    ).fillna(0.0)
 
     stage = frame["lifecycle_stage"]
     sub_stage = frame["sub_stage"]

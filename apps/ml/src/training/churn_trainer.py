@@ -8,7 +8,6 @@ Rebuilt cleanly to mirror notebooks/01_churn_prediction.ipynb:
   5. Max-F2 threshold selection (clipped to safe band).
 All legacy TabICL, Optuna multi-trial search, and stacking bloat are pruned.
 """
-
 from __future__ import annotations
 
 import logging
@@ -364,11 +363,11 @@ def finalize_churn_candidate(
         ]
 
     # Baseline comparison
-    baseline = ChurnLogisticBaseline().fit(training.x_train, training.y_train)
+    lr_base = LogisticRegression(max_iter=1000, random_state=RANDOM_SEED).fit(training.x_train, training.y_train)
     baseline_metrics = {
         "logistic_baseline": {
-            "validation": churn_metrics(training.y_val, baseline.predict_proba(training.x_val)[:, 1]),
-            "test": churn_metrics(training.y_test, baseline.predict_proba(training.x_test)[:, 1]),
+            "validation": churn_metrics(training.y_val, lr_base.predict_proba(training.x_val)[:, 1], threshold=thresholds["high"]),
+            "test": churn_metrics(training.y_test, lr_base.predict_proba(training.x_test)[:, 1], threshold=thresholds["high"]),
         }
     }
 

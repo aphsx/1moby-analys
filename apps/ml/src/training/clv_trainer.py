@@ -25,6 +25,7 @@ from src.training.metrics import (
     bootstrap_ci_regression,
     clv_composite_score,
     clv_metrics,
+    clv_p_pay_metrics,
 )
 from src.training.preprocessing import PreprocessorConfig, transform_features
 
@@ -204,16 +205,14 @@ def train_clv(
     x_test = transform_features(dataset.features("test"), preprocessor)
 
     twopart_bundle, validation_metrics = _fit_twopart_quantile(x_train, y_train, x_val, y_val)
-    test_metrics = clv_metrics(y_test.to_numpy(), twopart_bundle.predict(x_test))
-    test_ci_json = bootstrap_ci_regression(y_test.to_numpy(), twopart_bundle.predict(x_test))
+    val_composite = clv_composite_score(validation_metrics)
+    validation_metrics["clv_composite"] = val_composite
 
-    val_composite = clv_composite_score(
-        spearman=validation_metrics.get("spearman", 0.0),
-        top_decile_capture=validation_metrics.get("top_decile_capture", 0.0),
-        revenue_bias_ratio=validation_metrics.get("revenue_bias_ratio", 0.0),
-        range_coverage=validation_metrics.get("range_coverage", 0.8),
-        p_pay_roc_auc=validation_metrics.get("p_pay_roc_auc", 0.8),
-    )
+    test_metrics = clv_metrics(y_test.to_numpy(), twopart_bundle.predict(x_test))
+    p_pay_test = clv_p_pay_metrics(y_test.to_numpy(), twopart_bundle.p_pay(x_test))
+    test_metrics.update(p_pay_test)
+    test_metrics["clv_composite"] = clv_composite_score(test_metrics)
+    test_ci_json = bootstrap_ci_regression(y_test.to_numpy(), twopart_bundle.predict(x_test))
 
     notify(
         f"clv: val composite={val_composite:.4f} spearman={validation_metrics.get('spearman'):.4f} "
