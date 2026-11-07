@@ -249,6 +249,16 @@ def _train_and_register_churn(
         lift_table=result.lift_table_json,
         feature_importance=result.feature_importance,
     )
+    for b_name, b_splits in result.baseline_metrics.items():
+        if isinstance(b_splits, dict) and "test" in b_splits:
+            insert_evaluation(
+                model_version_id=version_id, training_run_id=training_run_id, model_type="churn",
+                evaluation_type="baseline", dataset_split="test",
+                baseline_name=b_name,
+                metrics=round_metrics(b_splits["test"]),
+                cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
+                feature_set_id=feature_set_id,
+            )
 
     verify_artifact_load(artifact_path, dataset.features("test").head(5))
     reason = "🏆 Colab Champion: Dual-GBDT (LightGBM + CatBoost 50:50 blend) + Isotonic Calibration"
@@ -386,6 +396,16 @@ def _train_and_register_clv(
         cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
         feature_set_id=feature_set_id,
     )
+    for b_name, b_splits in result.baseline_metrics.items():
+        if isinstance(b_splits, dict) and "test" in b_splits:
+            insert_evaluation(
+                model_version_id=version_id, training_run_id=training_run_id, model_type="clv",
+                evaluation_type="baseline", dataset_split="test",
+                baseline_name=b_name,
+                metrics=round_metrics(b_splits["test"]),
+                cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
+                feature_set_id=feature_set_id,
+            )
 
     verify_artifact_load(artifact_path, dataset.features("test").head(5))
     reason = "🏆 Colab Champion: Two-Part Hurdle (LightGBM + CatBoost Log-Scale) + Portfolio Multiplier"
@@ -516,6 +536,16 @@ def _train_and_register_credit(
         cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
         feature_set_id=feature_set_id,
     )
+    for b_name, b_splits in result.baseline_metrics.items():
+        if isinstance(b_splits, dict) and "test" in b_splits:
+            insert_evaluation(
+                model_version_id=version_id, training_run_id=training_run_id, model_type="credit",
+                evaluation_type="baseline", dataset_split="test",
+                baseline_name=b_name,
+                metrics=round_metrics(b_splits["test"]),
+                cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
+                feature_set_id=feature_set_id,
+            )
 
     verify_artifact_load(artifact_path, dataset.features("test").head(5))
     reason = "🏆 Colab Champion: LightGBM Quantile (p10, p50, p90) + Depletion Runway"

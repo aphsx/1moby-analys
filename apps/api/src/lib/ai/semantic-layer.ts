@@ -113,7 +113,7 @@ export const SEMANTIC_TABLES: SemanticTable[] = [
       { name: "priority_score", type: "numeric", description: "Business priority score (0-100), a display rescale of revenue_at_risk; ranks customers by expected money at risk." },
       { name: "segment", type: "text", description: "Descriptive customer segment (High-Value At-Risk, Mid-Value At-Risk, High-Value Stable, Emerging, Stable, Low-Value Watch, Low-Value At-Risk, Lapsed, Dormant, Ghost) derived from value tier × churn risk × lifecycle." },
       { name: "priority_rank", type: "integer", description: "Global priority rank (1 = highest priority), ordered by segment priority then money within each segment." },
-      { name: "needs_review", type: "boolean", description: "Flagged for human review: high churn risk, or a valuable customer whose p_alive and usage have silently collapsed." },
+      { name: "needs_review", type: "boolean", description: "Flagged for human review: high churn risk, or a valuable customer whose usage has collapsed." },
       { name: "output_status", type: "text", description: "Prediction output status: one of predicted, partial, insufficient_data." },
       { name: "created_at", type: "timestamp", description: "When the prediction output was created." },
     ],

@@ -15,7 +15,7 @@
  *   ## ภาพรวมพฤติกรรม    — how the customer uses the product, in 2–3 sentences
  *   ## การใช้งาน          — channel mix + monthly volume + trend, citing numbers
  *   ## การชำระเงิน        — payment cadence / amounts / recency, citing numbers
- *   ## แนวโน้มและความเสี่ยง — forward look: churn / p_alive / CLV / credit, with
+ *   ## แนวโน้มและความเสี่ยง — forward look: churn / CLV / credit, with
  *                            the SHAP factors translated to plain language
  *   ## ข้อสังเกต          — only when dataset and model output conflict
  */
@@ -64,7 +64,7 @@ ${renderGuardrails()}
 - [ความถี่การเติมเครดิต, ยอดชำระ, ครั้งล่าสุดก่อน cutoff — อ้างอิงตัวเลขจริงเสมอ]
 
 ## แนวโน้มและความเสี่ยง
-- [churn probability / p_alive / CLV / credit ที่โมเดลให้ พร้อมแปล churn factors เป็นภาษาคน
+- [churn probability / retention probability / CLV / credit ที่โมเดลให้ พร้อมแปล churn factors เป็นภาษาคน
   เช่น "ไม่มีการใช้งาน 75 วัน (ดันความเสี่ยงขึ้น)"]
 
 ## ข้อสังเกต
@@ -151,7 +151,7 @@ CLV value-if-pay range (p10–p90): ${
     ? `฿${ml_output.clv_forecast_interval.p10.toLocaleString()} – ฿${ml_output.clv_forecast_interval.p90.toLocaleString()} (p50 ฿${ml_output.clv_forecast_interval.p50.toLocaleString()})`
     : "N/A"
 }
-P(alive): ${ml_output.p_alive != null ? (ml_output.p_alive * 100).toFixed(1) + "%" : "N/A"}
+Retention probability: ${ml_output.churn_probability != null ? ((1 - ml_output.churn_probability) * 100).toFixed(1) + "%" : "N/A"}
 Churn factors: ${formatChurnFactors(ml_output.churn_factors)}
 </data>`;
 }

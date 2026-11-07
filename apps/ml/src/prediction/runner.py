@@ -872,7 +872,7 @@ def _apply_derived(
     valuable = frame["customer_value_tier"].isin([ValueTier.HIGH, ValueTier.MID])
     churn_at_risk = risk_level.isin([RiskLevel.HIGH, RiskLevel.CRITICAL])
     silent_decline = (
-        valuable & (p_alive < at_risk_cut) & (usage_change < -DerivedThresholds.MOMENTUM_BAND)
+        valuable & (usage_change < -DerivedThresholds.MOMENTUM_BAND)
     )
     needs_review = (churn_at_risk | silent_decline) & active_mask
     frame["needs_review"] = needs_review.fillna(False).astype(bool)
@@ -903,8 +903,8 @@ def _apply_segments(frame: pd.DataFrame, p_alive_cuts: tuple[float, float]) -> p
     stage = frame["lifecycle_stage"]
     sub_stage = frame["sub_stage"]
     valuable = tier.isin([ValueTier.HIGH, ValueTier.MID])
-    at_risk = risk.isin([RiskLevel.HIGH, RiskLevel.CRITICAL]) | (p_alive < at_risk_cut)
-    watch = ~at_risk & (risk.eq(RiskLevel.MEDIUM) | (p_alive < watch_cut))
+    at_risk = risk.isin([RiskLevel.HIGH, RiskLevel.CRITICAL])
+    watch = ~at_risk & risk.eq(RiskLevel.MEDIUM)
     growing = change > DerivedThresholds.MOMENTUM_BAND
 
     is_churned = stage.eq(LifecycleStage.CHURNED)
