@@ -15,7 +15,7 @@ import { useAsync } from "@/lib/use-async";
 import { useActiveRun } from "@/stores/run-store";
 import { AiSummaryLine } from "./ai-summary-line";
 import { MonthlyRevenue } from "./monthly-revenue";
-import { CallFirstList, TopupUrgency } from "./overview-rail";
+import { TopPriorityList, TopupUrgency } from "./overview-rail";
 import { assertAtRiskMatches, overviewModel, type OverviewModel } from "./overview-model";
 import { RiskMap } from "./risk-map";
 
@@ -140,8 +140,8 @@ function OverviewBody({
         />
         <RiskMap model={model} thresholds={summary.churn.thresholds} runId={runId} />
       </div>
-      <aside className="space-y-6" aria-label="รายการที่ต้องดูแล">
-        <CallFirstList rows={summary.top_priority} total={model.callFirst.count} listHref={callFirstHref} runId={runId} />
+      <aside className="space-y-6" aria-label="การวิเคราะห์กลุ่มเสี่ยงและเครดิต">
+        <TopPriorityList rows={summary.top_priority} total={model.callFirst.count} listHref={callFirstHref} runId={runId} />
         <TopupUrgency credit={summary.credit} runId={runId} />
         {/* in the rail so main and rail end near each other (DESIGN.md §5) */}
         <MonthlyRevenue model={model} />

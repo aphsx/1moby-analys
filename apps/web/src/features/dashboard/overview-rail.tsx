@@ -34,7 +34,7 @@ function reason(row: PriorityRow): string {
   return `เครดิตหมดใน ${formatDaysAhead(row.estimated_days_until_topup)}`;
 }
 
-export function CallFirstList({
+export function TopPriorityList({
   rows,
   total,
   listHref,
@@ -87,6 +87,8 @@ export function CallFirstList({
     </RailSection>
   );
 }
+
+export const CallFirstList = TopPriorityList;
 
 export function TopupUrgency({ credit, runId }: { credit: RunSummary["credit"]; runId: string }) {
   const counts = URGENCY_ROWS.map((level) => credit.by_urgency[level]);

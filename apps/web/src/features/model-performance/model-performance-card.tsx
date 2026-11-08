@@ -184,7 +184,7 @@ function SplitStrip({
     let value = split?.metrics[primaryKey];
     if (typeof value !== "number" || !Number.isFinite(value)) {
       if (entry.model_type === "clv") {
-        value = split?.metrics["spearman"] ?? split?.metrics["clv_composite"];
+        value = split?.metrics["spearman_payers"] ?? split?.metrics["spearman"];
       } else if (entry.model_type === "credit") {
         value = split?.metrics["coverage_p10_p90"];
       } else if (entry.model_type === "churn") {
