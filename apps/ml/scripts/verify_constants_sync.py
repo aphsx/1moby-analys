@@ -16,9 +16,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import constants  # noqa: E402
 
-TS_PATH = (
-    Path(__file__).resolve().parents[3] / "packages" / "types" / "src" / "enums.ts"
-)
+def find_ts_path() -> Path:
+    p = Path(__file__).resolve()
+    for parent in [p] + list(p.parents):
+        cand = parent / "packages" / "types" / "src" / "enums.ts"
+        if cand.exists():
+            return cand
+    cand = Path("/app/packages/types/src/enums.ts")
+    if cand.exists():
+        return cand
+    return Path(__file__).resolve().parent / "enums.ts"
+
+
+TS_PATH = find_ts_path()
 
 
 def python_values() -> set[str]:

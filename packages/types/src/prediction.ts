@@ -136,7 +136,7 @@ export interface RunSummary {
     by_urgency: Record<UrgencyLevel, number>;
     topup_due_7d: number;
   };
-  /** "ต้องโทรก่อน": high value tier × high/critical risk, largest revenue_at_risk first. */
+  /** Top priority: high value tier × high/critical risk, largest revenue_at_risk first. */
   top_priority: {
     acc_id: number;
     lifecycle_stage: LifecycleStage;

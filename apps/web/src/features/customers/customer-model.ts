@@ -91,7 +91,7 @@ export interface Finding {
   alert: boolean;
 }
 
-/** "สิ่งที่ควรรู้ก่อนโทร": written from rules, not an LLM, so it never states what the data does not show. */
+/** ข้อสังเกตและข้อมูลสำคัญสำหรับการตัดสินใจ: written from rules, not an LLM, so it never states what the data does not show. */
 export function buildFinding(c: PredictionOutput, payments: PaymentEvent[], usage: MonthlyUsagePoint[], cutoffMs: number): Finding {
   // Orange is for accounts we could still lose; Churned and Ghost are not retention work
   const alert = c.lifecycle_stage === "Active Paid";

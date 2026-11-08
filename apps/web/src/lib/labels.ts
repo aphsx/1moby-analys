@@ -2,7 +2,7 @@
  * Thai labels for every enum value shown on screen (docs/ui/CONTENT.md §4). `satisfies` makes a new
  * enum value in @moby/types a type error here until it gets a label.
  */
-import type { ContactChannel, ContactOutcome, LifecycleStage, PredictionOutput, RiskLevel, Segment, UrgencyLevel, ValueTier } from "@moby/types";
+import type { LifecycleStage, PredictionOutput, RiskLevel, Segment, UrgencyLevel, ValueTier } from "@moby/types";
 
 export const LIFECYCLE_LABEL = {
   "Active Paid": "ใช้งาน · จ่ายเงิน",
@@ -79,12 +79,3 @@ export const SEGMENT_LABEL = {
 } as const satisfies Record<Segment, string>;
 
 export const CHANNEL_LABEL = { bc: "SMS ส่งเอง", api: "SMS API", otp: "OTP", email: "Email" } as const;
-
-export const CONTACT_CHANNEL_LABEL = { phone: "โทรศัพท์", email: "อีเมล", meeting: "นัดพบ", other: "อื่น ๆ" } as const satisfies Record<ContactChannel, string>;
-
-export const CONTACT_OUTCOME_LABEL = {
-  reached: "คุยแล้ว",
-  no_answer: "ติดต่อไม่ได้",
-  follow_up: "ต้องติดตามต่อ",
-  resolved: "จบเรื่องแล้ว",
-} as const satisfies Record<ContactOutcome, string>;

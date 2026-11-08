@@ -8,7 +8,6 @@ import { predictionRunRoutes } from "./routes/prediction-runs";
 import { trainingRunRoutes } from "./routes/training-runs";
 import { modelPerformanceRoutes } from "./routes/model-performance";
 import { outcomeBackfillRoutes } from "./routes/outcome-backfill";
-import { customerContactRoutes } from "./routes/customer-contacts";
 import { startStaleRunReaper } from "./lib/ml/run-reaper";
 import { maxUploadBytes } from "./lib/constants";
 import { runMigrations } from "./db/migrate";
@@ -55,8 +54,6 @@ const app = new Elysia()
   .use(modelPerformanceRoutes)
   // Realized-outcome backfill trigger
   .use(outcomeBackfillRoutes)
-  // Contact log on the customer page
-  .use(customerContactRoutes)
   .get("/health", () => {
     return {
       status: "ok",

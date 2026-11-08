@@ -673,14 +673,3 @@ export type MlPredictionRun = typeof mlPredictionRuns.$inferSelect;
 export type MlPredictionOutput = typeof mlPredictionOutputs.$inferSelect;
 export type AiConversation = typeof aiConversations.$inferSelect;
 export type AiMessage = typeof aiMessages.$inferSelect;
-
-export const customerContacts = pgTable("customer_contacts", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  accId: integer("acc_id").notNull(),
-  channel: text("channel").notNull(),
-  outcome: text("outcome").notNull(),
-  note: text("note").default("").notNull(),
-  nextFollowUp: date("next_follow_up"),
-  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
-});

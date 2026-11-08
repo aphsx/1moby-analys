@@ -8,7 +8,7 @@ import { type ChurnFactor, type MonthlyUsagePoint, type PaymentEvent, type Predi
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, CalendarClock, ChevronRight, Coins, Gauge, HeartPulse, Loader2, Phone, Sparkles, TrendingDown, Wallet } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, ChevronRight, Coins, Gauge, HeartPulse, Loader2, Sparkles, TrendingDown, Wallet } from "lucide-react";
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { BUTTON, EmptyState, InfoTip, KpiStrip, Panel, StatusPill, type PillTone } from "@/components/ui";
 import { generateCustomerAiExplanation } from "@/lib/ml-api";
@@ -24,7 +24,6 @@ import {
 } from "@/lib/format";
 import { LIFECYCLE_LABEL, RISK_LABEL, SEGMENT_LABEL, URGENCY_LABEL, VALUE_TIER_LABEL } from "@/lib/labels";
 import { getDisplayError } from "@/lib/ui-error";
-import { CustomerFollowTab } from "./customer-follow-tab";
 import { buildFinding, recentEvents, topupStats } from "./customer-model";
 import { CustomerPaymentTab } from "./customer-payment-tab";
 import { CustomerProfilePanel } from "./customer-profile-panel";
@@ -37,20 +36,19 @@ const INFO = {
   clv: "ยอดที่คาดว่าจะจ่ายใน 6 เดือนข้างหน้า (ไม่ใช่ยอดที่จ่ายมาแล้ว) คิดจากความถี่และยอดเติมเงินที่ผ่านมา ช่วงคาดการณ์คือค่าต่ำสุด–สูงสุดที่น่าจะเป็น",
   topup: "จำนวนวันที่คาดว่าเครดิตจะหมด (Runway) = เครดิตคงเหลือ ÷ การใช้ต่อวัน นับจากวันตัดข้อมูล",
   alive: "ความน่าจะเป็นที่ลูกค้าจะยังคงใช้งานและชำระเงินต่อเนื่อง (คำนวณจากโมเดล Churn Dual-GBDT: 100% − โอกาสเลิกใช้)",
-  atRisk: "โอกาสเลิกใช้ × คาดจ่าย 6 เดือนข้างหน้า ใช้จัดลำดับว่าควรติดต่อใครก่อน",
+  atRisk: "โอกาสเลิกใช้ × คาดจ่าย 6 เดือนข้างหน้า ใช้จัดลำดับความสำคัญของลูกค้าที่ต้องให้ความสนใจก่อน",
   credit: "เครดิตที่คาดว่าจะใช้ พร้อมช่วงต่ำสุด–สูงสุด (p10–p90)",
   ai: "ข้อความอธิบายที่สร้างโดย AI จากข้อมูลของลูกค้ารายนี้",
 };
 
 const RISK_TONE: Record<string, PillTone> = { critical: "negative", high: "warning", medium: "neutral", low: "neutral" };
 
-type Tab = "overview" | "prediction" | "usage" | "payment" | "follow";
+type Tab = "overview" | "prediction" | "usage" | "payment";
 const TABS: { key: Tab; label: string }[] = [
   { key: "overview", label: "ภาพรวม" },
   { key: "prediction", label: "การทำนาย" },
   { key: "usage", label: "การใช้งาน" },
   { key: "payment", label: "การชำระเงิน" },
-  { key: "follow", label: "การติดตาม" },
 ];
 
 export function CustomerDetailView({
@@ -77,8 +75,6 @@ export function CustomerDetailView({
   const sp = useSearchParams();
   const view = sp.get("view");
   const tab: Tab = TABS.some((t) => t.key === view) ? (view as Tab) : "overview";
-  // Set by the finding's call-to-action, so arriving at the follow tab lands in the form
-  const [focusForm, setFocusForm] = useState(false);
   const cutoffMs = Date.parse(cutoff);
   const listHref = customersHref ?? (runId ? `/customers?run=${encodeURIComponent(runId)}` : "/customers");
 
@@ -87,7 +83,6 @@ export function CustomerDetailView({
     if (next === "overview") params.delete("view");
     else params.set("view", next);
     const query = params.toString();
-    setFocusForm(false);
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
@@ -143,19 +138,13 @@ export function CustomerDetailView({
               cutoff={cutoff}
               onCustomerChange={onCustomerChange}
               onShowPrediction={() => setTab("prediction")}
-              onCreateTask={() => {
-                setTab("follow");
-                setFocusForm(true);
-              }}
             />
           ) : tab === "prediction" ? (
             <Predictions customer={customer} />
           ) : tab === "usage" ? (
             <CustomerUsageTab usage={usageTrend} lastSend={customer.profile_snapshot?.last_send} />
-          ) : tab === "payment" ? (
-            <CustomerPaymentTab customer={customer} payments={payments} cutoffMs={cutoffMs} />
           ) : (
-            <CustomerFollowTab accId={accId} focusForm={focusForm} />
+            <CustomerPaymentTab customer={customer} payments={payments} cutoffMs={cutoffMs} />
           )}
         </div>
       </div>
@@ -179,7 +168,6 @@ function Overview({
   cutoff,
   onCustomerChange,
   onShowPrediction,
-  onCreateTask,
 }: {
   customer: PredictionOutput;
   accId: string;
@@ -189,7 +177,6 @@ function Overview({
   cutoff: string;
   onCustomerChange: (customer: PredictionOutput) => void;
   onShowPrediction: () => void;
-  onCreateTask: () => void;
 }) {
   const cutoffMs = Date.parse(cutoff);
   const finding = buildFinding(c, payments, usage, cutoffMs);
@@ -205,14 +192,10 @@ function Overview({
         style={{ background: finding.alert ? "var(--pill-negative-bg)" : "var(--raised)" }}
       >
         <h2 id="customer-finding" className="text-small font-semibold text-muted">
-          สิ่งที่ควรรู้ก่อนโทร
+          ข้อสังเกตและข้อมูลสำคัญสำหรับการตัดสินใจ
         </h2>
         <p className="num mt-1 text-section font-medium text-text">{finding.sentence}</p>
         {finding.evidence ? <p className="num mt-1 text-small text-muted">{finding.evidence}</p> : null}
-        <button type="button" onClick={onCreateTask} className={`${BUTTON.primary} mt-3`}>
-          <Phone size={14} aria-hidden />
-          สร้างงานโทรหาลูกค้า
-        </button>
       </section>
 
       <KpiStrip

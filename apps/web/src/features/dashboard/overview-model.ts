@@ -23,7 +23,7 @@ export type OverviewModel = {
   unscored: number;
   /** The high value tier across every risk level. */
   highTier: { count: number; share: number };
-  /** High value × high/critical risk: the "ต้องโทรก่อน" group. */
+  /** High value × high/critical risk: the top-priority high risk group. */
   callFirst: { count: number; revenueAtRisk: number; share: number };
   cells: MapCell[];
   revenue12m: number;
