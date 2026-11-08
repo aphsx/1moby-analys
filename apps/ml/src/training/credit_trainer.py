@@ -38,8 +38,17 @@ URGENT_TOPUP_DAYS = 14
 
 
 def credit_anchor_log(features_raw: pd.DataFrame, horizon_days: int) -> np.ndarray:
-    """log1p of the carryover baseline forecast (the model's anchor)."""
-    return np.log1p(np.clip(credit_last_30d_carryover(features_raw, horizon_days), 0, None))
+    """log1p of the carryover baseline forecast (anchor_30d for 30d, usage_recent_90d for 90d)."""
+    if horizon_days == 30 and "anchor_30d" in features_raw.columns:
+        raw_anchor = pd.to_numeric(features_raw["anchor_30d"], errors="coerce").fillna(0.0).to_numpy()
+    elif horizon_days == 90 and "usage_recent_90d" in features_raw.columns:
+        raw_anchor = pd.to_numeric(features_raw["usage_recent_90d"], errors="coerce").fillna(0.0).to_numpy()
+    else:
+        raw_anchor = credit_last_30d_carryover(features_raw, horizon_days)
+    return np.log1p(np.clip(raw_anchor, 0.0, None))
+
+
+MIN_ACTIVE_USAGE_30D = 10.0
 
 
 @dataclass
@@ -70,9 +79,13 @@ class CreditHorizonModels:
         preds[0.50] = np.maximum(preds[0.50], preds[0.10])
         preds[0.90] = np.maximum(preds[0.90], preds[0.50])
 
-        # 20% Blend with carryover anchor for p50
+        # 60:40 Blend with carryover anchor for p50 + micro-noise gating (< 10 SMS/30d)
         anchor_val = np.expm1(anchor_log)
-        preds[0.50] = 0.80 * preds[0.50] + 0.20 * anchor_val
+        min_active = MIN_ACTIVE_USAGE_30D * (self.horizon_days / 30.0)
+        blended_p50 = 0.60 * preds[0.50] + 0.40 * anchor_val
+        preds[0.50] = np.where(blended_p50 >= min_active, blended_p50, 0.0)
+        preds[0.10] = np.minimum(preds[0.10], preds[0.50])
+        preds[0.90] = np.maximum(preds[0.90], preds[0.50])
 
         # Fill p25 and p75 if requested by legacy callers
         preds[0.25] = 0.5 * (preds[0.10] + preds[0.50])
@@ -85,8 +98,14 @@ def calculate_runway(
     predicted_usage_30d: np.ndarray,
     max_days: float = 999.0,
 ) -> np.ndarray:
-    """Calculate Days Until Depletion = Current Balance / Predicted Daily Burn (Colab 03)."""
-    daily_burn = np.asarray(predicted_usage_30d, dtype=float) / 30.0
+    """Calculate Days Until Depletion = Current Balance / Predicted Daily Burn (Colab 03).
+
+    Treats micro-noise usage (< 10 SMS per 30 days, i.e. < 0.33 SMS/day) as zero burn
+    so inactive zero-balance accounts are not falsely flagged as Urgent Top-up.
+    """
+    usage_30d = np.asarray(predicted_usage_30d, dtype=float)
+    clean_usage = np.where(usage_30d >= MIN_ACTIVE_USAGE_30D, usage_30d, 0.0)
+    daily_burn = clean_usage / 30.0
     bal = np.maximum(np.asarray(balances, dtype=float), 0.0)
     with np.errstate(divide="ignore", invalid="ignore"):
         days_left = np.where(daily_burn > 0, np.ceil(bal / daily_burn), max_days)

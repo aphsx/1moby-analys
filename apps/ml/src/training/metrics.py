@@ -650,7 +650,11 @@ def credit_metrics(
 
     coverage_30 = interval_coverage(y_true_30d, pred_30d[0.10], pred_30d[0.90])
     coverage_90 = interval_coverage(y_true_90d, pred_90d[0.10], pred_90d[0.90])
+    sp_30 = spearmanr(y_true_30d, pred_30d[0.50]).statistic if len(y_true_30d) > 2 else 0.0
+    sp_90 = spearmanr(y_true_90d, pred_90d[0.50]).statistic if len(y_true_90d) > 2 else 0.0
     return {
+        "spearman_30d": round(float(0.0 if np.isnan(sp_30) else sp_30), 4),
+        "spearman_90d": round(float(0.0 if np.isnan(sp_90) else sp_90), 4),
         "mae_30d": round(float(mean_absolute_error(y_true_30d, pred_30d[0.50])), 2),
         "smape_30d": round(smape(y_true_30d, pred_30d[0.50]), 4),
         "mae_90d": round(float(mean_absolute_error(y_true_90d, pred_90d[0.50])), 2),

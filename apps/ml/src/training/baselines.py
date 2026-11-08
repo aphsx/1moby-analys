@@ -107,9 +107,14 @@ def clv_carryover_scores(features: pd.DataFrame) -> np.ndarray:
 
 
 def credit_last_30d_carryover(features: pd.DataFrame, horizon_days: int) -> np.ndarray:
-    """Use last-90d usage scaled to a 30-day month, carried over the horizon."""
+    """Use last-30d usage (anchor_30d / usage_recent_30d) scaled to the horizon."""
 
-    monthly = pd.to_numeric(features["usage_recent_90d"], errors="coerce").fillna(0.0) / 3.0
+    if "anchor_30d" in features.columns:
+        monthly = pd.to_numeric(features["anchor_30d"], errors="coerce").fillna(0.0)
+    elif "usage_recent_30d" in features.columns:
+        monthly = pd.to_numeric(features["usage_recent_30d"], errors="coerce").fillna(0.0)
+    else:
+        monthly = pd.to_numeric(features["usage_recent_90d"], errors="coerce").fillna(0.0) / 3.0
     return (monthly * (horizon_days / 30.0)).to_numpy()
 
 

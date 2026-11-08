@@ -829,7 +829,8 @@ def _apply_derived(
     # balance / (predicted_credit_usage_30d / 30). Uses profile snapshot balance
     # (credit_balance_total) when positive, falling back to current_sms_balance proxy.
     p50_30 = pd.to_numeric(frame["predicted_credit_usage_30d"], errors="coerce")
-    daily_burn = p50_30 / 30.0
+    clean_p50_30 = np.where(p50_30 >= 10.0, p50_30, 0.0)
+    daily_burn = clean_p50_30 / 30.0
     snap_balance = pd.to_numeric(
         frame["credit_balance_total"], errors="coerce"
     ).fillna(0.0)
@@ -842,9 +843,8 @@ def _apply_derived(
         np.minimum(np.ceil(credit_balance / daily_burn), TOPUP_CAP_DAYS),
         np.nan,
     )
-    model_days = pd.to_numeric(frame["estimated_days_until_topup"], errors="coerce")
-    days = np.where(heuristic_days == heuristic_days, heuristic_days, model_days)
-    frame["estimated_days_until_topup"] = days
+    frame["estimated_days_until_topup"] = heuristic_days
+    days = heuristic_days
 
     urgency = pd.Series([None] * len(frame), index=frame.index, dtype="object")
     credit_eligible = frame["el_credit"]

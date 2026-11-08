@@ -999,7 +999,7 @@ def build_lifecycle_outputs(
     rows["sub_stage"] = rows.apply(_lifecycle_sub_stage, axis=1)
     rows["eligible_for_churn"] = rows["active_in_window"] & rows["ever_paid"]
     rows["eligible_for_clv"] = rows["active_in_window"]
-    rows["eligible_for_credit"] = rows["has_activity_history"]
+    rows["eligible_for_credit"] = rows["active_in_window"]
     rows["model_eligibility_json"] = rows.apply(_model_eligibility, axis=1)
     rows["output_status"] = rows["model_eligibility_json"].map(
         lambda eligibility: "predicted"
@@ -1341,9 +1341,9 @@ def _model_eligibility(row: pd.Series) -> dict[str, dict[str, Any]]:
             "eligible": bool(row["eligible_for_credit"]),
             "status": "eligible" if row["eligible_for_credit"] else "insufficient_data",
             "reason": (
-                "Has payment or usage history."
+                "Active customer in 180d window."
                 if row["eligible_for_credit"]
-                else "Requires payment or usage history."
+                else "Requires activity in the active window."
             ),
         },
     }
