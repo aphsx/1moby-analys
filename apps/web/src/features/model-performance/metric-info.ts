@@ -308,6 +308,7 @@ const PRIMARY_LABEL_TO_KEY: Record<string, string> = {
   "กรอบคาดการณ์ [p10–p90]": "coverage_p10_p90_30d",
   "80% Coverage (30 วัน)": "coverage_p10_p90_30d",
   "Coverage p10–p90": "coverage_p10_p90_30d",
+  "CLV composite": "clv_composite",
 };
 
 export const SECONDARY_METRICS: Record<string, string[]> = {
