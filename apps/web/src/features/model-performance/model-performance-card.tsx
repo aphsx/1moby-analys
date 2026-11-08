@@ -7,10 +7,24 @@ import { formatCount, formatDate } from "@/lib/format";
 import { MetricLabel } from "./metric-help";
 
 const MODEL_TITLE: Record<string, string> = {
-  lifecycle: "สถานะลูกค้า",
-  churn: "โอกาสเลิกใช้",
-  clv: "มูลค่า 6 เดือน",
-  credit: "การเติมและใช้เครดิต",
+  churn: "01 โอกาสเลิกใช้ (Churn)",
+  clv: "02 มูลค่าลูกค้า 6 เดือน (CLV)",
+  credit: "03 การเติมและใช้เครดิต (Credit)",
+};
+
+const COLAB_TARGET: Record<string, { target: string; note: string }> = {
+  churn: {
+    target: "ROC-AUC > 0.85 · PR-AUC > 0.70",
+    note: "เกณฑ์ High Risk อิง Max-F2 (เน้นจับคนจะเลิกใช้ให้ครบ)",
+  },
+  clv: {
+    target: "Spearman ผู้จ่ายเงิน > 0.60 · Portfolio Bias < ±10%",
+    note: "Two-Part Hurdle + Portfolio Multiplier กำจัดอคติยอดเงิน",
+  },
+  credit: {
+    target: "80% Coverage 80–90% · MAE 30 วันแม่นยำ",
+    note: "LightGBM Quantile (p10, p50, p90) + Depletion Runway",
+  },
 };
 import {
   formatBaselineName,
@@ -33,6 +47,7 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
     : [];
   const primaryValue =
     typeof primary.value === "number" ? primaryInfo.fmt(primary.value) : String(primary.value);
+  const targetInfo = COLAB_TARGET[entry.model_type];
 
   return (
     <article className="surface flex flex-col overflow-visible p-4 sm:p-5">
@@ -41,22 +56,29 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
           {MODEL_TITLE[entry.model_type] ?? entry.model_type}
         </h2>
         {entry.version ? (
-          <span className="truncate text-micro text-faint">{entry.version}</span>
+          <span className="truncate rounded px-1.5 py-0.5 text-micro font-medium bg-raised text-faint">{entry.version}</span>
         ) : null}
       </header>
       {isMl && entry.algorithm ? (
-        <p className="mt-0.5 text-micro text-faint">{entry.algorithm}</p>
+        <p className="mt-1 text-micro text-faint">{entry.algorithm}</p>
       ) : null}
+
+      {targetInfo && (
+        <div className="mt-3 rounded-control border border-border bg-raised/70 px-3 py-2 text-micro">
+          <p className="font-semibold text-text">{targetInfo.target}</p>
+          <p className="mt-0.5 text-faint">{targetInfo.note}</p>
+        </div>
+      )}
 
       <section className="mt-4">
         <div className="flex items-center gap-1 text-micro text-faint">
           <MetricLabel info={primaryInfo} />
-          <span>· ชุดทดสอบ</span>
+          <span>· ชุดทดสอบจริง (Test Set)</span>
         </div>
         <p className="num mt-1 text-[32px] font-semibold leading-none ">{primaryValue}</p>
         {isMl && primary.baseline !== undefined && primary.baseline > 0 && (
           <p className="num mt-1.5 text-micro text-faint">
-            baseline {formatBaselineName(primary.baseline_name ?? "baseline")}{" "}
+            เกณฑ์เป้าหมาย {formatBaselineName(primary.baseline_name ?? "baseline")}{" "}
             {typeof primary.baseline === "number"
               ? primaryInfo.fmt(primary.baseline)
               : primary.baseline}
@@ -72,6 +94,7 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
 
       {secondary.length > 0 ? (
         <section className="mt-4 border-t border-rule pt-4">
+          <div className="mb-2 text-micro font-medium text-muted">ตัวชี้วัดความแม่นยำ (Colab Evaluation):</div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5">
             {secondary.map(({ key, value }) => {
               const info = metricInfo(key);
@@ -87,6 +110,43 @@ export function ModelPerformanceCard({ entry }: { entry: ModelPerfEntry }) {
           </dl>
         </section>
       ) : null}
+
+      {entry.model_type === "churn" && entry.thresholds && (
+        <div className="mt-4 rounded-card border border-border bg-raised/50 p-3 text-micro">
+          <span className="font-semibold text-text">จุดตัดความเสี่ยง (Colab F2 Thresholding):</span>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-faint">
+            <span className="font-medium text-negative">High Risk &ge; {(entry.thresholds.high * 100).toFixed(0)}% (เซลล์ติดต่อด่วน)</span>
+            <span>·</span>
+            <span className="text-accent">Medium &ge; {(entry.thresholds.medium * 100).toFixed(0)}%</span>
+            <span>·</span>
+            <span className="text-positive">Low &lt; {(entry.thresholds.medium * 100).toFixed(0)}%</span>
+          </div>
+        </div>
+      )}
+
+      {entry.model_type === "clv" && (
+        <div className="mt-4 rounded-card border border-border bg-raised/50 p-3 text-micro">
+          <span className="font-semibold text-text">กลุ่มมูลค่าลูกค้า (Colab Value Tiers):</span>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-faint">
+            <span className="font-medium text-text">Whale &ge; ฿100k</span>
+            <span>·</span>
+            <span>Core ฿10k–100k</span>
+            <span>·</span>
+            <span>Standard ฿1k–10k</span>
+            <span>·</span>
+            <span>Low &lt; ฿1k</span>
+          </div>
+        </div>
+      )}
+
+      {entry.model_type === "credit" && (
+        <div className="mt-4 rounded-card border border-border bg-raised/50 p-3 text-micro">
+          <span className="font-semibold text-text">วันเครดิตหมด (Colab Depletion Runway):</span>
+          <p className="mt-1 text-faint">
+            Runway = เครดิตคงเหลือ &divide; (ยอดใช้รายวันจาก p50) · แจ้งเตือนด่วน &le; 14 วัน
+          </p>
+        </div>
+      )}
 
       {entry.competition && entry.competition.length > 0 ? (
         <section className="mt-4 border-t border-rule pt-3">
@@ -121,7 +181,16 @@ function SplitStrip({
 
   const cells = SPLIT_ORDER.map((splitKey) => {
     const split = entry.splits.find((s) => s.split === splitKey);
-    const value = split?.metrics[primaryKey];
+    let value = split?.metrics[primaryKey];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      if (entry.model_type === "clv") {
+        value = split?.metrics["spearman"] ?? split?.metrics["clv_composite"];
+      } else if (entry.model_type === "credit") {
+        value = split?.metrics["coverage_p10_p90"];
+      } else if (entry.model_type === "churn") {
+        value = split?.metrics["roc_auc"];
+      }
+    }
     if (typeof value !== "number" || !Number.isFinite(value)) return null;
     return { splitKey, value };
   }).filter(Boolean) as Array<{ splitKey: (typeof SPLIT_ORDER)[number]; value: number }>;

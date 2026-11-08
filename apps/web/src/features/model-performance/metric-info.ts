@@ -62,6 +62,14 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     fmt: dec3,
     higherIsBetter: true,
   },
+  f2: {
+    label: "F2-Score",
+    tooltip: "วัดความแม่นยำที่เน้น Recall เป็น 2 เท่าตามเกณฑ์ธุรกิจ Colab 01",
+    help: "F-beta score (beta=2.0) ให้น้ำหนักกับการตรวจจับลูกค้าที่จะเลิกใช้จริง (Recall) เป็น 2 เท่าเทียบกับ Precision เพื่อไม่ให้หลุดเคสสำคัญ ใช้เป็นเกณฑ์หาจุดตัด High Risk",
+    goodRange: "เป้าหมาย > 0.75",
+    fmt: dec3,
+    higherIsBetter: true,
+  },
   recall_at_top10pct: {
     label: "Recall@top-10%",
     tooltip: "ถ้าทีมขายโทรได้แค่ 10% ของลูกค้า จะครอบ churner จริงกี่ %",
@@ -134,11 +142,41 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     higherIsBetter: true,
   },
   spearman: {
-    label: "Spearman",
-    tooltip: "จัดอันดับลูกค้าตามมูลค่า — องค์ประกอบหลักของ CLV composite",
-    help: "วัดว่าจัดลำดับลูกค้าจาก “มูลค่าต่ำ → สูง” ตรงกับความเป็นจริงแค่ไหน — ไม่ใช่ % accuracy; ~0.5 ปกติสำหรับข้อมูลรายได้ที่มีศูนย์เยอะ",
+    label: "Spearman (ทั้งหมด)",
+    tooltip: "จัดอันดับลูกค้าตามมูลค่ารวมทุกคน — วัดความสัมพันธ์อันดับ",
+    help: "วัดว่าจัดลำดับลูกค้าจากมูลค่าต่ำไปสูงตรงกับความเป็นจริงแค่ไหนเมื่อรวมลูกค้าทุกคน (รวมคนที่ไม่ชำระเงิน)",
     goodRange: "≈ 0.45–0.55 ปกติ · > 0.55 ดี",
     fmt: dec3,
+    higherIsBetter: true,
+  },
+  spearman_payers: {
+    label: "Spearman (ผู้จ่ายเงิน)",
+    tooltip: "จัดอันดับลูกค้าตามมูลค่าจริงเฉพาะกลุ่มที่ชำระเงิน — ตัวชี้วัดหลัก Colab 02",
+    help: "วัดการจัดลำดับลูกค้าจากมูลค่าต่ำไปสูงเฉพาะในกลุ่มที่มียอดชำระจริง (> ฿0) ช่วยพิสูจน์ว่าโมเดลเรียงลำดับลูกค้ารายใหญ่ได้แม่นยำจริง",
+    goodRange: "เป้าหมาย > 0.60 (Colab 02)",
+    fmt: dec3,
+    higherIsBetter: true,
+  },
+  portfolio_bias_pct: {
+    label: "Portfolio bias",
+    tooltip: "(Σ ทำนาย - Σ จริง) ÷ Σ จริง × 100% — เป้าหมาย < ±10%",
+    help: "เปอร์เซ็นต์ความคลาดเคลื่อนของยอดเงินพอร์ตโฟลิโอรวม 6 เดือน เทียบกับยอดเงินจริง — ค่าบวกแปลว่าทำนายสูงกว่าจริง ค่าติดลบแปลว่าทำนายต่ำกว่าจริง",
+    goodRange: "เป้าหมาย < ±10% (Colab 02)",
+    fmt: (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)}%`,
+    higherIsBetter: false,
+  },
+  total_actual: {
+    label: "ยอดเงินจริงรวม",
+    tooltip: "ยอดเงินจริงรวมของชุดทดสอบ 6 เดือน",
+    help: "ผลรวมยอดชำระเงินจริงทั้งหมดของลูกค้าในชุดทดสอบช่วง 180 วัน",
+    fmt: (v: number) => `฿${formatCount(v)}`,
+    higherIsBetter: true,
+  },
+  total_predicted: {
+    label: "ยอดเงินทำนายรวม",
+    tooltip: "ยอดเงินที่โมเดลพยากรณ์รวม 6 เดือน",
+    help: "ผลรวมยอดชำระเงินที่โมเดลพยากรณ์ให้ลูกค้าทุกคนในชุดทดสอบช่วง 180 วัน",
+    fmt: (v: number) => `฿${formatCount(v)}`,
     higherIsBetter: true,
   },
   mae: {
@@ -207,10 +245,10 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     higherIsBetter: true,
   },
   coverage_p10_p90_30d: {
-    label: "Coverage 30d",
-    tooltip: "ช่วง p10–p90 ครอบค่าจริง 30 วัน กี่ %",
-    help: "เฉพาะ horizon 30 วัน — กี่ % ที่ใช้จริงอยู่ในช่วงที่โมเดลให้",
-    goodRange: "≈ 75–85%",
+    label: "80% Coverage (30 วัน)",
+    tooltip: "ช่วง p10–p90 ครอบคลุมค่าจริง 30 วันกี่ % — เป้าหมาย 80–90% (Colab 03)",
+    help: "ความครอบคลุมของช่วงคาดการณ์ [p10, p90] ใน 30 วันข้างหน้า — หากอยู่ระหว่าง 80–90% แปลว่าช่วงความเชื่อมั่นแม่นยำตาม Colab 03",
+    goodRange: "เป้าหมาย 80–90% (Colab 03)",
     fmt: pct1,
     higherIsBetter: true,
   },
@@ -220,6 +258,14 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     help: "เฉพาะ horizon 90 วัน — กี่ % ที่ใช้จริงอยู่ในช่วงที่โมเดลให้",
     goodRange: "≈ 75–85%",
     fmt: pct1,
+    higherIsBetter: true,
+  },
+  urgent_topup_f1: {
+    label: "Urgent top-up F1",
+    tooltip: "F1-Score แจ้งเตือนเติมเงินด่วน (เครดิตจะหมดใน ≤ 14 วัน) ตาม Colab 03",
+    help: "วัดความสมดุลระหว่างการเตือนลูกค้าที่เครดิตใกล้หมดได้ครบ (Recall) และการเตือนได้แม่นยำไม่เตือนมั่ว (Precision) ตามเกณฑ์แจ้งเตือนด่วน",
+    goodRange: "เป้าหมาย > 0.60 (Colab 03)",
+    fmt: dec3,
     higherIsBetter: true,
   },
   urgent_topup_recall: {
@@ -256,19 +302,26 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
 
 const PRIMARY_LABEL_TO_KEY: Record<string, string> = {
   "PR-AUC": "pr_auc",
+  "ROC-AUC": "roc_auc",
+  "Spearman (ผู้จ่ายเงิน)": "spearman_payers",
+  "Portfolio bias": "portfolio_bias_pct",
+  "80% Coverage (30 วัน)": "coverage_p10_p90_30d",
+  "Coverage p10–p90": "coverage_p10_p90_30d",
   "CLV composite": "clv_composite",
-  "Coverage p10–p90": "coverage_p10_p90",
-  "Rule coverage": "coverage_p10_p90",
 };
 
 export const SECONDARY_METRICS: Record<string, string[]> = {
-  churn: ["recall_at_top10pct", "lift_at_top10pct", "ece", "f1"],
-  clv: ["spearman", "p_pay_roc_auc", "top_decile_capture", "revenue_bias_ratio", "range_coverage", "p_pay_ece"],
-  credit: ["coverage_p10_p90_30d", "coverage_p10_p90_90d", "mae_30d", "mae_90d", "urgent_topup_recall", "urgent_topup_precision"],
+  churn: ["roc_auc", "pr_auc", "f2", "f1", "recall", "precision", "lift_at_top10pct", "ece"],
+  clv: ["spearman_payers", "portfolio_bias_pct", "spearman", "mae", "top_decile_capture", "p_pay_roc_auc", "total_predicted", "total_actual"],
+  credit: ["coverage_p10_p90_30d", "mae_30d", "urgent_topup_f1", "urgent_topup_recall", "urgent_topup_precision", "mae_90d"],
 };
 
 const BASELINE_NAME_LABELS: Record<string, string> = {
+  target_85pct: "เป้า 85%",
+  target_80pct: "เป้า 80%",
   target_75pct: "เป้า 75%",
+  target_70pct: "เป้า 70%",
+  target_60pct: "เป้า 60%",
 };
 
 export function metricInfo(key: string): MetricInfo {
@@ -310,8 +363,8 @@ export function pickSecondaryMetrics(
 
 export const PRIMARY_METRIC_KEY: Record<string, string> = {
   churn: "pr_auc",
-  clv: "clv_composite",
-  credit: "coverage_p10_p90",
+  clv: "spearman_payers",
+  credit: "coverage_p10_p90_30d",
 };
 
 export const SPLIT_ORDER = ["validation", "test", "backtest_avg"] as const;

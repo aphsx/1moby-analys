@@ -32,15 +32,15 @@ import { mlErrorToHttp, triggerMlJob } from "../lib/ml/ml-internal";
 import { assertNotUsedByPredictions, predictionRunsUsingVersion } from "../lib/ml/model-registry";
 
 
-// Primary headline metric per model type, read from a version's test metrics.
+// Primary headline metric per model type matching Colab winning models.
 const PRIMARY_METRIC: Record<ModelType, { key: string; name: string }> = {
   churn: { key: "pr_auc", name: "PR-AUC" },
-  clv: { key: "clv_composite", name: "CLV composite" },
-  credit: { key: "coverage_p10_p90", name: "Coverage p10–p90" },
+  clv: { key: "spearman_payers", name: "Spearman (ผู้จ่ายเงิน)" },
+  credit: { key: "coverage_p10_p90_30d", name: "80% Coverage (30 วัน)" },
 };
 
-/** Credit coverage baselines are point-forecast rules — promotion floor is 75%. */
-const CREDIT_COVERAGE_BASELINE = 0.75;
+/** Credit coverage target floor matching Colab 03 is 80%. */
+const CREDIT_COVERAGE_BASELINE = 0.80;
 
 function isModelType(value: string): value is ModelType {
   return (MODEL_TYPES as readonly string[]).includes(value);
@@ -239,14 +239,36 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
     .filter((row) => row.baselineName !== null && row.datasetSplit === "test")
     .map((row) => ({ name: row.baselineName as string, metrics: asMetrics(row.metricsJson) }));
 
+  let primaryName = card.primary_metric?.name;
+  let primaryValue = card.primary_metric?.value;
   let primaryBaseline = card.primary_metric?.baseline;
   let primaryBaselineName = card.primary_metric?.baseline_name;
-  if (
-    modelType === "credit" &&
-    (primaryBaseline === undefined || primaryBaseline === 0)
-  ) {
-    primaryBaseline = CREDIT_COVERAGE_BASELINE;
-    primaryBaselineName = "target_75pct";
+
+  const testRow = holdout.find((r) => r.datasetSplit === "test");
+  const testMetrics = testRow ? asMetrics(testRow.metricsJson) : {};
+
+  // Colab alignment: Map legacy synthetic metric names to clean Colab evaluations
+  if (modelType === "clv") {
+    if (!primaryName || primaryName === "CLV composite") {
+      primaryName = PRIMARY_METRIC.clv.name;
+      primaryValue = testMetrics["spearman_payers"] ?? testMetrics["spearman"] ?? primaryValue ?? "";
+      primaryBaseline = 0.60;
+      primaryBaselineName = "target_60pct";
+    }
+  } else if (modelType === "credit") {
+    if (!primaryName || primaryName === "Coverage p10–p90") {
+      primaryName = PRIMARY_METRIC.credit.name;
+      primaryValue = testMetrics["coverage_p10_p90_30d"] ?? testMetrics["coverage_p10_p90"] ?? primaryValue ?? "";
+      primaryBaseline = CREDIT_COVERAGE_BASELINE;
+      primaryBaselineName = "target_80pct";
+    }
+  } else if (modelType === "churn") {
+    if (!primaryName) {
+      primaryName = PRIMARY_METRIC.churn.name;
+      primaryValue = testMetrics["pr_auc"] ?? primaryValue ?? "";
+      primaryBaseline = 0.70;
+      primaryBaselineName = "target_70pct";
+    }
   }
 
   const entry: ModelPerfEntry = {
@@ -259,8 +281,8 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
     dataset_rows: card.dataset_rows ?? null,
     feature_set: card.feature_set ?? null,
     primary_metric: {
-      name: card.primary_metric?.name ?? PRIMARY_METRIC[modelType].name,
-      value: card.primary_metric?.value ?? "",
+      name: primaryName ?? PRIMARY_METRIC[modelType].name,
+      value: primaryValue ?? "",
       ...(primaryBaseline !== undefined ? { baseline: primaryBaseline } : {}),
       ...(primaryBaselineName !== undefined ? { baseline_name: primaryBaselineName } : {}),
     },
@@ -279,7 +301,6 @@ async function buildEntry(modelType: (typeof MODEL_TYPES)[number]): Promise<Mode
 
   if (modelType === "churn") {
     entry.thresholds = card.thresholds ?? { ...DEFAULT_RISK_THRESHOLDS };
-    const testRow = holdout.find((r) => r.datasetSplit === "test");
     if (testRow) {
       const calibration = testRow.calibrationJson as ModelPerfEntry["calibration"] | null;
       const confusion = testRow.confusionMatrixJson as ModelPerfEntry["confusion"] | null;
@@ -302,7 +323,7 @@ interface VersionCard {
 export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" })
   .use(requireUser)
   .get("/", async (): Promise<ModelPerfEntry[]> => {
-    const entries: ModelPerfEntry[] = [LIFECYCLE_ENTRY];
+    const entries: ModelPerfEntry[] = [];
     for (const modelType of MODEL_TYPES) {
       const entry = await buildEntry(modelType);
       if (entry) entries.push(entry);
@@ -318,8 +339,6 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
         id: mlModelVersions.id,
         version: mlModelVersions.version,
         status: mlModelVersions.status,
-        // The production alias is the serving source of truth. Fall back to
-        // is_active for legacy rows created before aliases were repaired.
         isActive: sql<boolean>`CASE
           WHEN ${mlModelAliases.id} IS NOT NULL
             THEN ${mlModelAliases.modelVersionId} = ${mlModelVersions.id}
@@ -343,7 +362,10 @@ export const modelPerformanceRoutes = new Elysia({ prefix: "/model-performance" 
       .orderBy(desc(mlModelVersions.trainedAt));
 
     return rows.map((row) => {
-      const metricValue = asMetrics(row.testMetricsJson)[primary.key];
+      const metrics = asMetrics(row.testMetricsJson);
+      const metricValue =
+        metrics[primary.key] ??
+        (params.modelType === "clv" ? metrics["spearman"] : params.modelType === "credit" ? metrics["coverage_p10_p90"] : metrics["pr_auc"]);
       return {
         id: row.id,
         model_type: params.modelType,

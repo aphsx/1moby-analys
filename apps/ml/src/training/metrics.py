@@ -28,6 +28,7 @@ from sklearn.metrics import (
     average_precision_score,
     brier_score_loss,
     f1_score,
+    fbeta_score,
     log_loss,
     mean_absolute_error,
     precision_score,
@@ -69,6 +70,7 @@ def churn_metrics(
         "pr_auc": float(average_precision_score(y_true, ranking)),
         "roc_auc": float(roc_auc_score(y_true, ranking)) if len(np.unique(y_true)) > 1 else float("nan"),
         "f1": float(f1_score(y_true, y_pred, zero_division=0)),
+        "f2": float(fbeta_score(y_true, y_pred, beta=2.0, zero_division=0)),
         "precision": float(precision_score(y_true, y_pred, zero_division=0)),
         "recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "recall_at_top10pct": recall_at_top_k(y_true, ranking, 0.10),
@@ -472,8 +474,21 @@ def clv_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     revenue_bias_ratio = (
         round(total_predicted / total_actual, 4) if total_actual > 0 else 0.0
     )
+    portfolio_bias_pct = (
+        round(float((total_predicted - total_actual) / total_actual * 100), 2)
+        if total_actual > 0 else 0.0
+    )
+    mask_payers = y_true > 0
+    if int(mask_payers.sum()) > 2:
+        sp_p = spearmanr(y_true[mask_payers], y_pred[mask_payers]).statistic
+        spearman_payers = round(float(0.0 if np.isnan(sp_p) else sp_p), 4)
+    else:
+        spearman_payers = round(float(0.0 if np.isnan(corr) else corr), 4)
+
     return {
         "spearman": round(float(0.0 if np.isnan(corr) else corr), 4),
+        "spearman_payers": spearman_payers,
+        "portfolio_bias_pct": portfolio_bias_pct,
         "mae": round(float(mean_absolute_error(y_true, y_pred)), 2),
         "rmse": round(float(np.sqrt(np.mean((y_true - y_pred) ** 2))), 2),
         "rmsle": round(rmsle(y_true, y_pred), 4),
