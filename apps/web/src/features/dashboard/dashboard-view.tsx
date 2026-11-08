@@ -113,8 +113,8 @@ function OverviewBody({
               label: "รายได้ที่เสี่ยงหาย",
               lead: true,
               value: formatBahtCompact(model.atRisk),
-              caption: `จากมูลค่า 6 เดือน ${formatBahtCompact(model.clvTotal)}`,
-              info: `ผลรวมของ โอกาสเลิกใช้ × มูลค่าที่คาดว่าจะจ่ายใน 6 เดือน ของลูกค้า ${formatCount(model.scored)} รายที่มีคะแนน อีก ${formatCount(model.unscored)} รายใช้งานไม่ถึง 90 วัน ยังไม่มีคะแนน`,
+              caption: `จากคาดจ่าย 6 เดือนข้างหน้า ${formatBahtCompact(model.clvTotal)}`,
+              info: `ผลรวมของ โอกาสเลิกใช้ × คาดจ่าย 6 เดือนข้างหน้า ของลูกค้า ${formatCount(model.scored)} รายที่มีคะแนน อีก ${formatCount(model.unscored)} รายใช้งานไม่ถึง 90 วัน ยังไม่มีคะแนน`,
             },
             {
               label: "รายได้ 12 เดือน",

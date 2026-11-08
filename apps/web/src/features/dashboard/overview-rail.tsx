@@ -31,7 +31,7 @@ function reason(row: PriorityRow): string {
     return row.top_factor.direction === "up" ? `${label} ทำให้เสี่ยงขึ้น` : label;
   }
   // No SHAP factors for this run: say when they are due to top up instead
-  return `เติมครั้งถัดไป ${formatDaysAhead(row.estimated_days_until_topup)}`;
+  return `เครดิตหมดใน ${formatDaysAhead(row.estimated_days_until_topup)}`;
 }
 
 export function CallFirstList({
@@ -94,7 +94,7 @@ export function TopupUrgency({ credit, runId }: { credit: RunSummary["credit"]; 
   return (
     <RailSection
       title="ใกล้ถึงรอบเติมเครดิต"
-      info="จัดกลุ่มจากจำนวนวันที่คาดว่าเครดิตจะหมดและต้องเติมครั้งถัดไป (Runway) คำนวณจากเครดิตคงเหลือหารด้วยอัตราการใช้รายวัน"
+      info="จัดกลุ่มจากจำนวนวันที่คาดว่าเครดิตจะหมด (Runway) = เครดิตคงเหลือ ÷ การใช้ต่อวัน"
     >
       {max <= 0 ? (
         <div className="p-4">

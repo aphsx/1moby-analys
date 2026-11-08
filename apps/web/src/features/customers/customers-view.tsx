@@ -90,8 +90,8 @@ const acctColumn = (sub?: (r: PredictionOutput) => string): Column => ({
 });
 
 const topupColumn: Column = {
-  label: "เติมครั้งถัดไป",
-  tip: () => "จำนวนวันที่คาดว่าเครดิตจะหมดและต้องเติม (Runway) นับจากวันตัดข้อมูล",
+  label: "เครดิตหมดใน",
+  tip: () => "จำนวนวันที่คาดว่าเครดิตจะหมด (Runway) = เครดิตคงเหลือ ÷ การใช้ต่อวัน นับจากวันตัดข้อมูล",
   cell: (r) => <TopUp days={r.estimated_days_until_topup} />,
 };
 
@@ -104,8 +104,8 @@ export const TABS: Record<TabKey, TabConfig> = {
     sorts: [
       { value: "revenue_at_risk:desc", label: "รายได้เสี่ยงหาย" },
       { value: "churn_probability:desc", label: "โอกาสเลิกใช้" },
-      { value: "predicted_clv_6m:desc", label: "มูลค่า 6 เดือน" },
-      { value: "estimated_days_until_topup:asc", label: "เติมครั้งถัดไป" },
+      { value: "predicted_clv_6m:desc", label: "คาดจ่าย 6 เดือนข้างหน้า" },
+      { value: "estimated_days_until_topup:asc", label: "เครดิตหมดใน" },
     ],
     presets: [
       { key: "all", label: "ทั้งหมด", title: "ลูกค้าที่จ่ายเงินทั้งหมด", help: LIFECYCLE_HELP["Active Paid"], filters: {} },
@@ -138,11 +138,11 @@ export const TABS: Record<TabKey, TabConfig> = {
       {
         label: "โอกาสเลิกใช้",
         tip: (ctx) =>
-          `ความน่าจะเป็นที่จะเลิกใช้ใน 90 วัน${ctx.critical != null ? ` · วิกฤตตั้งแต่ ${formatPercent(ctx.critical)}` : ""} · ลูกค้าใหม่กว่า 90 วันยังไม่มีคะแนน`,
+          `ความน่าจะเป็นที่จะเลิกใช้ใน 180 วัน${ctx.critical != null ? ` · วิกฤตตั้งแต่ ${formatPercent(ctx.critical)}` : ""} · ลูกค้าใหม่กว่า 90 วันยังไม่มีคะแนน`,
         cell: (r) => <Risk row={r} />,
       },
-      { label: "มูลค่า 6 ด.", tip: () => "ยอดที่คาดว่าจะจ่ายใน 6 เดือนข้างหน้า", right: true, cell: (r) => <Money value={r.predicted_clv_6m} muted /> },
-      { label: "รายได้เสี่ยงหาย", tip: () => "โอกาสเลิกใช้ × มูลค่า 6 เดือน", right: true, cell: (r) => <Money value={r.revenue_at_risk} strong /> },
+      { label: "คาดจ่าย 6 ด.", tip: () => "ยอดที่คาดว่าจะจ่ายใน 6 เดือนข้างหน้า ไม่ใช่ยอดที่จ่ายมาแล้ว", right: true, cell: (r) => <Money value={r.predicted_clv_6m} muted /> },
+      { label: "รายได้เสี่ยงหาย", tip: () => "โอกาสเลิกใช้ × คาดจ่าย 6 เดือนข้างหน้า", right: true, cell: (r) => <Money value={r.revenue_at_risk} strong /> },
       topupColumn,
     ],
   },
@@ -151,7 +151,7 @@ export const TABS: Record<TabKey, TabConfig> = {
     count: (s) => s.lifecycle.active_free,
     sorts: [
       { value: "days_since_last_activity:asc", label: "ใช้งานล่าสุด" },
-      { value: "estimated_days_until_topup:asc", label: "เติมครั้งถัดไป" },
+      { value: "estimated_days_until_topup:asc", label: "เครดิตหมดใน" },
     ],
     presets: [
       { key: "all", label: "ทั้งหมด", title: "ใช้งานแต่ไม่ได้เติมเงิน", help: LIFECYCLE_HELP["Active Free"], filters: {} },
@@ -159,7 +159,7 @@ export const TABS: Record<TabKey, TabConfig> = {
         key: "soon",
         label: "ต้องเติมใน 14 วัน",
         title: "ต้องเติมเครดิตใน 14 วัน",
-        help: "คาดว่าจะเติมเครดิตครั้งถัดไปภายใน 14 วันนับจากวันตัดข้อมูล",
+        help: "คาดว่าเครดิตจะหมดภายใน 14 วันนับจากวันตัดข้อมูล (เครดิตคงเหลือ ÷ การใช้ต่อวัน)",
         filters: { credit_urgency_level: "critical" },
         sort: "estimated_days_until_topup:asc",
       },

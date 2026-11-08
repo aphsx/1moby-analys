@@ -281,7 +281,13 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
     customers, payments, usage = load_predict_clean(source_id)
 
     progress("features", 20)
-    feature_result = build_all_features(customers, payments, usage, cutoff)
+    feature_result = build_all_features(
+        customers,
+        payments,
+        usage,
+        cutoff,
+        allow_snapshot_balance=True,
+    )
     # lifecycle_df carries its own days_since_last_activity (same definition
     # as the feature) — drop it so the merge keeps the plain feature column.
     lifecycle_df = feature_result.lifecycle_df.drop(

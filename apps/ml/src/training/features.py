@@ -276,19 +276,19 @@ FEATURE_METADATA: FeatureSchema = {
         "null_handling": "0 when no usage exists",
     },
     "credit_added_180d": {
-        "source": "payments.credit_add",
+        "source": "payments.credit_add where credit_type=sms",
         "lookback_window": "180d_before_cutoff",
-        "formula": "sum(credit_add in last 180 days)",
+        "formula": "sum(SMS credit_add in last 180 days); email top-ups excluded",
         "null_handling": "0 when no top-up exists in window",
     },
     "credit_balance_proxy": {
-        "source": "payments.credit_add + usage.usage",
+        "source": "payments.credit_add (sms) + usage.usage (sms)",
         "lookback_window": "all_history_before_cutoff",
-        "formula": "sum(credit_add) - sum(usage), both before cutoff (PIT-safe; snapshot credit_sms/credit_email are NOT used because they reflect export time)",
+        "formula": "sum(SMS credit_add) - sum(SMS usage), both before cutoff (PIT-safe)",
         "null_handling": "0 when no prior activity exists",
     },
     "credit_runway_months": {
-        "source": "payments.credit_add + usage.usage",
+        "source": "payments.credit_add (sms) + usage.usage (sms)",
         "lookback_window": "all_history_before_cutoff",
         "formula": "credit_balance_proxy / (usage_recent_90d / 3), clipped to [0, 24]; 24 when balance > 0 with no recent usage",
         "null_handling": "0 when no prior activity or non-positive balance",
@@ -318,9 +318,9 @@ FEATURE_METADATA: FeatureSchema = {
         "null_handling": "0 when no payment exists in window",
     },
     "current_sms_balance": {
-        "source": "payments.credit_add - usage.usage",
+        "source": "payments.credit_add (sms) - usage.usage (sms); optional profile snapshot on predict",
         "lookback_window": "point_in_time_before_cutoff",
-        "formula": "max(credit_balance_proxy, 0.0)",
+        "formula": "max(credit_balance_proxy, 0.0); on predict only, if proxy<=0 fall back to profile credit_sms (export-time snapshot — never used in training)",
         "null_handling": "0.0 when no prior transactions",
     },
     "anchor_30d": {
@@ -688,16 +688,27 @@ def build_credit_features(
     usage: pd.DataFrame,
     cutoff_date: pd.Timestamp,
     customers: pd.DataFrame | None = None,
+    *,
+    allow_snapshot_balance: bool = False,
 ) -> pd.DataFrame:
-    """Build point-in-time credit balance/runway features.
+    """Build point-in-time SMS credit balance/runway features.
 
-    Reconstructs pre-cutoff balance from top-ups minus usage, falling back to
-    snapshot credit_sms when proxy balance is non-positive (matching Colab 03).
+    Reconstructs pre-cutoff balance from SMS top-ups minus SMS usage.
+    Profile snapshot credit_sms is used only when ``allow_snapshot_balance``
+    is True (prediction time). Training must keep proxy-only to avoid
+    export-time leakage.
     """
 
     cutoff = _timestamp(cutoff_date)
     payment_history = _payment_history(payments, cutoff)
     usage_history = _usage_history(usage, cutoff)
+
+    if "credit_type" in payment_history.columns:
+        credit_type = payment_history["credit_type"].astype(str).str.strip().str.lower()
+        payment_history = payment_history.loc[credit_type.eq("sms")].copy()
+    if "channel" in usage_history.columns:
+        channel = usage_history["channel"].astype(str).str.strip().str.lower()
+        usage_history = usage_history.loc[channel.eq("sms")].copy()
 
     acc_ids = sorted(
         set(payment_history["acc_id"].dropna().astype(int))
@@ -751,7 +762,11 @@ def build_credit_features(
     rows["credit_usage_decel"] = _signed_log1p((recent_mo - prev_mo) / (prev_mo + EPSILON))
 
     proxy_balance = np.maximum(rows["credit_balance_proxy"], 0.0)
-    if customers is not None and "credit_sms" in customers.columns:
+    if (
+        allow_snapshot_balance
+        and customers is not None
+        and "credit_sms" in customers.columns
+    ):
         snap_src = customers[customers["acc_id"].notna()].copy()
         snap_src["acc_id"] = snap_src["acc_id"].astype(int)
         snap_bal = pd.to_numeric(
@@ -848,11 +863,19 @@ def build_all_features(
     payments: pd.DataFrame,
     usage: pd.DataFrame,
     cutoff_date: pd.Timestamp,
+    *,
+    allow_snapshot_balance: bool = False,
 ) -> FeatureBuildResult:
     """Build the first deterministic Tier A feature set for every customer."""
 
     cutoff = _timestamp(cutoff_date)
-    feature_df = _build_feature_df(customers, payments, usage, cutoff)
+    feature_df = _build_feature_df(
+        customers,
+        payments,
+        usage,
+        cutoff,
+        allow_snapshot_balance=allow_snapshot_balance,
+    )
     lifecycle_df = build_lifecycle_outputs(customers, payments, usage, cutoff)
     eligibility_df = lifecycle_df[
         ["acc_id", "eligible_for_churn", "eligible_for_clv", "eligible_for_credit"]
@@ -879,6 +902,8 @@ def _build_feature_df(
     payments: pd.DataFrame,
     usage: pd.DataFrame,
     cutoff_date: pd.Timestamp,
+    *,
+    allow_snapshot_balance: bool = False,
 ) -> pd.DataFrame:
     cutoff = _timestamp(cutoff_date)
     feature_df = _base_customer_frame(customers, payments, usage, cutoff)
@@ -889,7 +914,13 @@ def _build_feature_df(
         build_channel_features(usage, cutoff),
         build_source_features(usage, cutoff),
         build_activity_features(payments, usage, cutoff),
-        build_credit_features(payments, usage, cutoff, customers),
+        build_credit_features(
+            payments,
+            usage,
+            cutoff,
+            customers,
+            allow_snapshot_balance=allow_snapshot_balance,
+        ),
     ]:
         feature_df = feature_df.merge(part, on="acc_id", how="left")
 

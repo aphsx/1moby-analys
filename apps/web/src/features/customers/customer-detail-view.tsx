@@ -34,10 +34,10 @@ import { humanizeFeature } from "./reasoning";
 const INFO = {
   churn: "โอกาสที่ลูกค้าจะเลิกใช้ ปรับเทียบ (calibration) แล้ว อ่านเป็นเปอร์เซ็นต์ได้ตรง ๆ: 78% คือจากลูกค้าลักษณะนี้ 100 ราย คาดว่าจะเลิกใช้ราว 78 ราย",
   factors: "ผลของแต่ละปัจจัยต่อคะแนนของลูกค้ารายนี้ (SHAP) แถบไปทางขวาทำให้เสี่ยงขึ้น ไปทางซ้ายช่วยลดความเสี่ยง ความยาวเทียบกันได้เฉพาะในลูกค้ารายนี้",
-  clv: "ยอดที่คาดว่าจะชำระใน 6 เดือนข้างหน้า คิดจากความถี่และยอดเติมเงินที่ผ่านมา ช่วงคาดการณ์คือค่าต่ำสุด–สูงสุดที่น่าจะเป็น",
-  topup: "จำนวนวันที่คาดว่าเครดิตจะหมดและต้องเติมครั้งถัดไป (Runway) คำนวณจากเครดิตคงเหลือหารด้วยอัตราการใช้รายวัน",
+  clv: "ยอดที่คาดว่าจะจ่ายใน 6 เดือนข้างหน้า (ไม่ใช่ยอดที่จ่ายมาแล้ว) คิดจากความถี่และยอดเติมเงินที่ผ่านมา ช่วงคาดการณ์คือค่าต่ำสุด–สูงสุดที่น่าจะเป็น",
+  topup: "จำนวนวันที่คาดว่าเครดิตจะหมด (Runway) = เครดิตคงเหลือ ÷ การใช้ต่อวัน นับจากวันตัดข้อมูล",
   alive: "ความน่าจะเป็นที่ลูกค้าจะยังคงใช้งานและชำระเงินต่อเนื่อง (คำนวณจากโมเดล Churn Dual-GBDT: 100% − โอกาสเลิกใช้)",
-  atRisk: "โอกาสเลิกใช้ × มูลค่าที่คาดว่าจะจ่ายใน 6 เดือน ใช้จัดลำดับว่าควรติดต่อใครก่อน",
+  atRisk: "โอกาสเลิกใช้ × คาดจ่าย 6 เดือนข้างหน้า ใช้จัดลำดับว่าควรติดต่อใครก่อน",
   credit: "เครดิตที่คาดว่าจะใช้ พร้อมช่วงต่ำสุด–สูงสุด (p10–p90)",
   ai: "ข้อความอธิบายที่สร้างโดย AI จากข้อมูลของลูกค้ารายนี้",
 };
@@ -233,13 +233,13 @@ function Overview({
             info: INFO.atRisk,
           },
           {
-            label: "มูลค่า 6 เดือน",
+            label: "คาดจ่าย 6 เดือนข้างหน้า",
             value: c.predicted_clv_6m != null ? formatBahtCompact(c.predicted_clv_6m) : "—",
             caption: clvRange ? `ถ้าจ่าย ${formatBahtCompact(clvRange.p10)}–${formatBahtCompact(clvRange.p90)}` : VALUE_TIER_LABEL[c.customer_value_tier],
             info: INFO.clv,
           },
           {
-            label: "เติมครั้งถัดไป",
+            label: "เครดิตหมดใน",
             value: formatDaysAhead(c.estimated_days_until_topup),
             caption: usualCycle != null ? `รอบปกติ ${formatCount(Math.round(usualCycle))} วัน` : c.credit_urgency_level ? URGENCY_LABEL[c.credit_urgency_level] : undefined,
             info: INFO.topup,
@@ -480,7 +480,7 @@ function Predictions({ customer: c }: { customer: PredictionOutput }) {
         <PredictionSection title="มูลค่าและรายได้">
           <PredictionCard
             icon={<Coins size={16} />}
-            title="มูลค่า 6 เดือน"
+            title="คาดจ่าย 6 เดือนข้างหน้า"
             value={c.predicted_clv_6m != null ? formatBaht(c.predicted_clv_6m) : "—"}
             info={INFO.clv}
             facts={[
@@ -497,7 +497,7 @@ function Predictions({ customer: c }: { customer: PredictionOutput }) {
             info={INFO.atRisk}
             facts={[
               ["โอกาสเลิกใช้", churnValue(c)],
-              ["มูลค่า 6 เดือน", c.predicted_clv_6m != null ? formatBahtCompact(c.predicted_clv_6m) : "—"],
+              ["คาดจ่าย 6 เดือนข้างหน้า", c.predicted_clv_6m != null ? formatBahtCompact(c.predicted_clv_6m) : "—"],
               ["กลุ่มแนะนำ", c.segment && c.segment in SEGMENT_LABEL ? SEGMENT_LABEL[c.segment as keyof typeof SEGMENT_LABEL] : "—"],
             ]}
           />
@@ -508,7 +508,7 @@ function Predictions({ customer: c }: { customer: PredictionOutput }) {
         <PredictionSection title="เครดิตและการใช้งาน">
           <PredictionCard
             icon={<CalendarClock size={16} />}
-            title="เติมครั้งถัดไป"
+            title="เครดิตหมดใน"
             value={formatDaysAhead(c.estimated_days_until_topup)}
             info={INFO.topup}
             facts={[

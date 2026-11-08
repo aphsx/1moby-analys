@@ -44,10 +44,10 @@ export const VALUE_TIER_LABEL = {
 } as const satisfies Record<ValueTier, string>;
 
 export const VALUE_TIER_HELP = {
-  high: "10% แรกของมูลค่า 6 เดือนในรอบทำนายนี้",
-  mid: "อยู่ในช่วง 10–50% แรก",
-  low: "ครึ่งล่างของมูลค่า 6 เดือน",
-  none: "ยังไม่มีมูลค่าคาดการณ์",
+  high: "10% แรกของคาดจ่าย 6 เดือนข้างหน้าในรอบทำนายนี้",
+  mid: "อยู่ในช่วง 10–50% แรกของคาดจ่าย 6 เดือนข้างหน้า",
+  low: "ครึ่งล่างของคาดจ่าย 6 เดือนข้างหน้า",
+  none: "ยังไม่มีคาดจ่าย 6 เดือนข้างหน้า",
 } as const satisfies Record<ValueTier, string>;
 
 // apps/ml/src/constants.py: URGENCY_CRITICAL_DAYS = 14, WARNING = 30, MONITOR = 90

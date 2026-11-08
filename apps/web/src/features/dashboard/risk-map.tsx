@@ -27,7 +27,7 @@ export function RiskMap({
   return (
     <Panel
       title="รายได้ที่เสี่ยงหายอยู่ที่ไหน"
-      info={`แถวคือกลุ่มมูลค่า (จากมูลค่า 6 เดือนของรอบนี้) คอลัมน์คือระดับโอกาสเลิกใช้ตามเกณฑ์ใน model card (${pct(thresholds.medium)}, ${pct(thresholds.high)}, ${pct(thresholds.critical)}) ขนาดคือรายได้ที่เสี่ยงหาย`}
+      info={`แถวคือกลุ่มมูลค่า (จากคาดจ่าย 6 เดือนข้างหน้าของรอบนี้) คอลัมน์คือระดับโอกาสเลิกใช้ตามเกณฑ์ใน model card (${pct(thresholds.medium)}, ${pct(thresholds.high)}, ${pct(thresholds.critical)}) ขนาดคือรายได้ที่เสี่ยงหาย`}
       meta="ขนาดสี่เหลี่ยมคือรายได้ที่เสี่ยงหาย · กดช่องเพื่อเปิดรายชื่อ"
     >
       {max <= 0 ? (

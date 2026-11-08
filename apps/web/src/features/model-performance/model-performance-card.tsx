@@ -8,8 +8,8 @@ import { MetricLabel } from "./metric-help";
 
 const MODEL_TITLE: Record<string, string> = {
   churn: "01 โอกาสเลิกใช้ (Churn)",
-  clv: "02 มูลค่าลูกค้า 6 เดือน (CLV)",
-  credit: "03 การเติมและใช้เครดิต (Credit)",
+  clv: "02 คาดจ่าย 6 เดือนข้างหน้า (CLV)",
+  credit: "03 การใช้เครดิตและวันเครดิตหมด (Credit)",
 };
 
 const COLAB_TARGET: Record<string, { target: string; note: string }> = {

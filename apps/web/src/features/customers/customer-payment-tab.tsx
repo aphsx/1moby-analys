@@ -125,14 +125,14 @@ function GapTip({ active, payload }: { active?: boolean; payload?: { payload: { 
 function NextTopup({ days, cutoffMs }: { days: number | null; cutoffMs: number }) {
   if (days == null) {
     return (
-      <Panel title="เติมครั้งถัดไป" info="จำนวนวันที่คาดว่าเครดิตจะหมดและต้องเติมครั้งถัดไป (Runway) คำนวณจากเครดิตคงเหลือหารด้วยอัตราการใช้รายวัน">
-        <p className="text-body text-muted">ยังไม่มีผลทำนายวันเติมครั้งถัดไปของลูกค้ารายนี้</p>
+      <Panel title="เครดิตหมดใน" info="จำนวนวันที่คาดว่าเครดิตจะหมด (Runway) = เครดิตคงเหลือ ÷ การใช้ต่อวัน นับจากวันตัดข้อมูล">
+        <p className="text-body text-muted">ยังไม่มีผลทำนายวันเครดิตจะหมดของลูกค้ารายนี้</p>
       </Panel>
     );
   }
   const position = Math.min(100, (Math.max(0, days) / RANGE_MAX_DAYS) * 100);
   return (
-    <Panel title="เติมครั้งถัดไป" info="จำนวนวันที่คาดว่าเครดิตจะหมดและต้องเติมครั้งถัดไป (Runway) คำนวณจากเครดิตคงเหลือหารด้วยอัตราการใช้รายวัน">
+    <Panel title="เครดิตหมดใน" info="จำนวนวันที่คาดว่าเครดิตจะหมด (Runway) = เครดิตคงเหลือ ÷ การใช้ต่อวัน นับจากวันตัดข้อมูล">
       <p className="num text-lead font-semibold text-text">{formatDaysAhead(days)}</p>
       <p className="num text-small text-muted">ประมาณ {formatDate(cutoffMs + days * 86_400_000)}</p>
       <div aria-hidden className="relative mt-4 h-2 rounded-full bg-raised">
