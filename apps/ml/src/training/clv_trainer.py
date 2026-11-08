@@ -17,13 +17,11 @@ from catboost import CatBoostRegressor
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
 
 from src.training.baselines import ClvSegmentMeanBaseline, clv_carryover_scores
 from src.training.datasets import SplitFrame
 from src.training.metrics import (
     bootstrap_ci_regression,
-    clv_composite_score,
     clv_metrics,
     clv_p_pay_metrics,
 )
@@ -71,56 +69,13 @@ class TwoPartQuantileBundle:
 
 
 @dataclass
-class BgNbdBundle:
-    """Lightweight RFM summary predictor for p_alive health cuts."""
-
-    def predict_frame(self, rfm: pd.DataFrame) -> pd.DataFrame:
-        out = rfm[["acc_id"]].copy()
-        # Data-grounded health proxy from activity recency vs age
-        recency = pd.to_numeric(rfm.get("recency", 0), errors="coerce").fillna(0.0)
-        tenure = pd.to_numeric(rfm.get("T", 1), errors="coerce").fillna(1.0).clip(lower=1.0)
-        out["p_alive"] = np.clip(1.0 - (tenure - recency) / tenure, 0.05, 0.99)
-        out["predicted_clv"] = 0.0
-        return out
-
-
-@dataclass
 class ClvTrainResult:
-    bgnbd: BgNbdBundle
     twopart_bundle: TwoPartQuantileBundle
-    validation_composite: float
     validation_metrics: dict[str, float]
     test_metrics: dict[str, float]
     baseline_metrics: dict[str, dict[str, dict[str, float]]]
     preprocessor: PreprocessorConfig
     test_ci_json: dict[str, dict[str, float]] = field(default_factory=dict)
-    magnitude_slope: float = 1.0
-    magnitude_intercept: float = 0.0
-    p_alive_thresholds: dict[str, float] = field(default_factory=dict)
-
-
-def build_rfm_summary(payments: pd.DataFrame, acc_ids: pd.Series, cutoff: pd.Timestamp) -> pd.DataFrame:
-    """RFM summary from pre-cutoff payments."""
-    history = payments[
-        payments["acc_id"].notna()
-        & payments["payment_date"].notna()
-        & (payments["payment_date"] < cutoff)
-    ].copy()
-    history["acc_id"] = history["acc_id"].astype(int)
-    history["amount"] = pd.to_numeric(history["amount"], errors="coerce").fillna(0.0)
-    history["day"] = history["payment_date"].dt.normalize()
-
-    daily = history.groupby(["acc_id", "day"], as_index=False)["amount"].sum()
-    grouped = daily.groupby("acc_id")
-    first = grouped["day"].min()
-    last = grouped["day"].max()
-    counts = grouped["day"].count()
-
-    rfm = pd.DataFrame({"acc_id": pd.Series(sorted(set(acc_ids.astype(int))))})
-    rfm["frequency"] = rfm["acc_id"].map(counts - 1).fillna(0.0).clip(lower=0)
-    rfm["recency"] = rfm["acc_id"].map((last - first).dt.days).fillna(0.0)
-    rfm["T"] = rfm["acc_id"].map((cutoff.normalize() - first).dt.days).fillna(0.0).clip(lower=0)
-    return rfm
 
 
 def _fit_twopart_quantile(
@@ -188,7 +143,7 @@ def _evaluate_clv_split(
     x: pd.DataFrame,
     bundle: TwoPartQuantileBundle,
 ) -> dict[str, float]:
-    """Compute full CLV + P(pay) + range_coverage + composite metrics for a split."""
+    """Compute full CLV + P(pay) + range_coverage metrics for a split."""
     y_arr = np.asarray(y_true, dtype=float)
     pred = bundle.predict(x)
     metrics = clv_metrics(y_arr, pred)
@@ -206,15 +161,11 @@ def _evaluate_clv_split(
     else:
         metrics["range_coverage"] = 0.0
 
-    metrics["clv_composite"] = clv_composite_score(metrics)
     return metrics
 
 
 def train_clv(
     dataset: SplitFrame,
-    payments: pd.DataFrame,
-    cutoff: pd.Timestamp,
-    horizon_days: int,
     preprocessor: PreprocessorConfig,
     *,
     progress: Callable[[str], None] | None = None,
@@ -232,14 +183,14 @@ def train_clv(
     x_test = transform_features(dataset.features("test"), preprocessor)
 
     twopart_bundle, validation_metrics = _fit_twopart_quantile(x_train, y_train, x_val, y_val)
-    val_composite = validation_metrics["clv_composite"]
 
     test_metrics = _evaluate_clv_split(y_test.to_numpy(), x_test, twopart_bundle)
     test_ci_json = bootstrap_ci_regression(y_test.to_numpy(), twopart_bundle.predict(x_test))
 
     notify(
-        f"clv: val composite={val_composite:.4f} spearman={validation_metrics.get('spearman'):.4f} "
-        f"bias={validation_metrics.get('revenue_bias_ratio'):.4f}"
+        f"clv: val spearman_payers={validation_metrics.get('spearman_payers'):.4f} "
+        f"spearman={validation_metrics.get('spearman'):.4f} "
+        f"bias={validation_metrics.get('portfolio_bias_pct'):+.2f}%"
     )
 
     segment = ClvSegmentMeanBaseline().fit(dataset.features("train"), y_train)
@@ -254,21 +205,13 @@ def train_clv(
         },
     }
 
-    bgnbd = BgNbdBundle()
-    p_alive_thresholds = {"p_alive_at_risk": 0.20, "p_alive_watch": 0.50}
-
     return ClvTrainResult(
-        bgnbd=bgnbd,
         twopart_bundle=twopart_bundle,
-        validation_composite=val_composite,
         validation_metrics=validation_metrics,
         test_metrics=test_metrics,
         baseline_metrics=baseline_metrics,
         preprocessor=preprocessor,
         test_ci_json=test_ci_json,
-        magnitude_slope=1.0,
-        magnitude_intercept=0.0,
-        p_alive_thresholds=p_alive_thresholds,
     )
 
 

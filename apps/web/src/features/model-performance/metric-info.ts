@@ -101,14 +101,6 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     fmt: dec3,
     higherIsBetter: false,
   },
-  clv_composite: {
-    label: "CLV composite",
-    tooltip: "คะแนนรวม: Spearman + top-decile + portfolio bias + range coverage + p_pay ECE",
-    help: "คะแนนรวมคุณภาพ CLV — รวมการจัดอันดับมูลค่า, จับลูกค้ารายใหญ่, ยอดรวม portfolio, ช่วงมูลค่า และความน่าจะเป็นจ่าย — ใช้ตัดสิน promote",
-    goodRange: "> 0.70 ดี",
-    fmt: dec3,
-    higherIsBetter: true,
-  },
   p_pay_roc_auc: {
     label: "P(pay) ROC-AUC",
     tooltip: "แยกลูกค้าที่จะมีรายได้ใน 6 เดือนได้ดีแค่ไหน",
@@ -208,10 +200,18 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     fmt: pct1,
     higherIsBetter: true,
   },
+  spearman_30d: {
+    label: "Spearman (ยอดใช้ 30 วัน)",
+    tooltip: "ความแม่นยำในการจัดลำดับลูกค้าที่ใช้เครดิตมากไปน้อยใน 30 วันข้างหน้า",
+    help: "วัดว่าโมเดลเรียงลำดับลูกค้าที่จะใช้ SMS มากไปน้อยใน 30 วันข้างหน้าได้ตรงความจริงแค่ไหน — ไม่ถูกค่าเฉลี่ยของขาใหญ่ดึงหลอกเหมือน MAE",
+    goodRange: "เป้าหมาย > 0.75 (Colab 03)",
+    fmt: dec3,
+    higherIsBetter: true,
+  },
   mae_30d: {
-    label: "MAE 30d",
-    tooltip: "คลาดเคลื่อนของ p50 ที่ horizon 30 วัน (เครดิต)",
-    help: "เฉลี่ยว่าทายการใช้เครดิต 30 วันข้างหน้า (ค่ากลาง p50) คลาดเคลื่อนจากจริงกี่หน่วย",
+    label: "MAE 30 วัน (SMS)",
+    tooltip: "คลาดเคลื่อนเฉลี่ยของค่ากลาง p50 ที่ 30 วัน (หน่วย SMS)",
+    help: "เฉลี่ยว่าทายการใช้เครดิต 30 วันข้างหน้า (ค่ากลาง p50) คลาดเคลื่อนจากจริงกี่ข้อความ (มีหน่วยเป็นจำนวน SMS ซึ่งรวมองค์กรขนาดใหญ่ที่ส่งหลักแสน–ล้านข้อความ)",
     fmt: int,
     higherIsBetter: false,
   },
@@ -245,9 +245,9 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     higherIsBetter: true,
   },
   coverage_p10_p90_30d: {
-    label: "80% Coverage (30 วัน)",
-    tooltip: "ช่วง p10–p90 ครอบคลุมค่าจริง 30 วันกี่ % — เป้าหมาย 80–90% (Colab 03)",
-    help: "ความครอบคลุมของช่วงคาดการณ์ [p10, p90] ใน 30 วันข้างหน้า — หากอยู่ระหว่าง 80–90% แปลว่าช่วงความเชื่อมั่นแม่นยำตาม Colab 03",
+    label: "กรอบคาดการณ์ [p10–p90]",
+    tooltip: "ความแม่นยำของกรอบคาดการณ์ต่ำ–สูง [p10, p90] ใน 30 วัน — เป้าหมาย 80–90%",
+    help: "วัดว่ายอดใช้ SMS จริงใน 30 วันข้างหน้าตกอยู่ในกรอบคาดการณ์ [p10 (ขั้นต่ำ) ถึง p90 (ขั้นสูง)] กี่ % ของลูกค้าที่ยังเคลื่อนไหว — ค่าที่เหมาะสมที่สุดตามทฤษฎีคือ 80–90% (ต่ำกว่า 80% แปลว่ากรอบแคบไป, สูงกว่า 90% แปลว่าเผื่อกรอบกว้างเกินจริง)",
     goodRange: "เป้าหมาย 80–90% (Colab 03)",
     fmt: pct1,
     higherIsBetter: true,
@@ -305,6 +305,7 @@ const PRIMARY_LABEL_TO_KEY: Record<string, string> = {
   "ROC-AUC": "roc_auc",
   "Spearman (ผู้จ่ายเงิน)": "spearman_payers",
   "Portfolio bias": "portfolio_bias_pct",
+  "กรอบคาดการณ์ [p10–p90]": "coverage_p10_p90_30d",
   "80% Coverage (30 วัน)": "coverage_p10_p90_30d",
   "Coverage p10–p90": "coverage_p10_p90_30d",
   "CLV composite": "clv_composite",
@@ -313,7 +314,7 @@ const PRIMARY_LABEL_TO_KEY: Record<string, string> = {
 export const SECONDARY_METRICS: Record<string, string[]> = {
   churn: ["roc_auc", "pr_auc", "f2", "f1", "recall", "precision", "lift_at_top10pct", "ece"],
   clv: ["spearman_payers", "portfolio_bias_pct", "spearman", "mae", "top_decile_capture", "p_pay_roc_auc", "total_predicted", "total_actual"],
-  credit: ["coverage_p10_p90_30d", "mae_30d", "urgent_topup_f1", "urgent_topup_recall", "urgent_topup_precision", "mae_90d"],
+  credit: ["coverage_p10_p90_30d", "urgent_topup_f1", "spearman_30d", "urgent_topup_recall", "urgent_topup_precision", "mae_30d"],
 };
 
 const BASELINE_NAME_LABELS: Record<string, string> = {

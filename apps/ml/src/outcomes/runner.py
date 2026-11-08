@@ -466,7 +466,7 @@ def find_actuals_source() -> ActualsSource | None:
                     FROM predict_clean_payments
                     WHERE payment_date IS NOT NULL
                     UNION ALL
-                    SELECT source_id, make_date(year, month, 1) AS activity_date
+                    SELECT source_id, (make_date(year, month, 1) + INTERVAL '1 month - 1 day')::date AS activity_date
                     FROM predict_clean_usage
                     WHERE year IS NOT NULL AND month IS NOT NULL
                   ) events
@@ -591,6 +591,8 @@ def _load_outputs(prediction_run_id: str) -> pd.DataFrame:
                 SELECT acc_id,
                        churn_probability,
                        predicted_clv_6m,
+                       clv_pay_probability,
+                       clv_forecast_interval_json,
                        predicted_credit_usage_30d,
                        predicted_credit_usage_90d,
                        credit_forecast_interval_json
@@ -608,11 +610,13 @@ def _load_outputs(prediction_run_id: str) -> pd.DataFrame:
     for column in (
         "churn_probability",
         "predicted_clv_6m",
+        "clv_pay_probability",
         "predicted_credit_usage_30d",
         "predicted_credit_usage_90d",
     ):
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
 
+    frame["clv_forecast_interval_json"] = frame["clv_forecast_interval_json"].apply(_parse_json_cell)
     intervals = frame["credit_forecast_interval_json"].apply(_parse_json_cell)
     for key in ("p10_30d", "p90_30d", "p10_90d", "p90_90d"):
         frame[key] = pd.to_numeric(

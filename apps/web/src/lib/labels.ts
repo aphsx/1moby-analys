@@ -44,9 +44,9 @@ export const VALUE_TIER_LABEL = {
 } as const satisfies Record<ValueTier, string>;
 
 export const VALUE_TIER_HELP = {
-  high: "10% แรกของคาดจ่าย 6 เดือนข้างหน้าในรอบทำนายนี้",
-  mid: "อยู่ในช่วง 10–50% แรกของคาดจ่าย 6 เดือนข้างหน้า",
-  low: "ครึ่งล่างของคาดจ่าย 6 เดือนข้างหน้า",
+  high: "คาดจ่าย 6 เดือนข้างหน้าตั้งแต่ ฿10,000 ขึ้นไป (กลุ่ม Whale & Core)",
+  mid: "คาดจ่าย 6 เดือนข้างหน้า ฿1,000 – ฿10,000 (กลุ่ม Standard)",
+  low: "คาดจ่าย 6 เดือนข้างหน้าน้อยกว่า ฿1,000",
   none: "ยังไม่มีคาดจ่าย 6 เดือนข้างหน้า",
 } as const satisfies Record<ValueTier, string>;
 

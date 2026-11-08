@@ -517,67 +517,6 @@ def clv_p_pay_metrics(y_true: np.ndarray, p_pay: np.ndarray) -> dict[str, float]
     }
 
 
-def clv_composite_score(metrics: dict[str, float]) -> float:
-    """Multi-metric CLV quality score (higher is better).
-
-    Combines ranking (Spearman), business capture (top-decile), portfolio
-    calibration (revenue_bias_ratio → 1.0), value-range coverage, and p_pay ECE.
-    Used for promotion instead of Spearman alone.
-    """
-
-    spearman = float(metrics.get("spearman") or 0.0)
-    top10 = float(metrics.get("top_decile_capture") or 0.0)
-    bias = metrics.get("revenue_bias_ratio")
-    if bias is not None and float(bias) > 0:
-        bias_score = max(0.0, 1.0 - min(abs(float(np.log(float(bias)))), 1.0))
-    else:
-        bias_score = 0.0
-    coverage = float(metrics.get("range_coverage") or 0.0)
-    ece = metrics.get("p_pay_ece")
-    pay_score = max(0.0, 1.0 - float(ece)) if ece is not None and not np.isnan(float(ece)) else 0.85
-    return round(
-        0.35 * spearman + 0.25 * top10 + 0.20 * bias_score + 0.10 * coverage + 0.10 * pay_score,
-        4,
-    )
-
-
-def fit_clv_magnitude_calibration(
-    val_preds: np.ndarray,
-    val_actual: np.ndarray,
-    *,
-    min_slope: float = 0.01,
-) -> tuple[float, float]:
-    """Affine OLS magnitude calibration on validation.
-
-    Fitted on validation only; test never sees it. An increasing affine map
-    preserves Spearman ranking while correcting systematic scale bias for
-    ``revenue_at_risk``. Falls back to identity when data are insufficient or
-    the slope is non-positive (unstable champion / validation drift).
-  """
-
-    import logging
-
-    from sklearn.linear_model import LinearRegression
-
-    logger = logging.getLogger(__name__)
-    val_preds = np.asarray(val_preds, dtype=float)
-    val_actual = np.asarray(val_actual, dtype=float)
-    finite = np.isfinite(val_preds) & np.isfinite(val_actual)
-    if int(finite.sum()) < 2:
-        return 1.0, 0.0
-    lr = LinearRegression().fit(val_preds[finite].reshape(-1, 1), val_actual[finite])
-    slope = float(lr.coef_[0])
-    intercept = float(lr.intercept_)
-    if slope <= min_slope:
-        logger.warning(
-            "CLV magnitude calibration slope=%.4f <= %.4f; falling back to identity",
-            slope,
-            min_slope,
-        )
-        return 1.0, 0.0
-    return slope, intercept
-
-
 def rmsle(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Root Mean Squared Log Error — scale-invariant, penalises under-prediction less for zeros."""
     y_true = np.clip(np.asarray(y_true, dtype=float), 0.0, None)

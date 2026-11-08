@@ -64,11 +64,6 @@ _UNSET = object()  # sentinel — distinguishes "not supplied" from None in _upd
 TOPUP_CAP_DAYS = 365
 INSERT_CHUNK = 1000
 
-# CLV hybrid tail correction (REMEDIATION-PLAN P1). All relative/scale-free.
-CLV_TAIL_QUANTILE = 0.90  # only the top-decile whales may borrow the BG/NBD estimate
-CLV_TAIL_MIN_POPULATION = 50  # below this, percentile tail detection is unreliable
-CLV_TAIL_MIN_FREQUENCY = 2.0  # never blend single-payment customers
-
 
 def _features_for_bundle(frame: pd.DataFrame, bundle: dict[str, Any]) -> pd.DataFrame:
     feature_names = list(bundle["preprocessor"].feature_names)
@@ -348,15 +343,11 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
     # Shown on the run so a completed run with empty churn factors isn't a silent mystery.
     warnings = [f"Churn explanations unavailable: {shap_error}"] if shap_error else []
 
-    # ── CLV + p_alive ─────────────────────────────────────────────
+    # ── CLV (Two-Part Hurdle) ─────────────────────────────────────
     progress("clv model", 55)
     clv_bundle = champions["clv"]["bundle"]
     clv_features = _features_for_bundle(frame, clv_bundle)
-    frame = _apply_clv(frame, clv_bundle, clv_features, payments, cutoff)
-    # p_alive health cuts travel with the CLV model (derived from its validation
-    # distribution at training). Legacy artifacts have no thresholds → fall back
-    # to the fixed constants.
-    p_alive_cuts = _p_alive_cuts(clv_bundle.get("thresholds"))
+    frame = _apply_clv(frame, clv_bundle, clv_features)
 
     # ── Credit quantiles ─────────────────────────────────────────
     progress("credit model", 65)
@@ -369,7 +360,7 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
     frame = _apply_descriptive(frame, customers, payments, cutoff)
 
     # ── Derived business fields (§5) ──────────────────────────────
-    frame = _apply_derived(frame, cutoff, p_alive_cuts)
+    frame = _apply_derived(frame)
 
     model_versions = {
         model_type: champions[model_type]["version"] for model_type in champions
@@ -408,15 +399,6 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
 
 
 # ── Model application helpers ────────────────────────────────────
-
-
-def _p_alive_cuts(clv_thresholds: dict[str, float] | None) -> tuple[float, float]:
-    """(at_risk_cut, watch_cut) from the CLV artifact, else fixed fallbacks."""
-
-    thr = clv_thresholds or {}
-    at_risk = float(thr.get("p_alive_at_risk", DerivedThresholds.P_ALIVE_ATRISK_FALLBACK))
-    watch = float(thr.get("p_alive_watch", DerivedThresholds.P_ALIVE_WATCH_FALLBACK))
-    return at_risk, watch
 
 
 def _risk_level(probability: float, thresholds: dict[str, float]) -> str | None:
@@ -506,68 +488,18 @@ def _churn_shap_factors(
     return factors, None
 
 
-def _blend_clv_tail(
-    base_pred: np.ndarray,
-    *,
-    bg_clv: np.ndarray,
-    freq: np.ndarray,
-    revenue: np.ndarray,
-    tail_quantile: float = CLV_TAIL_QUANTILE,
-) -> np.ndarray:
-    """Lift the whale tail of a CLV point forecast with BG/NBD (serve-time).
-
-    Tree-based revenue models cannot extrapolate beyond training leaves, so they
-    under-predict whales. BG/NBD scales with monetary value (no ceiling), so for
-    the top-decile tail take the higher of the two. Kept tight (top decile)
-    because BG/NBD over-predicts the body.
-    """
-
-    if len(base_pred) < CLV_TAIL_MIN_POPULATION:
-        return base_pred
-
-    tail = np.zeros(len(base_pred), dtype=bool)
-    fok = freq[np.isfinite(freq)]
-    if fok.size:
-        cut = max(float(np.quantile(fok, tail_quantile)), CLV_TAIL_MIN_FREQUENCY)
-        tail |= np.nan_to_num(freq, nan=0.0) >= cut
-    rok = revenue[np.isfinite(revenue)]
-    if rok.size:
-        tail |= np.nan_to_num(revenue, nan=0.0) >= float(
-            np.quantile(rok, tail_quantile)
-        )
-
-    blended = base_pred.copy()
-    blended[tail] = np.maximum(base_pred[tail], bg_clv[tail])
-    return blended
-
-
 def _apply_clv(
     frame: pd.DataFrame,
     clv_bundle: dict[str, Any],
     features_raw: pd.DataFrame,
-    payments: pd.DataFrame,
-    cutoff: pd.Timestamp,
 ) -> pd.DataFrame:
-    from src.training.clv_trainer import build_rfm_summary
-
     model_object = clv_bundle["model"]
     clv_mask = frame["el_clv"].to_numpy()
     predicted = np.full(len(frame), np.nan)
-    p_alive = np.full(len(frame), np.nan)
     clv_pay_probability = np.full(len(frame), np.nan)
     clv_interval: list[dict[str, float] | None] = [None] * len(frame)
 
     if clv_mask.any():
-        eligible_acc = frame.loc[clv_mask, "acc_id"]
-        rfm = build_rfm_summary(payments, eligible_acc, cutoff)
-        bgnbd = model_object.get("bgnbd")
-        bg_pred = None
-        if bgnbd is not None:
-            bg_pred = bgnbd.predict_frame(rfm).set_index("acc_id")
-            p_alive[clv_mask] = (
-                eligible_acc.map(bg_pred["p_alive"]).fillna(np.nan).to_numpy()
-            )
-
         twopart = model_object.get("twopart")
         if twopart is None:
             champion = model_object.get("champion", "unknown")
@@ -577,44 +509,25 @@ def _apply_clv(
 
         xx = transform_features(features_raw[clv_mask], clv_bundle["preprocessor"])
         pp = np.clip(twopart.p_pay(xx), 0.0, 1.0)
-        v10 = twopart.value_quantile(xx, 0.10)
-        v50 = twopart.value_quantile(xx, 0.50)
-        v90 = twopart.value_quantile(xx, 0.90)
-        raw_expected = pp * v50
-        if bg_pred is not None:
-            tail_q = float(
-                clv_bundle.get("model_card", {}).get("clv_tail_quantile", CLV_TAIL_QUANTILE)
-            )
-            raw_expected = _blend_clv_tail(
-                raw_expected,
-                bg_clv=eligible_acc.map(bg_pred["predicted_clv"]).fillna(0.0).to_numpy(),
-                freq=pd.to_numeric(features_raw["payment_count_all"], errors="coerce")
-                .to_numpy()[clv_mask],
-                revenue=pd.to_numeric(features_raw["total_revenue_all"], errors="coerce")
-                .to_numpy()[clv_mask],
-                tail_quantile=tail_q,
-            )
-        mag_slope = float(model_object.get("magnitude_slope", 1.0))
-        mag_intercept = float(model_object.get("magnitude_intercept", 0.0))
-        expected = np.clip(mag_slope * raw_expected + mag_intercept, 0.0, None)
+        v10 = np.clip(twopart.value_quantile(xx, 0.10), 0.0, None)
+        v50 = np.clip(twopart.value_quantile(xx, 0.50), 0.0, None)
+        v90 = np.clip(twopart.value_quantile(xx, 0.90), 0.0, None)
+        v50 = np.maximum(v50, v10)
+        v90 = np.maximum(v90, v50)
+        expected = np.clip(pp * v50, 0.0, None)
+
         predicted[clv_mask] = expected
         clv_pay_probability[clv_mask] = pp
-        v10_cal = np.clip(mag_slope * v10, 0.0, None)
-        v50_cal = np.clip(mag_slope * v50, 0.0, None)
-        v90_cal = np.clip(mag_slope * v90, 0.0, None)
-        v50_cal = np.maximum(v50_cal, v10_cal)
-        v90_cal = np.maximum(v90_cal, v50_cal)
         for i, fp in enumerate(np.flatnonzero(clv_mask)):
             clv_interval[fp] = {
-                "p10": round(float(v10_cal[i]), 2),
-                "p50": round(float(v50_cal[i]), 2),
-                "p90": round(float(v90_cal[i]), 2),
+                "p10": round(float(v10[i]), 2),
+                "p50": round(float(v50[i]), 2),
+                "p90": round(float(v90[i]), 2),
             }
 
     frame["predicted_clv_6m"] = predicted
     frame["clv_pay_probability"] = np.clip(clv_pay_probability, 0.0, 1.0)
     frame["clv_forecast_interval"] = clv_interval
-    frame["p_alive"] = np.clip(p_alive, 0.0, 1.0)
     return frame
 
 
@@ -624,7 +537,6 @@ def _apply_credit(
     features_raw: pd.DataFrame,
 ) -> pd.DataFrame:
     horizons = credit_bundle["model"]["horizons"]
-    topup_model = credit_bundle["model"].get("topup_model")
     credit_mask = frame["el_credit"].to_numpy()
     columns = {
         "predicted_credit_usage_30d": np.nan,
@@ -648,10 +560,7 @@ def _apply_credit(
         q90 = horizons[90].predict_quantiles(
             x, credit_anchor_log(features_raw[credit_mask], 90)
         )
-        # The 30d and 90d quantiles come from independent heads, so a longer
-        # horizon can occasionally fall below a shorter one. Cumulative usage is
-        # non-decreasing in time, so enforce 90d >= 30d per quantile (cheap,
-        # removes the ~3% cross-horizon inversions seen in the audit).
+        # Cumulative usage is non-decreasing in time: enforce 90d >= 30d per quantile.
         p50_30 = np.asarray(q30[0.50], dtype=float)
         p10_30 = np.asarray(q30[0.10], dtype=float)
         p90_30 = np.asarray(q30[0.90], dtype=float)
@@ -663,17 +572,6 @@ def _apply_credit(
         frame.loc[credit_mask, "credit_p90_30d"] = p90_30
         frame.loc[credit_mask, "credit_p10_90d"] = np.maximum(q90[0.10], p10_30)
         frame.loc[credit_mask, "credit_p90_90d"] = np.maximum(q90[0.90], p90_30)
-        if topup_model is not None:
-            # Data-grounded depletion runway model (balance / predicted daily burn)
-            try:
-                days = topup_model.predict_days(features_raw[credit_mask], predicted_usage_30d=p50_30)
-            except TypeError:
-                days = topup_model.predict_days(features_raw[credit_mask])
-            except Exception:
-                days = topup_model.predict_days(x)
-            frame.loc[credit_mask, "estimated_days_until_topup"] = np.minimum(
-                np.ceil(days), TOPUP_CAP_DAYS
-            )
     return frame
 
 
@@ -777,13 +675,7 @@ def _apply_descriptive(
     return frame
 
 
-def _apply_derived(
-    frame: pd.DataFrame,
-    cutoff: pd.Timestamp,
-    p_alive_cuts: tuple[float, float],
-) -> pd.DataFrame:
-    at_risk_cut, watch_cut = p_alive_cuts
-
+def _apply_derived(frame: pd.DataFrame) -> pd.DataFrame:
     # ── Churn abstention (§3.4) ───────────────────────────────────
     # Active-Paid customers with too little history get a churn score driven by
     # zero-filled features, not real signal. Abstain: null the churn outputs and
@@ -799,38 +691,46 @@ def _apply_derived(
     if abstain.any():
         frame.loc[abstain, "churn_probability"] = np.nan
         frame.loc[abstain, "churn_risk_level"] = None
-        # object column of SHAP lists — rebuild elementwise (no .loc array-set).
         frame["churn_factors"] = [
             None if ab else factors
             for ab, factors in zip(abstain, frame["churn_factors"])
         ]
 
-    # value tier (§3.5): percentile of CLV among active customers of the run
+    # ── p_alive (aligned with Colab Churn & CLV Hurdle) ───────────
+    churn_prob = pd.to_numeric(frame["churn_probability"], errors="coerce")
+    clv_pay_prob = pd.to_numeric(frame["clv_pay_probability"], errors="coerce")
     active_mask = frame["lifecycle_stage"].isin(list(LifecycleStage.ACTIVE))
+    p_alive = np.where(
+        churn_prob.notna(),
+        1.0 - churn_prob,
+        np.where(active_mask & clv_pay_prob.notna(), clv_pay_prob, np.nan),
+    )
+    frame["p_alive"] = np.clip(p_alive, 0.0, 1.0)
+
+    # ── Value tier (§3.5): Colab 02 monetary THB tiers ────────────
     clv = pd.to_numeric(frame["predicted_clv_6m"], errors="coerce")
     tier = pd.Series(ValueTier.NONE, index=frame.index, dtype="object")
     pool = active_mask & clv.notna() & (clv > 0)
     if pool.any():
-        rank = clv[pool].rank(pct=True)
         tier.loc[pool] = np.select(
-            [rank >= DerivedThresholds.VALUE_TIER_HIGH_PCT, rank >= DerivedThresholds.VALUE_TIER_MID_PCT],
+            [
+                clv[pool] >= DerivedThresholds.VALUE_TIER_HIGH_THB,
+                clv[pool] >= DerivedThresholds.VALUE_TIER_MID_THB,
+            ],
             [ValueTier.HIGH, ValueTier.MID],
             default=ValueTier.LOW,
         )
     frame["customer_value_tier"] = tier
 
-    # revenue at risk (§5.1)
-    churn_prob = pd.to_numeric(frame["churn_probability"], errors="coerce")
+    # ── Revenue at risk (§5.1) ────────────────────────────────────
     frame["revenue_at_risk"] = np.where(
         churn_prob.notna() & clv.notna(), (churn_prob * clv).round(2), np.nan
     )
 
-    # estimated days until top-up (§3.6) — matching Colab 03 Depletion Runway:
-    # balance / (predicted_credit_usage_30d / 30). Uses profile snapshot balance
-    # (credit_balance_total) when positive, falling back to current_sms_balance proxy.
+    # ── Estimated days until top-up (§3.6): Colab 03 Depletion Runway ──
+    from src.training.credit_trainer import calculate_runway
+
     p50_30 = pd.to_numeric(frame["predicted_credit_usage_30d"], errors="coerce")
-    clean_p50_30 = np.where(p50_30 >= 10.0, p50_30, 0.0)
-    daily_burn = clean_p50_30 / 30.0
     snap_balance = pd.to_numeric(
         frame["credit_balance_total"], errors="coerce"
     ).fillna(0.0)
@@ -838,30 +738,35 @@ def _apply_derived(
         frame.get("current_sms_balance", 0.0), errors="coerce"
     ).fillna(0.0)
     credit_balance = np.where(snap_balance > 0, snap_balance, np.maximum(proxy_balance, 0.0))
-    heuristic_days = np.where(
-        daily_burn > 0,
-        np.minimum(np.ceil(credit_balance / daily_burn), TOPUP_CAP_DAYS),
-        np.nan,
-    )
-    frame["estimated_days_until_topup"] = heuristic_days
-    days = heuristic_days
+
+    credit_eligible = frame["el_credit"].to_numpy()
+    runway_days = np.full(len(frame), np.nan)
+    if credit_eligible.any():
+        raw_runway = calculate_runway(
+            credit_balance[credit_eligible],
+            p50_30.to_numpy()[credit_eligible],
+            max_days=float(TOPUP_CAP_DAYS),
+        )
+        # Customers with negligible burn (< 10 SMS/30d -> censor_days when balance > 0)
+        # have no active depletion deadline unless balance is already depleted.
+        active_burn = np.nan_to_num(p50_30.to_numpy()[credit_eligible], nan=0.0) >= 10.0
+        runway_days[credit_eligible] = np.where(
+            active_burn,
+            np.minimum(np.ceil(raw_runway), TOPUP_CAP_DAYS),
+            np.nan,
+        )
+    frame["estimated_days_until_topup"] = runway_days
 
     urgency = pd.Series([None] * len(frame), index=frame.index, dtype="object")
-    credit_eligible = frame["el_credit"]
     urgency.loc[credit_eligible] = UrgencyLevel.STABLE
-    with_days = credit_eligible & pd.Series(days, index=frame.index).notna()
-    days_series = pd.Series(days, index=frame.index)
+    days_series = pd.Series(runway_days, index=frame.index)
+    with_days = frame["el_credit"] & days_series.notna()
     urgency.loc[with_days & (days_series <= DerivedThresholds.URGENCY_MONITOR_DAYS)] = UrgencyLevel.MONITOR
     urgency.loc[with_days & (days_series <= DerivedThresholds.URGENCY_WARNING_DAYS)] = UrgencyLevel.WARNING
     urgency.loc[with_days & (days_series <= DerivedThresholds.URGENCY_CRITICAL_DAYS)] = UrgencyLevel.CRITICAL
     frame["credit_urgency_level"] = urgency
 
-    # priority score (§5.2) — rank by expected money at risk. revenue_at_risk
-    # (= churn × CLV) is the ranking key; the 0..100 priority_score is just a
-    # log rescale of it for display, so sorting by priority_score equals sorting
-    # by revenue_at_risk. No text reason is generated here — the numeric score is
-    # the only priority signal; any human-readable "why" is produced by the AI
-    # explanation from the underlying numbers/SHAP factors.
+    # ── Priority score (§5.2) ─────────────────────────────────────
     var = (
         pd.to_numeric(frame["revenue_at_risk"], errors="coerce")
         .fillna(0.0)
@@ -869,13 +774,8 @@ def _apply_derived(
     )
     frame["priority_score"] = _display_score(var)
 
-    # needs_review (§5.3) — surface the churn/p_alive disagreement. A valuable
-    # customer whose recent usage has collapsed and whose p_alive is near zero
-    # is at risk even when the churn score is low (it leans on long payment
-    # history). Flag = high churn risk OR (valuable AND p_alive low AND usage
-    # declining), so a human looks before we treat the low churn score as safe.
+    # ── needs_review (§5.3) ───────────────────────────────────────
     risk_level = frame["churn_risk_level"].astype("object")
-    p_alive = pd.to_numeric(frame["p_alive"], errors="coerce")
     usage_change = (
         pd.to_numeric(frame["usage_trend_pct"], errors="coerce")
         if "usage_trend_pct" in frame
@@ -885,27 +785,19 @@ def _apply_derived(
     ).fillna(0.0)
     valuable = frame["customer_value_tier"].isin([ValueTier.HIGH, ValueTier.MID])
     churn_at_risk = risk_level.isin([RiskLevel.HIGH, RiskLevel.CRITICAL])
-    silent_decline = (
-        valuable & (usage_change < -DerivedThresholds.MOMENTUM_BAND)
-    )
+    silent_decline = valuable & (usage_change < -DerivedThresholds.MOMENTUM_BAND)
     needs_review = (churn_at_risk | silent_decline) & active_mask
     frame["needs_review"] = needs_review.fillna(False).astype(bool)
 
-    frame = _apply_segments(frame, p_alive_cuts)
+    frame = _apply_segments(frame)
     return frame
 
 
-# Prioritization segments — value × health + sales-timing, see
-# Segment spec (historical: docs/CUSTOMER-SEGMENTS.md, removed). Names/order are the single source in src/constants.
-
-
-def _apply_segments(frame: pd.DataFrame, p_alive_cuts: tuple[float, float]) -> pd.DataFrame:
+def _apply_segments(frame: pd.DataFrame) -> pd.DataFrame:
     """Assign a descriptive segment + a global priority_rank per customer (§5.4)."""
 
-    at_risk_cut, watch_cut = p_alive_cuts
     tier = frame["customer_value_tier"]
     risk = frame["churn_risk_level"].astype("object")
-    p_alive = pd.to_numeric(frame["p_alive"], errors="coerce")
     change = (
         pd.to_numeric(frame["usage_trend_pct"], errors="coerce")
         if "usage_trend_pct" in frame

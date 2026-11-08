@@ -22,8 +22,8 @@ const COLAB_TARGET: Record<string, { target: string; note: string }> = {
     note: "Two-Part Hurdle + Portfolio Multiplier กำจัดอคติยอดเงิน",
   },
   credit: {
-    target: "80% Coverage 80–90% · MAE 30 วันแม่นยำ",
-    note: "LightGBM Quantile (p10, p50, p90) + Depletion Runway",
+    target: "กรอบคาดการณ์ [p10–p90] 80–90% · Urgent Top-up F1 > 0.65 · Spearman > 0.75",
+    note: "LightGBM Quantile (60:40 Anchor Blend) + Depletion Runway (ตัด Noise < 10 SMS)",
   },
 };
 import {

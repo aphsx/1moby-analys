@@ -110,7 +110,7 @@ def _run_training_inner(training_run_id: str) -> None:
     # ── 4. Train CLV Model (Two-Part Hurdle) ───────────────────────
     progress("train clv (Two-Part Hurdle)", 65)
     results.append(
-        _train_and_register_clv(training_run_id, datasets, payments, horizon_days, created_by, progress)
+        _train_and_register_clv(training_run_id, datasets, horizon_days, created_by, progress)
     )
 
     # ── 5. Train Credit Model (Quantile + Runway) ──────────────────
@@ -281,7 +281,6 @@ def _train_and_register_churn(
 def _train_and_register_clv(
     training_run_id: str,
     datasets: CutoffDatasets,
-    payments: pd.DataFrame,
     horizon_days: int,
     created_by: str | None,
     progress: Callable[[str, int], None],
@@ -291,7 +290,7 @@ def _train_and_register_clv(
         dataset.features("train"), _feature_schema_for_dataset(datasets, dataset)
     )
     result = train_clv(
-        dataset, payments, datasets.cutoff_date, horizon_days, preprocessor,
+        dataset, preprocessor,
         progress=lambda m: logger.info(m),
     )
 
@@ -333,18 +332,15 @@ def _train_and_register_clv(
             "p_pay_ece": result.test_metrics.get("p_pay_ece"),
         },
         "test_ci": result.test_ci_json,
-        "limitations": "CLV เป็น forecast 180 วัน",
+        "limitations": "CLV เป็น forecast 180 วัน สำหรับกลุ่มลูกค้าที่ยังมีความเคลื่อนไหวภายใน 180 วัน",
         "trained_by": created_by,
     }
 
     model_object = {
         "kind": "clv_bundle",
         "champion": CLV_CHAMPION,
-        "bgnbd": result.bgnbd,
         "twopart": result.twopart_bundle,
         "horizon_days": horizon_days,
-        "magnitude_slope": result.magnitude_slope,
-        "magnitude_intercept": result.magnitude_intercept,
     }
 
     artifact_path, checksum = save_artifacts(
@@ -472,7 +468,7 @@ def _train_and_register_credit(
             "urgent_topup_recall_test": result.test_metrics.get("urgent_topup_recall"),
         },
         "primary_metric": {
-            "name": "80% Coverage (30 วัน)",
+            "name": "กรอบคาดการณ์ [p10–p90]",
             "value": result.test_metrics.get("coverage_p10_p90_30d", coverage),
             "baseline": 0.80,
             "baseline_name": "target_80pct",
@@ -555,7 +551,7 @@ def _train_and_register_credit(
 
     return {
         "model_type": "credit",
-        "primary_metric_name": "80% Coverage (30 วัน)",
+        "primary_metric_name": "กรอบคาดการณ์ [p10–p90]",
         "primary_metric_value": result.test_metrics.get("coverage_p10_p90_30d", coverage),
         "baseline_name": "target_80pct",
         "baseline_value": 0.80,

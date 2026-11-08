@@ -12,12 +12,12 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy.stats import spearmanr
 from sklearn.metrics import mean_absolute_error
 
 from src.training.metrics import (
     calibration_curve_points,
     churn_metrics,
-    clv_composite_score,
     clv_metrics,
     clv_p_pay_metrics,
     confusion_at_threshold,
@@ -80,7 +80,6 @@ def realized_clv_metrics(
                 ),
                 4,
             )
-    metrics["clv_composite"] = clv_composite_score(metrics)
     return round_metrics(metrics)
 
 
@@ -101,6 +100,8 @@ def realized_credit_metrics(frames: dict[int, pd.DataFrame]) -> dict[str, float]
     for horizon_days, frame in sorted(frames.items()):
         y_true = frame["y_true"].to_numpy(dtype=float)
         p50 = frame["p50"].to_numpy(dtype=float)
+        sp = spearmanr(y_true, p50).statistic if len(y_true) > 2 else 0.0
+        metrics[f"spearman_{horizon_days}d"] = float(0.0 if np.isnan(sp) else sp)
         metrics[f"mae_{horizon_days}d"] = float(mean_absolute_error(y_true, p50))
         metrics[f"smape_{horizon_days}d"] = smape(y_true, p50)
         metrics[f"pinball_p50_{horizon_days}d"] = pinball_loss(y_true, p50, 0.50)

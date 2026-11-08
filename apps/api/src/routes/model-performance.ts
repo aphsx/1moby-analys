@@ -36,7 +36,7 @@ import { assertNotUsedByPredictions, predictionRunsUsingVersion } from "../lib/m
 const PRIMARY_METRIC: Record<ModelType, { key: string; name: string }> = {
   churn: { key: "pr_auc", name: "PR-AUC" },
   clv: { key: "spearman_payers", name: "Spearman (ผู้จ่ายเงิน)" },
-  credit: { key: "coverage_p10_p90_30d", name: "80% Coverage (30 วัน)" },
+  credit: { key: "coverage_p10_p90_30d", name: "กรอบคาดการณ์ [p10–p90]" },
 };
 
 /** Credit coverage target floor matching Colab 03 is 80%. */
@@ -46,26 +46,10 @@ function isModelType(value: string): value is ModelType {
   return (MODEL_TYPES as readonly string[]).includes(value);
 }
 
-const LIFECYCLE_ENTRY: ModelPerfEntry = {
-  model_type: "lifecycle",
-  method: "Rule-based classification",
-  algorithm: "Deterministic rules (features.py)",
-  version: null,
-  trained_at: null,
-  cutoff_date: null,
-  dataset_rows: null,
-  feature_set: null,
-  primary_metric: { name: "Rule coverage", value: "100%" },
-  splits: [],
-  baselines: [],
-  notes: "ไม่ใช่โมเดล ML — กติกาแบ่ง Ghost / Churned / Active Free / Active Paid จากข้อมูลจริง",
-};
-
 interface SelectionEntry {
   candidate?: string;
   cv_pr_auc?: number;
   test_pr_auc?: number;
-  test_clv_composite?: number;
   test_coverage_p10_p90?: number;
   gate_passed?: boolean;
   reason?: string;
@@ -87,7 +71,6 @@ interface ModelCard {
   // Candidate competition snapshots (present per model type that runs one).
   candidate_competition_cv_pr_auc?: Record<string, number>;
   candidate_competition_val_spearman?: Record<string, number>;
-  candidate_competition_val_composite?: Record<string, number>;
   component_metrics?: Record<string, number>;
   candidate_selection?: SelectionEntry[];
 }
@@ -95,7 +78,7 @@ interface ModelCard {
 /** Test holdout score from the training run's candidate_selection log. */
 function selectionTestScore(entry: SelectionEntry | undefined): number | null {
   if (!entry) return null;
-  for (const key of ["test_pr_auc", "test_clv_composite", "test_coverage_p10_p90"] as const) {
+  for (const key of ["test_pr_auc", "test_coverage_p10_p90"] as const) {
     const value = entry[key];
     if (typeof value === "number" && Number.isFinite(value)) return value;
   }
@@ -105,11 +88,10 @@ function selectionTestScore(entry: SelectionEntry | undefined): number | null {
 /** Rebuild the candidate competition (ranked, champion-flagged) from a card. */
 function buildCompetition(card: ModelCard): CandidateResult[] | undefined {
   const churn = card.candidate_competition_cv_pr_auc;
-  const clv =
-    card.candidate_competition_val_composite ?? card.candidate_competition_val_spearman;
+  const clv = card.candidate_competition_val_spearman;
   const scores = churn ?? clv;
   if (!scores || Object.keys(scores).length === 0) return undefined;
-  const cvMetric = churn ? "CV PR-AUC" : clv === card.candidate_competition_val_composite ? "Val composite" : "Val Spearman";
+  const cvMetric = churn ? "CV PR-AUC" : "Val Spearman";
 
   const selection = new Map<string, SelectionEntry>();
   for (const entry of card.candidate_selection ?? []) {
