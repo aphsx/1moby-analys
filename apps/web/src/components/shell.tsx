@@ -69,11 +69,21 @@ export default function Shell({ children }: { children: ReactNode }) {
             </button>
             {title ? <span className="min-w-0 truncate text-body font-semibold text-text">{title}</span> : null}
           </header>
-          <main className="flex-1 overflow-y-auto">
+          <main
+            className={
+              aiChat
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                : "flex-1 overflow-y-auto"
+            }
+          >
             {shellRendersPageHeader(pathname) && title ? (
               <PageHeader title={title} scope={showRunSelector ? <RunScope /> : undefined} />
             ) : null}
-            <Suspense fallback={<div className="p-8 text-muted">กำลังโหลด…</div>}>{children}</Suspense>
+            <Suspense
+              fallback={<div className="p-8 text-muted">กำลังโหลด…</div>}
+            >
+              {aiChat ? <div className="min-h-0 flex-1">{children}</div> : children}
+            </Suspense>
           </main>
         </div>
         {!aiChat && <AIChatWidget />}

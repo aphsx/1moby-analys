@@ -25,9 +25,9 @@ function RunBadge({ name }: { name: string }) {
   return (
     <span
       title={`ผูกกับ run: ${name}`}
-      className="inline-flex max-w-[120px] items-center gap-1 truncate rounded-full bg-accent-soft px-1.5 py-0.5 text-micro font-medium text-accent"
+      className="inline-flex max-w-[120px] items-center gap-1 truncate rounded-full bg-accent-soft px-1.5 py-0.5 text-micro font-medium text-accent-ink"
     >
-      <Target size={9} className="shrink-0" />
+      <Target size={9} className="shrink-0 text-accent" />
       <span className="truncate">{name}</span>
     </span>
   );
@@ -61,15 +61,15 @@ function ConversationItem({
   return (
     <div
       className={[
-        "group flex min-w-0 cursor-pointer flex-col gap-1 rounded-control px-3 py-2.5 transition-colors",
+        "group flex min-w-0 cursor-pointer flex-col gap-1 rounded-control px-3 py-2 transition-colors",
         active
-          ? "bg-accent-soft text-accent"
+          ? "bg-accent-soft text-accent-ink"
           : "text-text hover:bg-raised",
       ].join(" ")}
       onClick={editing ? undefined : onSelect}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <MessageSquare size={13} className={active ? "shrink-0 text-accent" : "shrink-0 opacity-50"} />
+        <MessageSquare size={13} strokeWidth={1.5} className={active ? "shrink-0 text-accent" : "shrink-0 text-faint"} />
         {editing ? (
           <input
             ref={inputRef}
@@ -147,7 +147,7 @@ function Sidebar({
   }, [conversations, showArchived, query]);
 
   return (
-    <aside className={`absolute inset-y-0 left-0 z-40 flex h-full w-[min(86vw,280px)] shrink-0 flex-col border-r border-border bg-ground transition-transform duration-200 md:static md:z-auto md:w-[240px] md:translate-x-0 md:shadow-none ${
+    <aside className={`absolute inset-y-0 left-0 z-40 flex h-full w-[min(86vw,280px)] shrink-0 flex-col border-r border-border bg-ground transition-transform duration-200 md:static md:z-auto md:w-[232px] md:translate-x-0 ${
       mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
     }`}>
       <div className="space-y-2 p-3">
@@ -169,13 +169,14 @@ function Sidebar({
         />
 
         <button
+          type="button"
           onClick={() => {
             createConversation();
             onClose?.();
           }}
-          className="flex w-full items-center justify-center gap-2 rounded-control bg-accent px-3 py-2.5 text-small font-semibold text-white transition-colors hover:bg-accent active:scale-[0.98]"
+          className={`w-full ${BUTTON.primary}`}
         >
-          <Plus size={14} /> แชทใหม่
+          <Plus size={14} strokeWidth={1.5} /> แชทใหม่
         </button>
 
         <div className="relative">
@@ -184,7 +185,7 @@ function Sidebar({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ค้นหาแชท…"
-            className="h-8 w-full rounded-lg border border-border bg-surface pl-7 pr-2 text-micro text-text outline-none placeholder:text-faint focus:border-accent-track"
+            className="h-8 w-full rounded-control border border-control bg-surface pl-7 pr-2 text-micro text-text outline-none placeholder:text-faint focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           />
         </div>
       </div>
@@ -235,56 +236,57 @@ function EvidencePanel({ evidence }: { evidence: ChatEvidence }) {
   if (!hasData) return null;
 
   return (
-    <div className="mt-2 overflow-hidden rounded-control border border-border bg-[#f8fafc]">
+    <div className="mt-2 overflow-hidden rounded-control border border-border bg-raised">
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-micro text-muted transition-colors hover:bg-raised"
+        className="flex w-full items-center gap-2 px-3 py-2 text-micro text-muted transition-colors hover:bg-surface"
       >
-        <Database size={11} className="shrink-0 text-accent" />
-        <span className="flex-1 text-left font-medium">
+        <Database size={11} strokeWidth={1.5} className="shrink-0 text-accent" />
+        <span className="flex-1 text-left font-medium text-text">
           {evidence.mode === "text_to_sql"
-            ? `SQL · ${evidence.row_count} row${evidence.row_count !== 1 ? "s" : ""}`
+            ? `SQL · ${evidence.row_count} แถว`
             : "ตอบโดยตรง"}
         </span>
         {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
       </button>
       {open && (
-        <div className="space-y-2 border-t border-border p-3">
+        <div className="space-y-2 border-t border-border bg-surface p-3">
           {evidence.sql && (
             <div>
-              <p className="mb-1 text-micro font-semibold text-faint">SQL</p>
+              <p className="mb-1 text-micro text-muted">SQL</p>
               <pre className="overflow-x-auto rounded-control bg-raised p-3 text-micro leading-relaxed text-text">
                 <code>{evidence.sql}</code>
               </pre>
             </div>
           )}
           {evidence.warnings.length > 0 && (
-            <div className="flex items-start gap-2 rounded-lg border border-border bg-[var(--pill-warning-bg)] px-3 py-2">
+            <div className="flex items-start gap-2 rounded-control border border-border bg-[var(--pill-warning-bg)] px-3 py-2">
               <AlertCircle size={12} className="mt-0.5 shrink-0 text-warning" />
               <p className="text-micro text-warning">{evidence.warnings.join(" · ")}</p>
             </div>
           )}
           {evidence.row_count > 0 && evidence.columns.length > 0 && (
             <div>
-              <p className="mb-1 text-micro font-semibold text-faint">
-                Result · {evidence.row_count} rows
+              <p className="mb-1 text-micro text-muted">
+                ผลลัพธ์ · {evidence.row_count} แถว
               </p>
-              <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="min-w-full text-micro">
-                  <thead className="bg-raised">
+              <div className="overflow-x-auto rounded-control border border-border">
+                <table className="data-table min-w-full text-micro">
+                  <thead>
                     <tr>
                       {evidence.columns.map((col) => (
-                        <th key={col} className="border-b border-border px-2 py-1.5 text-left font-semibold text-text">
+                        <th key={col} className="!h-9 !px-2 text-left">
                           {col}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-rule">
+                  <tbody>
                     {(evidence.rows as Record<string, unknown>[]).slice(0, 20).map((row, ri) => (
-                      <tr key={ri} className="hover:bg-raised">
+                      <tr key={ri}>
                         {evidence.columns.map((col) => (
-                          <td key={col} className="px-2 py-1.5 text-muted">
+                          <td key={col} className="!h-9 !px-2 text-muted">
                             {String(row[col] ?? "")}
                           </td>
                         ))}
@@ -293,8 +295,8 @@ function EvidencePanel({ evidence }: { evidence: ChatEvidence }) {
                   </tbody>
                 </table>
                 {evidence.row_count > 20 && (
-                  <p className="px-3 py-1.5 text-micro text-faint">
-                    + {evidence.row_count - 20} more rows
+                  <p className="border-t border-rule px-3 py-1.5 text-micro text-faint">
+                    + {evidence.row_count - 20} แถวถัดไป
                   </p>
                 )}
               </div>
@@ -309,8 +311,8 @@ function EvidencePanel({ evidence }: { evidence: ChatEvidence }) {
 // ── Thinking + bubbles ─────────────────────────────────────────────────────────
 function AssistantAvatar() {
   return (
-    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent">
-      <Bot size={13} className="text-white" />
+    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent-soft">
+      <Bot size={14} strokeWidth={1.5} className="text-accent" />
     </div>
   );
 }
@@ -318,10 +320,10 @@ function AssistantAvatar() {
 function ThinkingBubble({ message }: { message: string }) {
   return (
     <div className="flex min-w-0 gap-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent">
-        <Loader2 size={15} className="animate-spin text-white" />
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent-soft">
+        <Loader2 size={14} strokeWidth={1.5} className="animate-spin text-accent" />
       </div>
-      <div className="flex items-center gap-2 rounded-card rounded-tl-sm border border-border bg-surface px-4 py-3">
+      <div className="flex items-center gap-2 rounded-card border border-border bg-surface px-4 py-3">
         <span className="text-micro text-muted">{message}</span>
         <TypingDots />
       </div>
@@ -348,22 +350,22 @@ function EmptyState({ onPrompt, runName }: { onPrompt: (p: string) => void; runN
         "ลูกค้า priority สูงสุด 10 อันดับ",
       ];
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6">
-      <div className="flex h-16 w-16 items-center justify-center rounded-card bg-accent">
-        <Bot size={28} className="text-white" />
-      </div>
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-10">
       <div className="text-center">
-        <h2 className="text-[17px] font-semibold text-text">Moby AI</h2>
-        <p className="mt-1 text-small text-muted">
-          {runName ? `ถามข้อมูลของ run “${runName}” ได้เลย` : "ถามข้อมูล analytics จากฐานข้อมูลได้เลย"}
+        <h2 className="text-section font-semibold text-text">ผู้ช่วย AI</h2>
+        <p className="mt-1 max-w-[48ch] text-small text-muted">
+          {runName
+            ? `ถามข้อมูลของรอบ “${runName}” ได้เลย`
+            : "ถามข้อมูลลูกค้าและการทำนายจากฐานข้อมูลได้เลย"}
         </p>
       </div>
-      <div className="grid w-full max-w-md grid-cols-2 gap-2">
+      <div className="grid w-full max-w-lg grid-cols-1 gap-2 sm:grid-cols-2">
         {prompts.map((p) => (
           <button
             key={p}
+            type="button"
             onClick={() => onPrompt(p)}
-            className="rounded-control border border-border bg-surface px-3 py-2.5 text-left text-micro text-text transition-colors hover:border-accent-track hover:bg-accent-soft hover:text-accent"
+            className="rounded-control border border-border bg-surface px-3 py-2.5 text-left text-micro text-text transition-colors hover:bg-raised"
           >
             {p}
           </button>
@@ -450,7 +452,7 @@ export function AIChatView() {
       {chatSidebarOpen && (
         <button
           type="button"
-          className="absolute inset-0 z-30 bg-black/30 md:hidden"
+          className="absolute inset-0 z-30 bg-text/20 md:hidden"
           onClick={() => setChatSidebarOpen(false)}
           aria-label="ปิดรายการสนทนา"
         />
@@ -458,66 +460,67 @@ export function AIChatView() {
       <Sidebar runs={runs} mobileOpen={chatSidebarOpen} onClose={() => setChatSidebarOpen(false)} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface">
-        <header className="flex shrink-0 items-center gap-3 border-b border-border bg-surface px-5 py-3">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5">
           <button
             type="button"
             onClick={() => setChatSidebarOpen(true)}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-text hover:bg-raised md:hidden"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-text hover:bg-raised md:hidden"
             aria-label="เปิดรายการสนทนา"
             aria-expanded={chatSidebarOpen}
           >
-            <Menu size={16} />
+            <Menu size={16} strokeWidth={1.5} />
           </button>
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent">
-              <Bot size={14} className="text-white" />
+            <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent-soft sm:flex">
+              <Bot size={14} strokeWidth={1.5} className="text-accent" />
             </div>
             <div className="min-w-0">
               <h2 className="truncate text-body font-semibold text-text">
-                {activeConv?.title ?? "Moby AI"}
+                {activeConv?.title ?? "ผู้ช่วย AI"}
               </h2>
               <p className="truncate text-micro text-faint">{statusLine}</p>
             </div>
           </div>
           {sending && (
             <button
+              type="button"
               onClick={cancel}
-              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-micro text-text hover:bg-raised"
+              className={BUTTON.secondary}
             >
               <X size={12} /> หยุด
             </button>
           )}
         </header>
 
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#f8fafc] px-4 py-4">
-          <div className="mx-auto w-full max-w-3xl">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-ground px-4 py-5 sm:px-6">
+          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col">
             {!activeId ? (
               <NoConversation onCreate={() => createConversation()} />
             ) : !showMessages ? (
               <EmptyState onPrompt={(p) => handleSend(p)} runName={activeConv?.run_name ?? null} />
             ) : (
-              <div className="space-y-5">
+              <div className="space-y-5 pb-2">
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex min-w-0 gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                     {msg.role === "assistant" ? (
                       <AssistantAvatar />
                     ) : (
                       <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-control border border-border bg-surface">
-                        <User size={13} className="text-muted" />
+                        <User size={13} strokeWidth={1.5} className="text-muted" />
                       </div>
                     )}
-                    <div className={["flex min-w-0 flex-col gap-1 max-w-[min(80%,48rem)]", msg.role === "user" ? "items-end" : "items-start"].join(" ")}>
+                    <div className={["flex min-w-0 max-w-[min(80%,48rem)] flex-col gap-1", msg.role === "user" ? "items-end" : "items-start"].join(" ")}>
                       <span className="px-1 text-micro text-faint">
-                        {msg.role === "assistant" ? "Moby AI" : "คุณ"} · {formatTime(msg.ts)}
+                        {msg.role === "assistant" ? "ผู้ช่วย AI" : "คุณ"} · {formatTime(msg.ts)}
                       </span>
                       <div
                         className={[
                           "min-w-0 rounded-card px-4 py-3 text-small leading-relaxed",
                           msg.role === "user"
-                            ? "rounded-tr-sm bg-accent text-white"
+                            ? "bg-primary text-primary-ink"
                             : msg.error
-                              ? "rounded-tl-sm border border-border bg-[var(--pill-negative-bg)] text-negative"
-                              : "rounded-tl-sm border border-border bg-surface text-text",
+                              ? "border border-border bg-[var(--pill-negative-bg)] text-negative"
+                              : "border border-border bg-surface text-text",
                         ].join(" ")}
                       >
                         {msg.role === "user" ? (
@@ -535,13 +538,12 @@ export function AIChatView() {
                   </div>
                 ))}
 
-                {/* Streaming assistant bubble (committed once on done) */}
                 {streaming && streaming.content && (
                   <div className="flex min-w-0 gap-3">
                     <AssistantAvatar />
                     <div className="flex min-w-0 max-w-[min(80%,48rem)] flex-col items-start gap-1">
-                      <span className="px-1 text-micro text-faint">Moby AI</span>
-                      <div className="min-w-0 rounded-card rounded-tl-sm border border-border bg-surface px-4 py-3 text-small leading-relaxed text-text">
+                      <span className="px-1 text-micro text-faint">ผู้ช่วย AI</span>
+                      <div className="min-w-0 rounded-card border border-border bg-surface px-4 py-3 text-small leading-relaxed text-text">
                         <MarkdownLite text={streaming.content} strongClassName="font-semibold text-text" />
                         <span className="ml-0.5 inline-block h-3.5 w-0.5 rounded-full bg-accent" />
                       </div>
@@ -549,7 +551,6 @@ export function AIChatView() {
                   </div>
                 )}
 
-                {/* Thinking (planner / sql / answer) */}
                 {thinkingStep && <ThinkingBubble message={thinkingStep.message} />}
                 {sending && !thinkingStep && !streaming?.content && <ThinkingBubble message="กำลังวิเคราะห์…" />}
               </div>
@@ -557,9 +558,9 @@ export function AIChatView() {
           </div>
         </div>
 
-        <footer className="shrink-0 border-t border-border bg-surface px-4 py-3">
+        <footer className="shrink-0 border-t border-border bg-surface px-4 py-3 sm:px-6">
           <div className="mx-auto w-full max-w-3xl">
-            <div className="flex items-end gap-3 rounded-card border border-border bg-surface px-4 py-3 transition-colors focus-within:ring-1 focus-within:ring-accent-track">
+            <div className="flex items-end gap-2 rounded-control border border-control bg-surface px-3 py-2 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -572,20 +573,22 @@ export function AIChatView() {
                 style={{ overflowY: "auto" }}
               />
               <button
+                type="button"
                 onClick={() => handleSend()}
                 disabled={!input.trim() || sending}
+                aria-label="ส่งข้อความ"
                 className={[
-                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-control transition-[background-color,transform]",
+                  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-control transition-colors",
                   input.trim() && !sending
-                    ? "bg-accent text-white hover:bg-accent active:scale-95"
+                    ? "bg-primary text-primary-ink hover:opacity-90"
                     : "cursor-not-allowed bg-raised text-faint",
                 ].join(" ")}
               >
-                <Send size={14} />
+                <Send size={14} strokeWidth={1.5} />
               </button>
             </div>
             <p className="mt-1.5 text-center text-micro text-faint">
-              Moby AI อาจผิดพลาด — ตรวจสอบข้อมูลสำคัญเสมอ
+              ผู้ช่วย AI อาจผิดพลาด — ตรวจสอบข้อมูลสำคัญเสมอ
             </p>
           </div>
         </footer>
