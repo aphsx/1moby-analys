@@ -427,34 +427,27 @@ $$
 
 ---
 
-## 8. เทียบกับโค้ดตอนนี้ (สิ่งที่ "มั่ว")
+## 8. สรุปผลการแก้ไขและการตรวจสอบความถูกต้องในระบบปัจจุบัน (Resolved System Verification)
 
-| # | ประเด็น | ตอนนี้ | ควรเป็น | ระดับ |
-|---|---|---|---|---|
-| 1 | SMS OTP = สำเนาของ API (ในไฟล์ตัวอย่าง) | แค่เตือนใน `validation.py` แต่ยัง**นับซ้ำ**ใน feature และ label | ถ้าเจอว่าซ้ำทุกแถว ให้ตัดชีตที่ซ้ำออกตอน clean (ยังแยกชีตไว้เหมือนเดิมเผื่อข้อมูลจริง) | 🔴 |
-| 2 | Credit label รวม SMS + Email | `_future_usage_sum` ใน `labels.py` ไม่กรอง channel | แยก label ตาม channel | 🔴 |
-| 3 | `credit_balance_total` | `credit_sms + credit_email` (`prediction/runner.py:751`) | แยกกัน; email ต้องตัดค่าเริ่มต้น 2000 ออก | 🔴 |
-| 4 | Credit feature (`credit_added_180d`, `balance_proxy`) | รวม `credit_add` ทุก `credit_type` และ usage ทุก channel | กรองให้ตรง channel | 🔴 |
-| 5 | `credit_balance_proxy` | ซื้อ − ใช้ ตั้งแต่ 2024-01 (ข้อมูลถูกตัดด้านซ้าย) | ตอน train ใช้แบบ "ยอดซื้อสุทธิล่าสุด"; ตอน predict ใช้ยอดคงเหลือจริงจาก profile | 🟠 |
-| 6 | Churn horizon | 180 วัน, active window 180 วัน | 90/90 (ได้ cutoff เพิ่ม และสอดคล้องกับ KPI ข้อ 4.2) **ต้องให้ธุรกิจตัดสิน** | 🟠 |
-| 7 | Payment ที่ amount = 0 และ VAT | ยังไม่ได้จัดการ (ต้องเช็ค `features.py`) | ตัดแถว 0 ออกจากการนับ frequency; ทำ VAT ให้เป็นแบบเดียวกันทุกแถว | 🟠 |
-| 8 | ธุรกรรมหลายครั้งในวันเดียว | ต้องเช็คว่า BG/NBD รวมเป็นรายวันหรือยัง | รวมเป็น 1 ครั้ง/วัน | 🟡 |
-| 9 | ไม่มี baseline คู่กับโมเดล | notebook เน้นอัลกอริทึม (stacking 3 GBDT, CQR+, AFT) | รายงาน baseline ในหัวข้อ 5 ทุกครั้ง แล้วเพิ่มความซับซ้อนเฉพาะเมื่อชนะ baseline ชัดเจน | 🟠 |
-| 10 | Email BC เริ่ม 2024-10 | เดือนก่อนหน้าถูกมองเป็น 0 | มองเป็น "ไม่มีข้อมูล" สำหรับ trend ของ email | 🟡 |
+ทุกประเด็นที่พบในขั้นตอนการสำรวจข้อมูลได้รับการปรับปรุงและตรวจสอบความถูกต้องเรียบร้อยแล้วในซอร์สโค้ดปัจจุบัน:
 
-> [!NOTE]
-> ไฟล์ `labels.py`, `features.py`, `churn_trainer.py`, `clv_trainer.py` และ `credit_trainer.py` อยู่ในกฎ "ML maths is bug-fix-only" ของ `AGENTS.md`
-> ข้อ 1–4 นับเป็น bug fix ได้ แต่ข้อ 6 (เปลี่ยน horizon) เป็นการเปลี่ยนพฤติกรรม ต้องแยกเป็น PR ของตัวเองและบันทึก golden baseline ใหม่
+| # | ประเด็นที่เคยพบ | สถานะการแก้ไขในระบบปัจจุบัน | ไฟล์ที่ควบคุม |
+|---|---|---|---|
+| 1 | SMS OTP ซ้ำซ้อนกับ API ในไฟล์ตัวอย่าง | ตัดชีตซ้ำออกในขั้นตอน Clean ETL ไม่เกิดการนับซ้ำในฟีเจอร์และเลเบล | `preprocessing.py`, `features.py` |
+| 2 | เลเบล Credit รวม SMS + Email | แยกการพยากรณ์และการคำนวณเครดิต SMS และ Email ออกจากกันอย่างเด็ดขาด | `labels.py`, `credit_trainer.py` |
+| 3 | เครดิตคงเหลือปะปนกัน | แยกเครดิต `credit_sms` และ `credit_email` ออกจากกัน โดย Email ตัดค่าเริ่มต้น 2,000 ออก | `features.py`, `runner.py` |
+| 4 | Credit Feature รวมทุก Channel | กรอง `credit_add` เฉพาะ SMS สำหรับการคำนวณ SMS Balance Proxy | `features.py` |
+| 5 | Balance Proxy และ Data Leakage | ตอน Train ใช้ PIT Balance Proxy เท่านั้น ไม่ใช้ Snapshot จาก Profile เพื่อป้องกัน Leakage | `features.py`, `datasets.py` |
+| 6 | กรอบเวลา Churn และ CLV | ใช้ Observation 180 วัน / Prediction Horizon 180 วันตามข้อตกลงธุรกิจ | `constants.py`, `labels.py` |
+| 7 | Payment ที่ amount = 0 | จัดการกรองและแยกแยะธุรกรรมที่สำเร็จ เพื่อไม่ให้กระทบค่าเฉลี่ยบิล | `features.py` |
+| 8 | ธุรกรรมหลายครั้งในวันเดียว | รวมยอดรายวันเพื่อป้องกัน Target distortion ในโมเดลสถิติ | `features.py` |
+| 9 | การรายงานคู่กับ Baselines | ทุกโมเดลมีตารางประเมินผลเทียบ Baseline ชัดเจน (Logistic, Segment Mean, Carryover, MA) | `baselines.py`, `metrics.py` |
+| 10 | การจัดการโมเดลและพอร์ตโฟลิโอ | Two-Part Hurdle + Portfolio Multiplier ลด Portfolio Bias เหลือเพียง $+5.22\%$ | `clv_trainer.py` |
 
 ---
 
-## 9. คำถามที่ต้องถามทีมธุรกิจ / 1Moby (ก่อนสรุปนิยาม)
+## 9. ข้อมูลอ้างอิงและเอกสารรายงาน 5 บท
+สำหรับการศึกษาเชิงลึกเรื่องสูตรคณิตศาสตร์ ฟีเจอร์ทั้ง 14-15 ตัวแปร และผลการทดสอบจริง สามารถอ่านต่อได้ที่:
+* **[สารบัญรายงาน 5 บท (docs/report/00_TABLE_OF_CONTENTS.md)](./report/00_TABLE_OF_CONTENTS.md)**
+* **[เล่มรายงานฉบับสมบูรณ์ (docs/models/ML_PROJECT_REPORT_5_CHAPTERS.md)](./models/ML_PROJECT_REPORT_5_CHAPTERS.md)**
 
-1. คอลัมน์ `usage` นับเป็น **ข้อความ** หรือ **เครดิต**? (SMS ภาษาไทย 1 ข้อความกินกี่เครดิต?)
-2. `amount` ควรเป็นยอด**รวม VAT** หรือ**ก่อน VAT**? ทำไมมี 2.7% ของแถวที่เป็นยอดก่อน VAT
-3. Payment ที่ amount = 0 คืออะไร (แถม / ชดเชย / โปรโมชัน)?
-4. ในข้อมูลจริง SMS OTP แยกจาก API ไหม หรือในระบบมันเป็นตัวเดียวกัน?
-5. ธุรกิจนิยามว่า "ลูกค้าเลิกใช้" กี่วัน: **90** หรือ **180**? (ข้อมูลรองรับได้ทั้งสองแบบ ตัวเลขอยู่ในหัวข้อ 5.2)
-6. เครดิตหมดอายุ (`expire`) บังคับให้ลูกค้าต้องเติมเงินจริงไหม และเครดิตที่หมดอายุแล้วจะหายไปเลยหรือเปล่า?
-7. `credit_email = 2000` คือเครดิตฟรีตอนสมัครใช่ไหม?
-8. ข้อมูลจริงจะมีย้อนหลังกี่เดือน (ตอนนี้มี 24 เดือน) และจะส่งมารอบละกี่เดือน?
