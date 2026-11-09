@@ -13,10 +13,9 @@ It ingests a fixed-schema Excel export, then predicts customer **churn**, segmen
 | Layer | Tech |
 |---|---|
 | **Frontend** (`apps/web`) | Next.js 16 (App Router) · React 18 · TypeScript · Tailwind · Better Auth client · recharts · gsap |
-| **API** (`apps/api`) | Elysia.js on Bun · Better Auth · Drizzle ORM (introspect-only) · ioredis |
+| **API** (`apps/api`) | Elysia.js on Bun · Better Auth · Drizzle ORM (introspect-only) |
 | **ML** (`apps/ml`) | Python 3.11 · FastAPI (health + internal job triggers) · LightGBM · XGBoost · SHAP · lifetimes · Optuna |
 | **Database** | PostgreSQL 15 (`pgvector/pgvector:pg15` image) · schema from `db/migrations/`, applied by the api on boot |
-| **Queue / progress** | Redis (Arq + Redis Streams for progress) |
 | **Monorepo** | Turborepo + Bun workspaces |
 
 ## Run it
@@ -25,7 +24,7 @@ It ingests a fixed-schema Excel export, then predicts customer **churn**, segmen
 
 ```bash
 cp .env.example .env          # fill in secrets (Google OAuth, Ollama, etc.)
-docker compose up --build     # db, redis, ml, api, web
+docker compose up --build     # db, ml, api, web
 ```
 
 Postgres starts empty; the api applies `db/migrations/` when it boots.
@@ -35,7 +34,7 @@ Postgres starts empty; the api applies `db/migrations/` when it boots.
 Run the backing services in Docker and the frontend on the host:
 
 ```bash
-docker compose up -d db redis api    # add `ml` if you need training/prediction
+docker compose up -d db api    # add `ml` if you need training/prediction
 cd apps/web && bun install
 ELYSIA_URL=http://localhost:3001 bun run dev   # Next.js on :3000
 ```
@@ -48,7 +47,6 @@ ELYSIA_URL=http://localhost:3001 bun run dev   # Next.js on :3000
 | `api` (Elysia) | `:3001` | `:3001` | REST + Better Auth + SSE |
 | `ml` (FastAPI) | `:8000` | `:8001` | internal-only: `/health` + job triggers |
 | `db` (Postgres) | `:5432` | `:5433` | schema from `db/migrations/` |
-| `redis` | `:6379` | — | Arq queue + progress Streams |
 
 ## How data flows
 

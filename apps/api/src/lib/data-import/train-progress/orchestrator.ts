@@ -1,6 +1,6 @@
 /**
  * The async train import job: runs Import + Clean in the background while the web polls
- * GET /import/progress, publishing each step to the Redis Stream.
+ * GET /import/progress, publishing each step to the in-memory progress store.
  */
 import { deleteDataSource } from "../abort-data-source";
 import { runImportPipeline } from "../import-pipeline";

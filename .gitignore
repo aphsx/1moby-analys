@@ -48,10 +48,6 @@ temp/
 # Docker
 *.pid
 
-# Redis
-dump.rdb
-*.rdb
-
 models/
 *.tsbuildinfo
 

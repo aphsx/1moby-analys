@@ -18,7 +18,6 @@
     "better-auth": "^1.2.0",
     "drizzle-orm": "^0.44.0",
     "elysia": "^1.2.0",
-    "ioredis": "^5.4.0",
     "pg": "^8.13.0",
     "postgres": "^3.4.0",
     "xlsx": "^0.18.5"

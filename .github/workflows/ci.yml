@@ -62,7 +62,7 @@ jobs:
   # Token deploy (no GitHub-repo connection on Railway). Requires a Project
   # Token in repo secret RAILWAY_TOKEN — Project Settings → Tokens, scoped to
   # the production environment. Service names must match the Railway dashboard
-  # (defaults: web / api / ml). Postgres and Redis are not deployed from here.
+  # (defaults: web / api / ml). Postgres is not deployed from here.
   deploy:
     needs: [build, ml-check]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'

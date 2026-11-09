@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time environment bootstrap for the Moby Analytics stack.
 #
-# The whole application (Postgres+pgvector, Redis, ML/FastAPI, API/Elysia,
+# The whole application (Postgres+pgvector, ML/FastAPI, API/Elysia,
 # Web/Next.js) runs via docker compose, so the VM only needs Docker plus the
 # nested-container tweaks. This script is idempotent and safe to re-run.
 set -euo pipefail
