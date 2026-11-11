@@ -102,7 +102,7 @@ function CustomersClientInner() {
     if (search === state.search) return;
     const timer = window.setTimeout(() => replace({ ...state, search, page: 1 }), SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search]);
 
   const queryKey = JSON.stringify([effectiveRunId, toOutputsQuery(state), state.page, reload]);
   useEffect(() => {
@@ -122,7 +122,7 @@ function CustomersClientInner() {
     return () => {
       alive = false;
     };
-  }, [queryKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [queryKey]);
 
   if (!runsLoading && !effectiveRun) {
     return (

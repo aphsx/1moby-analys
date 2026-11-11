@@ -34,7 +34,7 @@ export function ProfileView() {
       setName(user.name ?? "");
       setImage(user.image ?? "");
     }
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   if (isPending) {
     return (

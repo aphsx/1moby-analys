@@ -83,14 +83,12 @@ export function CreateRunPanel({
   useEffect(() => {
     if (sourceId && readySources.some((s) => s.id === sourceId)) return;
     setSourceId(readySources[0]?.id ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readySources.map((s) => s.id).join(",")]);
 
   const selected = readySources.find((s) => s.id === sourceId) ?? null;
   useEffect(() => {
     if (nameTouched) return;
     setName(selected ? defaultRunName(selected.name) : "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id, nameTouched]);
 
   useEffect(() => {
@@ -107,7 +105,6 @@ export function CreateRunPanel({
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
   const canCreate = Boolean(sourceId && name.trim() && cutoff && !creating);

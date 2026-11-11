@@ -87,7 +87,6 @@ function ModelStatusCard({
 
   useEffect(() => {
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelType]);
 
   async function activate(id: string) {
