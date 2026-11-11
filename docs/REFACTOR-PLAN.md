@@ -442,7 +442,8 @@ lib/
 Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTOR-PLAN.md`](ui/REFACTOR-PLAN.md)
 (decided 2026-10-26: stay on Tailwind 3 and React 18, own primitives instead of shadcn, Thai copy).
 
-- [ ] **5.1 Delete dead code first** `[structure]`
+- [x] **5.1 Delete dead code first** `[structure]`
+  _Done (the UI refactor removed most of it; the last part was the 8 `eslint-disable` comments)._
   Grep-confirm each one.
   - In `components/ui.tsx`:
     - six components with no importers: `KpiCard` (66), `DeltaPill` (128), `StackBar` (186),
@@ -465,7 +466,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
 
 - [x] ~~**5.4 Swap the home-made primitives for shadcn, one PR each**~~ Replaced: the UI plan builds `KpiStrip`, `Panel`, `StatusPill`, `InfoTip`, `EmptyState`, `Skeleton` (phase 0) and swaps them in page by page; the `[color:var(--` sweep is UI plan phase 6.
 
-- [ ] **5.5 One HTTP client** `[structure]`
+- [x] **5.5 One HTTP client** `[structure]`
+  _Done during the UI refactor (`lib/http.ts`, `lib/ai-chat-api.ts`, no barrel re-exports)._
   - Put a single `requestJson<T>(url, init)` in `lib/http.ts` that handles the 401 redirect and
     `{ message, code }` errors. Today:
     - `lib/api.ts` repeats parse + throw 5 times and copies the 401 redirect at `:146`.
@@ -475,7 +477,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
   - Remove the barrel re-exports (`ml-api.ts:10-51`, `api.ts:11`, the `export *` in
     `lib/auth/index.ts`) and import from `@moby/types` directly.
 
-- [ ] **5.6 Load data one way; fetch the run list once** `[structure]`
+- [x] **5.6 Load data one way; fetch the run list once** `[structure]`
+  _Done. The customer-list fetch keeps its own effect on purpose: it keeps the current page on screen while the next loads and clamps an out-of-range page._
   - Add a small `useAsync` hook to replace the 9 copies of the `let alive` effect.
   - Move the run list and its loading and error state into `stores/run-store.ts`. Today it is fetched
     by the header, the page, and `ai-chat-view.tsx:408`.
@@ -484,7 +487,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
     `customers-client.tsx:211-216` and `customer-detail-client.tsx:39-44`.
   - Fix the reverse import from `status-dialog-store` into `components/`.
 
-- [ ] **5.7 Show errors and loading one way** `[behaviour]`
+- [x] **5.7 Show errors and loading one way** `[behaviour]`
+  _Done. Also: one `NoRunState` tells "no runs yet" from "the run list failed"._
   - Use the UI plan's error state and `Skeleton` for loading on every page (`docs/ui/DESIGN.md` §6.11).
   - `getDisplayError` returns a string; this replaces the 13 inline `e instanceof Error` checks.
   - Stop swallowing errors at `training-view.tsx:110` (which makes `loadError` unreachable),
@@ -492,7 +496,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
   - A failed run-list fetch shows an error, not "no completed run".
   - Remove the redundant `Suspense` at `customers-client.tsx:341`.
 
-- [ ] **5.8 One container convention: `*-view.tsx`** `[structure]`
+- [x] **5.8 One container convention: `*-view.tsx`** `[structure]`
+  _Done, with the list split as `customers-view` + `customers-table` + `customers-filters` (plain module, shared with the server page). `CustomerFilters` is still built by a cast in `stateFromParams`._
   - `*-view.tsx` is the route's container (it fetches data and owns state). Presentational pieces are
     named for what they render. The `-client` suffix goes away:
     - `dashboard-client` + `dashboard-view` → `dashboard-view` + `dashboard-grid`
@@ -517,7 +522,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
     (`runs-utils.ts:9`, `training-run-utils.ts:4`).
   - Rename `selectedSourceId2` (`training-view.tsx:152`).
 
-- [ ] **5.9 One pannable chart** `[structure]`
+- [x] **5.9 One pannable chart** `[structure]`
+  _Moot: the pannable charts were replaced in the UI refactor; none are left._
   - Put `usePannableViewport(length, defaultVisible)` and `<ChartNavigator>` in
     `components/pannable-chart.tsx`.
   - Today each chart has its own viewport, clamp, range label, wheel and drag handlers, and
@@ -527,7 +533,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
     - `customers/customer-payment-chart.tsx:17-68`, `:86-247`, `:351-384`
   - Afterwards each chart keeps only its data mapping and its `<Line>` / `<Bar>`.
 
-- [ ] **5.10 AI chat: share the pieces, split the view** `[structure]`
+- [x] **5.10 AI chat: share the pieces, split the view** `[structure]`
+  _Done for the split, selectors and shared scroll/resize. Still two bubble styles, textarea heights (160 vs 96 px) and LLM status wordings: picking one of each is a copy change, not done here._
   - Share the message, streaming and thinking bubbles, the auto-resizing textarea (shadcn `Textarea`), auto-scroll and
     the LLM status label in `components/chat/`, used by both `features/ai-chat/ai-chat-view.tsx` and
     `components/ai-chat-widget.tsx`. Today the two copies use different textarea max heights (160 vs
@@ -538,7 +545,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
   - Use selectors with `useChatStore` (`:136`, `:398`), so the sidebar stops re-rendering on every
     streamed token.
 
-- [ ] **5.11 Types come from `@moby/types`** `[structure]`
+- [x] **5.11 Types come from `@moby/types`** `[structure]`
+  _Done._
   - Replace `CustomerDetail` (`customer-detail-view.tsx:27-57`) with `PredictionOutput`.
   - `CleanCounts` is redefined at `runs-utils.ts:16` and `training-utils.ts:9`.
   - `TrainCleanManifest` / `TrainImportProgress` (`api.ts:55-102`) and `DeleteTrainingRunResult`
@@ -549,7 +557,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
 
 - [x] ~~**5.12 One formatter set and one name per page**~~ Replaced: UI plan phase 0 (`lib/format.ts`, `lib/labels.ts`, formats in `docs/ui/CONTENT.md` §2) and phase 1 (Thai page names, distinct nav icons).
 
-- [ ] **5.13 Small duplicates** `[structure]`
+- [x] **5.13 Small duplicates** `[structure]`
+  _Done._
   - One `HighValueMedal` (`customer-row-ui.tsx:50`, `customer-detail-primitives.tsx:132`), one
     `isHighValueTier`, and one `initials` (`user-nav-profile.tsx:10`, `profile-view.tsx:9`).
   - Split `InlineImportForm` (`create-run-panel.tsx:288-409`) into `predict-import-form.tsx`.
