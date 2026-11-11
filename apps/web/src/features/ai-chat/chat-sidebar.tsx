@@ -118,13 +118,14 @@ export const ChatSidebar = memo(function ChatSidebar({
 }) {
   // Only what the list shows: streamed tokens change other store fields and must not re-render it
   const {
-    conversations, activeId, showArchived, pendingRunId,
+    conversations, activeId, showArchived, pendingRunId, conversationsError,
     loadConversations, createConversation, selectConversation,
     renameConversation, archiveConversation, deleteConversation,
     setPendingRun, setShowArchived,
   } = useChatStore(
     useShallow((s) => ({
       conversations: s.conversations, activeId: s.activeId, showArchived: s.showArchived, pendingRunId: s.pendingRunId,
+      conversationsError: s.conversationsError,
       loadConversations: s.loadConversations, createConversation: s.createConversation, selectConversation: s.selectConversation,
       renameConversation: s.renameConversation, archiveConversation: s.archiveConversation, deleteConversation: s.deleteConversation,
       setPendingRun: s.setPendingRun, setShowArchived: s.setShowArchived,
@@ -185,7 +186,14 @@ export const ChatSidebar = memo(function ChatSidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {visible.length === 0 ? (
+        {conversationsError ? (
+          <p className="px-3 py-6 text-center text-micro text-negative">
+            {conversationsError}{" "}
+            <button type="button" onClick={() => void loadConversations()} className="underline underline-offset-2">
+              ลองอีกครั้ง
+            </button>
+          </p>
+        ) : visible.length === 0 ? (
           <p className="px-3 py-6 text-center text-micro text-faint">
             {showArchived ? "ไม่มีแชทที่ archive" : "ยังไม่มีการสนทนา"}
           </p>

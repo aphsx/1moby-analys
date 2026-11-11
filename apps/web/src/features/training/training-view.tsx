@@ -94,7 +94,7 @@ export function TrainingView() {
   const loadSources = useCallback(async () => {
     setLoadError(null);
     try {
-      const sources = await fetchTrainDataSources().catch(() => [] as TrainDataSource[]);
+      const sources = await fetchTrainDataSources();
       setTrainSources(Array.isArray(sources) ? sources : []);
     } catch (e) {
       setTrainSources([]);
@@ -219,7 +219,7 @@ export function TrainingView() {
       notifyStatusDialog({
         tone: "error",
         title: "ลบชุดข้อมูลไม่สำเร็จ",
-        message: getDisplayError(e, "ลบชุดข้อมูลไม่สำเร็จ") ?? "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+        message: getDisplayError(e, "ลบชุดข้อมูลไม่สำเร็จ"),
       });
     } finally {
       setDeletingId(null);

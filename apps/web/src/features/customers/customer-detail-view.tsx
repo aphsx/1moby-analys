@@ -4,11 +4,11 @@
  * run selector → fetchRunOutput + fetchCustomerUsageMonthly →
  * CustomerDetailLayout. No mock fallback — empty state links to /runs.
  */
-import Link from "next/link";
+import { NoRunState } from "@/components/run-selector";
 import { useActiveRun } from "@/stores/run-store";
 import { getDisplayError } from "@/lib/ui-error";
 import { useAsync } from "@/lib/use-async";
-import { BUTTON, EmptyState, Skeleton } from "@/components/ui";
+import { EmptyState, Skeleton } from "@/components/ui";
 import { fetchCustomerPayments, fetchCustomerUsageMonthly, fetchRunOutput } from "@/lib/ml-api";
 import { CustomerDetailLayout } from "./customer-detail-layout";
 
@@ -44,11 +44,7 @@ export function CustomerDetailView({
   if (!runsLoading && !effectiveRun) {
     return (
       <div className="px-4 pt-6 sm:px-6 lg:px-8">
-        <EmptyState
-          title="ยังไม่มีผลทำนาย"
-          hint="อัปโหลดข้อมูลแล้วสร้างรอบทำนายแรกได้ที่ “รอบทำนาย”"
-          action={<Link href="/runs" className={BUTTON.primary}>สร้างรอบทำนาย</Link>}
-        />
+        <NoRunState />
       </div>
     );
   }

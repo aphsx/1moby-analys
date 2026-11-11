@@ -19,6 +19,7 @@ import { EXPORT_ROW_CAP, exportOutputsCsv } from "./export-csv";
 import { pageItems } from "./page-items";
 import { EMPTY_FILTERS, FILTER_KEYS, TAB_KEYS, type FilterKey, type ListFilters, type ListState, type TabKey } from "./customers-filters";
 import { humanizeFeature } from "./reasoning";
+import { getDisplayError } from "@/lib/ui-error";
 
 
 interface Ctx {
@@ -661,7 +662,7 @@ function ExportButton({ runId, state, disabled }: { runId: string; state: ListSt
       notifyStatusDialog({
         tone: "error",
         title: "ดาวน์โหลด CSV ไม่สำเร็จ",
-        message: e instanceof Error ? e.message : "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง",
+        message: getDisplayError(e, "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง"),
       });
     } finally {
       setExporting(false);

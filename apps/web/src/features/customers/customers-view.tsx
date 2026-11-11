@@ -5,11 +5,11 @@
  * filtering and sorting are server-side so every lifecycle stage is reachable.
  */
 import { type OutputsPage } from "@moby/types";
-import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { NoRunState } from "@/components/run-selector";
 import { useActiveRun } from "@/stores/run-store";
-import { BUTTON, EmptyState } from "@/components/ui";
+
 import { fetchRunOutputs, fetchRunSummary } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { useAsync } from "@/lib/use-async";
@@ -42,7 +42,8 @@ function paramsFromState(s: ListState, base: URLSearchParams): URLSearchParams {
   return params;
 }
 
-function CustomersViewInner() {
+/** useSearchParams needs a Suspense boundary; the shell's (components/shell.tsx) is it. */
+export function CustomersView() {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -120,11 +121,7 @@ function CustomersViewInner() {
   if (!runsLoading && !effectiveRun) {
     return (
       <div className="px-4 pt-6 sm:px-6 lg:px-8">
-        <EmptyState
-          title="ยังไม่มีผลทำนาย"
-          hint="อัปโหลดข้อมูลแล้วสร้างรอบทำนายแรกได้ที่ “รอบทำนาย”"
-          action={<Link href="/runs" className={BUTTON.primary}>สร้างรอบทำนาย</Link>}
-        />
+        <NoRunState />
       </div>
     );
   }
@@ -146,13 +143,5 @@ function CustomersViewInner() {
       onChange={onChange}
       customerHref={(accId) => `/customers/${accId}?${listQuery}`}
     />
-  );
-}
-
-export function CustomersView() {
-  return (
-    <Suspense fallback={<div className="p-8 text-muted">กำลังโหลด…</div>}>
-      <CustomersViewInner />
-    </Suspense>
   );
 }

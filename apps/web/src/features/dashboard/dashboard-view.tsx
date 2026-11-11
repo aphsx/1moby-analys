@@ -7,8 +7,8 @@
 import Link from "next/link";
 import { type ReactNode } from "react";
 import { type PredictionRun, type RunSummary } from "@moby/types";
-import { RunScope } from "@/components/run-selector";
-import { BUTTON, Delta, EmptyState, KpiStrip, PageHeader, Provenance, Skeleton, Swatch } from "@/components/ui";
+import { NoRunState, RunScope } from "@/components/run-selector";
+import { BUTTON, Delta, KpiStrip, PageHeader, Provenance, Skeleton, Swatch } from "@/components/ui";
 import { fetchRunSummary } from "@/lib/ml-api";
 import { formatBahtCompact, formatCount, formatDate, formatMonth, formatPercent } from "@/lib/format";
 import { riskRange } from "@/lib/labels";
@@ -37,13 +37,7 @@ export function DashboardView() {
 
   let body;
   if (!runsLoading && !run) {
-    body = (
-      <EmptyState
-        title="ยังไม่มีผลทำนาย"
-        hint="อัปโหลดข้อมูลแล้วสร้างรอบทำนายแรกได้ที่ “รอบทำนาย”"
-        action={<Link href="/runs" className={BUTTON.primary}>สร้างรอบทำนาย</Link>}
-      />
-    );
+    body = <NoRunState />;
   } else if (loaded.error) {
     body = (
       <div className="rounded-card border border-border bg-surface p-5 text-body text-text">

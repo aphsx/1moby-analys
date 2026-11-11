@@ -67,7 +67,7 @@ export function RunsTable({
       await retryPredictionRun(run.id);
       await onRefresh();
     } catch (e) {
-      setError(getDisplayError(e, "Retry ไม่สำเร็จ") ?? "Retry ไม่สำเร็จ");
+      setError(getDisplayError(e, "Retry ไม่สำเร็จ"));
     } finally {
       setRetryingId(null);
     }
@@ -81,7 +81,7 @@ export function RunsTable({
       setPendingDeleteRun(null);
       await onRefresh();
     } catch (e) {
-      setError(getDisplayError(e, "ลบ run ไม่สำเร็จ") ?? "ลบ run ไม่สำเร็จ");
+      setError(getDisplayError(e, "ลบ run ไม่สำเร็จ"));
     } finally {
       setDeletingId(null);
     }

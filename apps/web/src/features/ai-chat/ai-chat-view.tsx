@@ -10,7 +10,7 @@ import { ChatWelcome, MessageList, NoConversation } from "./message-list";
 
 export function AIChatView() {
   const {
-    config, conversations, activeId, messages, streaming, sending, thinkingStep,
+    config, conversations, activeId, messages, streaming, sending, thinkingStep, messagesError,
     send, cancel, createConversation, selectConversation, loadConfig,
   } = useChatStore();
 
@@ -108,6 +108,8 @@ export function AIChatView() {
           <div className="mx-auto w-full max-w-3xl">
             {!activeId ? (
               <NoConversation onCreate={() => createConversation()} />
+            ) : messagesError && !showMessages ? (
+              <p className="py-10 text-center text-small text-negative">{messagesError}</p>
             ) : !showMessages ? (
               <ChatWelcome onPrompt={(p) => handleSend(p)} runName={activeConv?.run_name ?? null} />
             ) : (

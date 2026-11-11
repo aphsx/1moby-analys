@@ -8,6 +8,7 @@ import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { fetchRunInsight, generateRunInsight } from "@/lib/ml-api";
 import { formatDateTime } from "@/lib/format";
 import { useAsync } from "@/lib/use-async";
+import { getDisplayError } from "@/lib/ui-error";
 
 /** Markdown → one plain line for the collapsed view. */
 const plain = (md: string) => md.replace(/[#*_`>]/g, "").replace(/\s+/g, " ").trim();
@@ -27,7 +28,7 @@ export function AiSummaryLine({ runId }: { runId: string }) {
     try {
       loaded.setData(await generateRunInsight(runId, { force: Boolean(text) }));
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "สร้างสรุปไม่สำเร็จ");
+      setError(getDisplayError(e, "สร้างสรุปไม่สำเร็จ"));
     } finally {
       setGenerating(false);
     }

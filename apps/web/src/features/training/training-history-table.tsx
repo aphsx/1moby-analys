@@ -97,7 +97,7 @@ export function TrainingHistoryTable({
       setNotice(formatDeleteNotice(result));
       onDeleted?.();
     } catch (e: unknown) {
-      setError(getDisplayError(e, "ลบ training run ไม่สำเร็จ") ?? "ลบ training run ไม่สำเร็จ");
+      setError(getDisplayError(e, "ลบ training run ไม่สำเร็จ"));
       setPendingDelete(null);
     } finally {
       setDeletingId(null);

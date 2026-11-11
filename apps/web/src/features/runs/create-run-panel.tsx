@@ -96,7 +96,7 @@ export function CreateRunPanel({
       setName(selected ? defaultRunName(selected.name) : "");
       await onRefresh();
     } catch (e) {
-      setError(getDisplayError(e, "สร้างรอบทำนายไม่สำเร็จ") ?? "สร้างรอบทำนายไม่สำเร็จ");
+      setError(getDisplayError(e, "สร้างรอบทำนายไม่สำเร็จ"));
     } finally {
       setCreating(false);
     }

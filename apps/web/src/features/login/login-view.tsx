@@ -6,6 +6,7 @@ import { signIn } from "@/lib/auth/client";
 import { sanitizeRedirectParam } from "@/lib/auth/redirect";
 import { LoginBackground } from "@/components/login-background";
 import { INTRO_ASSETS, MOBY_BRAND } from "@/lib/login-brand-colors";
+import { getDisplayError } from "@/lib/ui-error";
 
 /** Google sign-in. useSearchParams needs the Suspense boundary for the static build. */
 export function LoginView() {
@@ -28,7 +29,7 @@ function LoginForm() {
       setError(null);
       await signIn.social({ provider: "google", callbackURL });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Sign-in failed");
+      setError(getDisplayError(e, "Sign-in failed"));
       setBusy(false);
     }
   };
