@@ -8,7 +8,7 @@
  * separate data-sources section anymore.
  */
 
-import { type ModelVersionSummary, type PredictDataSource } from "@moby/types";
+import { MODEL_TYPES, type ModelType, type ModelVersionSummary, type PredictDataSource } from "@moby/types";
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -35,8 +35,6 @@ import {
   todayISO,
 } from "./runs-utils";
 
-const MODEL_TYPES = ["churn", "clv", "credit"] as const;
-type ModelType = (typeof MODEL_TYPES)[number];
 
 const fieldCls =
   "mt-1.5 h-11 w-full rounded-card border border-border bg-surface px-3.5 text-small text-text shadow-[var(--shadow-1)] outline-none transition-colors focus:border-accent disabled:opacity-50";

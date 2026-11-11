@@ -1,4 +1,4 @@
-import { type PredictDataSource } from "@moby/types";
+import { type PredictDataSource, type TrainDataSource } from "@moby/types";
 import { formatDate } from "@/lib/format";
 /**
  * Local helpers for the Prediction Runs page (spec §2.5 + §5).
@@ -15,7 +15,8 @@ export interface CleanCounts {
   usage: number;
 }
 
-export function getCleanCounts(source: PredictDataSource): CleanCounts | null {
+/** Row counts Clean produced for a train or predict Data Source; null when there is no manifest. */
+export function getCleanCounts(source: PredictDataSource | TrainDataSource): CleanCounts | null {
   const manifest: unknown = source.clean_manifest;
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return null;
   const clean = (manifest as Record<string, unknown>).clean;

@@ -7,7 +7,7 @@
  * Full metric breakdowns still live on the read-only /model-performance page.
  */
 
-import { type ModelVersionSummary, type TrainingRun, type TrainingRunResult } from "@moby/types";
+import { MODEL_TYPES, type ModelType, type ModelVersionSummary, type TrainingRun, type TrainingRunResult } from "@moby/types";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -25,8 +25,6 @@ import { StatusDialog } from "@/components/status-dialog";
 import { activateModelVersion, deleteModelVersion, fetchModelVersions } from "@/lib/ml-api";
 import { MODEL_TYPE_LABELS, beatsBaseline, formatMetric } from "./training-run-utils";
 
-const MODEL_TYPES = ["churn", "clv", "credit"] as const;
-type ModelType = (typeof MODEL_TYPES)[number];
 
 const TYPE_ICON: Record<ModelType, typeof UserX> = {
   churn: UserX,
