@@ -91,21 +91,10 @@ export function CreateRunPanel({
     setName(selected ? defaultRunName(selected.name) : "");
   }, [selected?.id, nameTouched]);
 
-  useEffect(() => {
-    setCutoff("");
-    if (!selected) return;
-    let alive = true;
-    fetchPredictSuggestedCutoff(selected.id)
-      .then(({ suggested_cutoff }) => {
-        if (alive) setCutoff(suggested_cutoff);
-      })
-      .catch(() => {
-        // Keep the local fallback when no suggestion is available.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [selected?.id]);
+  // The cutoff field starts from the source's suggestion (empty while it loads or when there is
+  // none) and stays editable; a newly selected source resets it.
+  const suggested = useAsync(() => fetchPredictSuggestedCutoff(selected!.id), [selected?.id], Boolean(selected)).data;
+  useEffect(() => setCutoff(suggested?.suggested_cutoff ?? ""), [suggested]);
 
   const canCreate = Boolean(sourceId && name.trim() && cutoff && !creating);
 

@@ -104,6 +104,8 @@ function CustomersClientInner() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
+  // Not useAsync: the current page stays on screen while the next one loads, and a page past the
+  // end sends the URL back to the last page instead of showing an empty list.
   const queryKey = JSON.stringify([effectiveRunId, toOutputsQuery(state), state.page, reload]);
   useEffect(() => {
     if (!effectiveRunId) return;
