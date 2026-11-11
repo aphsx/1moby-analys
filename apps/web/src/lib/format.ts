@@ -100,3 +100,11 @@ export function formatMonth(ym: string, withYear = false): string {
   return new Intl.DateTimeFormat(LOCALE, { month: "short", ...(withYear ? { year: "2-digit" } : {}), timeZone: "UTC" })
     .format(new Date(Date.UTC(y, m - 1, 1)));
 }
+
+/** Avatar initials: "Somchai Jaidee" → "SJ", "Somchai" → "SO", "" → "?". */
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}

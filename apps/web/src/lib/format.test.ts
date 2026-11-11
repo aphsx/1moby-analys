@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   formatBaht, formatBahtCompact, formatCount, formatCountCompact, formatCredits, formatDate, formatDateTime, formatDaysAgo,
-  formatDaysAhead, formatMonth, formatPercent, formatSignedPercent,
+  formatDaysAhead, formatMonth, formatPercent, formatSignedPercent, initials,
 } from "./format";
 
 describe("format", () => {
@@ -57,5 +57,13 @@ describe("format", () => {
     expect(formatDateTime("2026-01-01T07:05:00Z")).toBe("1 ม.ค. 2569 14:05");
     expect(formatMonth("2025-01")).toBe("ม.ค.");
     expect(formatMonth("2025-01", true)).toBe("ม.ค. 68");
+  });
+});
+
+describe("initials", () => {
+  test("first and last name, one name, or nothing", () => {
+    expect(initials("Somchai Jaidee")).toBe("SJ");
+    expect(initials("  ann  ")).toBe("AN");
+    expect(initials("")).toBe("?");
   });
 });

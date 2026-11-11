@@ -61,3 +61,7 @@ export function todayISO(): string {
 export function defaultRunName(sourceName: string): string {
   return `${sourceName} — ${formatDate(todayISO())}`;
 }
+
+/** Text input / select styling shared by the create-run card and the import form. */
+export const FIELD_CLASS =
+  "mt-1.5 h-11 w-full rounded-card border border-border bg-surface px-3.5 text-small text-text shadow-[var(--shadow-1)] outline-none transition-colors focus:border-accent disabled:opacity-50";
