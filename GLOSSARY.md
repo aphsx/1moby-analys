@@ -9,6 +9,11 @@ which customers will churn, what they are worth, and when they will run out of c
 A 1Moby business account that buys prepaid messaging credit. The thing being predicted about.
 _Avoid_: client, account, user
 
+**Payer**:
+A Customer who paid more than ฿0 within a given period (a month or a year), whatever their Lifecycle
+Stage. A ฿0 credit grant is not a payment.
+_Avoid_: paying customer, buyer
+
 **User**:
 A 1Moby staff member signed in to the platform. Every User can do everything; there are no roles.
 _Avoid_: admin, member, viewer, analyst
@@ -80,11 +85,18 @@ What actually happened to a Prediction Run's Customers once its Horizon has pass
 was predicted.
 _Avoid_: actuals, ground truth, backfill
 
+**Backtest**:
+Looking back to a date six months before the Cutoff Date in the same Data Source, where what happened next
+is already known: e.g. what share of the Customers who sent messages in only one of the five months before
+that date went on to churn. It involves no predictions, unlike a Realized Outcome.
+_Avoid_: holdout, lookback
+
 ## Customer classifications
 
 **Lifecycle Stage**:
 A rule-based (never predicted) label from a Customer's activity before the Cutoff Date: Active Paid,
-Active Free, Churned (had activity, none in the last 180 days), or Ghost (no activity ever).
+Active Free, Churned (had activity, none in the last 180 days), or Ghost (no activity ever). "Active"
+always means one of these stages, never a count of Customers who sent messages in a month.
 _Avoid_: status, state
 
 **Churn Risk Level**:
@@ -97,13 +109,35 @@ The amount a Customer is predicted to pay over the next 6 months.
 _Avoid_: LTV, lifetime value, revenue forecast
 
 **Value Tier**:
-The high / mid / low / none bucket of a Customer's CLV.
+The high / mid / low / none bucket of a Customer's CLV, ranked against the other Active Customers of the
+same Prediction Run whose CLV is above ฿0: high is the top 10%, mid the next 40%, low the bottom half.
+None means there is nothing to rank: the Customer is predicted to pay ฿0, or is not Active.
 _Avoid_: value segment, tier
 
 **Credit Urgency**:
-How soon a Customer is predicted to run out of prepaid credit: stable, monitor, warning, or critical.
-_Avoid_: top-up risk, credit risk
+How soon a Customer is predicted to top up (buy credit) next: critical within 14 days, warning within 30,
+monitor within 90, stable after that. It is a predicted payment date, not the day their credit runs out.
+_Avoid_: top-up risk, credit risk, run-out date
 
 **Segment**:
-The action group a Customer falls into by combining Value Tier and Churn Risk Level (e.g. High-Value At-Risk).
-_Avoid_: cluster, cohort, group
+A grouping each Prediction Run gives a Customer from their Lifecycle Stage, value (the high and mid Value
+Tiers count as one), health (Churn Risk Level, or the predicted chance they are still active) and usage
+growth. It describes a Customer; it is not what to do about them, which is the Playbook.
+_Avoid_: cluster, cohort, group, action group
+
+## Acting on predictions
+
+**Revenue at Risk**:
+A Customer's churn probability times their CLV: how much of their next 6 months of payments is expected
+to be lost to churn. Only Active Paid Customers with a churn score have one.
+_Avoid_: expected loss, value at risk, money at risk
+
+**Call List**:
+Active Paid Customers with a churn score, ordered by Revenue at Risk, largest first: who to contact first.
+It is not limited to any Value Tier or Churn Risk Level.
+_Avoid_: top priority, priority list, call-first group
+
+**Playbook**:
+The fixed action for each pair of Value Tier and Churn Risk Level (e.g. high value with critical risk: an
+Account Manager calls this week). Every Customer in the same pair gets the same action.
+_Avoid_: segment, recommendation, next best action, guidance
