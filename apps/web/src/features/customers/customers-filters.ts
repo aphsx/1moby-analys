@@ -20,29 +20,10 @@ export interface ListState {
   page: number;
 }
 
-export type CustomerDetailSearchParams = {
-  run?: string | string[];
-  tab?: string | string[];
-  search?: string | string[];
-  customer_value_tier?: string | string[];
-  churn_risk_level?: string | string[];
-  credit_urgency_level?: string | string[];
-  ever_paid?: string | string[];
-  sort?: string | string[];
-  page?: string | string[];
-};
+/** Every key the list keeps in its URL; the customer page carries them back. */
+const CUSTOMER_LIST_QUERY_KEYS = ["run", "tab", "search", ...FILTER_KEYS, "sort", "page"] as const;
 
-const CUSTOMER_LIST_QUERY_KEYS = [
-  "run",
-  "tab",
-  "search",
-  "customer_value_tier",
-  "churn_risk_level",
-  "credit_urgency_level",
-  "ever_paid",
-  "sort",
-  "page",
-] as const;
+export type CustomerDetailSearchParams = Partial<Record<(typeof CUSTOMER_LIST_QUERY_KEYS)[number], string | string[]>>;
 
 export function firstParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
