@@ -28,6 +28,7 @@ import {
   RotateCcw, ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
+import { fitTextarea, useScrollToBottom } from "@/components/chat/chat-hooks";
 import { MarkdownLite } from "@/components/chat/markdown-lite";
 import { TypingDots } from "@/components/chat/typing-dots";
 import { formatTime } from "@/lib/format";
@@ -105,11 +106,7 @@ export function AIChatWidget() {
     if (!config) loadConfig();
   }, [config, loadConfig]);
 
-  /* auto-scroll to bottom */
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, streaming, thinkingStep, sending]);
+  useScrollToBottom(scrollRef, [messages, streaming, thinkingStep, sending]);
 
   /* focus on open (badge clears in the store) */
   useEffect(() => {
@@ -118,12 +115,8 @@ export function AIChatWidget() {
     }
   }, [open]);
 
-  /* auto-resize textarea — cross-browser, no fieldSizing needed */
   const resizeTA = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 96) + "px";
+    if (textareaRef.current) fitTextarea(textareaRef.current, 96);
   };
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
