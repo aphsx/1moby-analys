@@ -22,7 +22,7 @@ import {
   formatDaysAhead,
   formatPercent,
 } from "@/lib/format";
-import { LIFECYCLE_LABEL, RISK_LABEL, SEGMENT_LABEL, URGENCY_LABEL, VALUE_TIER_LABEL } from "@/lib/labels";
+import { CELL_ACTION, LIFECYCLE_LABEL, RISK_LABEL, URGENCY_LABEL, valueTierLabel } from "@/lib/labels";
 import { getDisplayError } from "@/lib/ui-error";
 import { CustomerFollowTab } from "./customer-follow-tab";
 import { buildFinding, recentEvents, topupStats } from "./customer-model";
@@ -230,13 +230,12 @@ function Overview({
           {
             label: "รายได้ที่เสี่ยงหาย",
             value: c.revenue_at_risk != null ? formatBaht(c.revenue_at_risk) : "—",
-            caption: c.priority_rank != null ? `อันดับที่ต้องดูแล ${formatCount(c.priority_rank)}` : undefined,
             info: INFO.atRisk,
           },
           {
             label: "มูลค่า 6 เดือน",
             value: c.predicted_clv_6m != null ? formatBahtCompact(c.predicted_clv_6m) : "—",
-            caption: clvRange ? `ถ้าจ่าย ${formatBahtCompact(clvRange.p10)}–${formatBahtCompact(clvRange.p90)}` : VALUE_TIER_LABEL[c.customer_value_tier],
+            caption: clvRange ? `ถ้าจ่าย ${formatBahtCompact(clvRange.p10)}–${formatBahtCompact(clvRange.p90)}` : valueTierLabel(c.customer_value_tier, c.lifecycle_stage),
             info: INFO.clv,
           },
           {
@@ -459,7 +458,6 @@ function Predictions({ customer: c }: { customer: PredictionOutput }) {
             info={INFO.churn}
             facts={[
               ["ระดับความเสี่ยง", c.churn_risk_level ? RISK_LABEL[c.churn_risk_level] : "—"],
-              ["อันดับที่ต้องดูแล", c.priority_rank != null ? formatCount(c.priority_rank) : "—"],
               ["สถานะลูกค้า", LIFECYCLE_LABEL[c.lifecycle_stage]],
             ]}
             footer={c.churn_probability == null && c.lifecycle_stage === "Active Paid" ? "ยังไม่มีคะแนน · ใช้งานไม่ถึง 90 วัน" : undefined}
@@ -486,7 +484,7 @@ function Predictions({ customer: c }: { customer: PredictionOutput }) {
             value={c.predicted_clv_6m != null ? formatBaht(c.predicted_clv_6m) : "—"}
             info={INFO.clv}
             facts={[
-              ["กลุ่มมูลค่า", VALUE_TIER_LABEL[c.customer_value_tier]],
+              ["กลุ่มมูลค่า", valueTierLabel(c.customer_value_tier, c.lifecycle_stage)],
               ["โอกาสจ่ายใน 6 เดือน", c.clv_pay_probability != null ? formatPercent(c.clv_pay_probability) : "—"],
               ["ช่วงคาดการณ์ (ถ้าจ่าย)", clv ? `${formatBahtCompact(clv.p10)}–${formatBahtCompact(clv.p90)}` : "—"],
             ]}
@@ -500,7 +498,8 @@ function Predictions({ customer: c }: { customer: PredictionOutput }) {
             facts={[
               ["โอกาสเลิกใช้", churnValue(c)],
               ["มูลค่า 6 เดือน", c.predicted_clv_6m != null ? formatBahtCompact(c.predicted_clv_6m) : "—"],
-              ["กลุ่มแนะนำ", c.segment && c.segment in SEGMENT_LABEL ? SEGMENT_LABEL[c.segment as keyof typeof SEGMENT_LABEL] : "—"],
+              // the Playbook action of the customer's own cell, the same text as the overview heat grid
+              ["แนวทาง", c.churn_risk_level ? CELL_ACTION[c.customer_value_tier][c.churn_risk_level] : "—"],
             ]}
           />
         </PredictionSection>

@@ -8,8 +8,10 @@ import {
   type OutputsQueryParams,
   requireOutput,
   requireRun,
+  type RunRow,
   SORT_COLUMNS,
 } from "../../lib/ml/prediction-runs";
+import { sendingMonthsOf } from "../../lib/ml/summary-facts";
 
 function parseSort(sort: string | undefined): SQL {
   const [field, dir] = (sort ?? "priority_score:desc").split(":");
@@ -19,9 +21,9 @@ function parseSort(sort: string | undefined): SQL {
   return sql`${column} ${direction} NULLS LAST`;
 }
 
-function outputFilters(runId: string, q: OutputsQueryParams): SQL | undefined {
+function outputFilters(run: RunRow, q: OutputsQueryParams): SQL | undefined {
   const o = mlPredictionOutputs;
-  const conds: SQL[] = [eq(o.predictionRunId, runId)];
+  const conds: SQL[] = [eq(o.predictionRunId, run.id)];
   if (q.search) conds.push(sql`${o.accId}::text LIKE ${`%${q.search}%`}`);
   if (q.lifecycle_stage) conds.push(eq(o.lifecycleStage, q.lifecycle_stage));
   if (q.churn_risk_level) {
@@ -37,6 +39,9 @@ function outputFilters(runId: string, q: OutputsQueryParams): SQL | undefined {
   if (q.needs_review === "true" || q.needs_review === "false") {
     conds.push(eq(o.needsReview, q.needs_review === "true"));
   }
+  if (q.sending_months_max != null) {
+    conds.push(sql`${sendingMonthsOf(o.accId, run.predictSourceId, run.cutoffDate)} <= ${q.sending_months_max}`);
+  }
   return and(...conds);
 }
 
@@ -49,7 +54,7 @@ export const outputsRoutes = new Elysia()
 
       const page = Math.max(1, query.page ?? 1);
       const pageSize = Math.min(200, Math.max(1, query.page_size ?? 8));
-      const where = outputFilters(run.id, query);
+      const where = outputFilters(run, query);
 
       const [[{ total, revenueAtRiskSum }], rows] = await Promise.all([
         db
@@ -84,6 +89,7 @@ export const outputsRoutes = new Elysia()
         ever_paid: t.Optional(t.String()),
         segment: t.Optional(t.String()),
         needs_review: t.Optional(t.String()),
+        sending_months_max: t.Optional(t.Numeric({ minimum: 0 })),
       }),
     }
   )

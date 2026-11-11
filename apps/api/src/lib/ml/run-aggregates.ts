@@ -5,7 +5,7 @@
  * counts and distributions. Keeping one implementation here prevents the
  * two consumers from drifting independently.
  */
-import { type RiskLevel, type UrgencyLevel, type ValueTier } from "@moby/types";
+import { type RiskLevel, SUB_STAGE, type UrgencyLevel, type ValueTier } from "@moby/types";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import { mlPredictionOutputs } from "../../db/schema";
@@ -14,6 +14,8 @@ export type RunAggregates = {
   total_customers: number;
   churn_eligible: number;
   lifecycle: { active_paid: number; active_free: number; churned: number; ghost: number };
+  /** Churned customers who paid at some point. */
+  churned_ever_paid: number;
   churn_by_risk: Record<RiskLevel, number>;
   usage_trend: { increasing: number; stable: number; declining: number; no_usage: number };
   /** The same counts for Active Paid customers only (AT_RISK_SCOPE). */
@@ -76,6 +78,7 @@ export async function fetchRunAggregates(runId: string): Promise<RunAggregates> 
           highRiskExposure: sql<number>`COALESCE(SUM(${o.predictedClv6m}) FILTER (WHERE ${o.churnRiskLevel} IN ('high', 'critical')), 0)::float8`,
           demand30d: sql<number>`COALESCE(SUM(${o.predictedCreditUsage30d}) FILTER (WHERE ${o.lifecycleStage} LIKE 'Active%'), 0)::float8`,
           topupDue7d: sql<number>`COUNT(*) FILTER (WHERE ${o.estimatedDaysUntilTopup} <= 7)::int`,
+          churnedEverPaid: sql<number>`COUNT(*) FILTER (WHERE ${o.subStage} = ${SUB_STAGE.CHURNED_PAID})::int`,
         })
         .from(o)
         .where(inRun),
@@ -135,6 +138,7 @@ export async function fetchRunAggregates(runId: string): Promise<RunAggregates> 
     total_customers: scalars.total,
     churn_eligible: scalars.eligibleCount,
     lifecycle,
+    churned_ever_paid: scalars.churnedEverPaid,
     churn_by_risk: churnByRisk,
     usage_trend: usageTrend,
     paid_usage_trend: paidUsageTrend,

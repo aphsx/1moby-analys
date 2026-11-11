@@ -36,6 +36,13 @@
   --chart-muted: #c3c8d1;
   --grid: #edf0f3; --axis-ink: #5f6672;
   --risk-low: #d3e4ff; --risk-medium: #9fc3ff; --risk-high: #4b92ff; --risk-critical: #006bff;
+  /* overview (DASHBOARD.md §12): heat = revenue at risk per cell, tier = payer rank, base = lifecycle */
+  --heat-0: #ffeadd; --heat-1: #ffcbaa; --heat-2: #ffa36f; --heat-3: #f2671f; --heat-4: #a93300;
+  --heat-ink-0: var(--text); --heat-ink-1: var(--text); --heat-ink-2: var(--text); --heat-ink-3: var(--text); --heat-ink-4: #ffffff;
+  --risk-emph: #fc4c02; --risk-emph-track: #ffe3d1;
+  --tier-1: #0a3d91; --tier-2: #006bff; --tier-3: #4d8fff; --tier-4: #8db8ff;
+  --tier-ink-1: #ffffff; --tier-ink-2: #ffffff; --tier-ink-3: var(--text); --tier-ink-4: var(--text);
+  --base-paid: var(--chart-1); --base-free: #8db8ff; --base-churned: #9aa1ad; --base-ghost: #d5d9e0;
   /* tooltip */
   --tip-bg: #111827; --tip-ink: #ffffff;
   /* type (--font-plex comes from next/font in app/layout.tsx) */
@@ -65,6 +72,12 @@
   --pill-neutral-bg: #212023; --pill-neutral-ink: #bdbdc0;
   --chart-1: #f2f2f3; --chart-muted: #5b5b62; --grid: #242328; --axis-ink: #8a8c92;
   --risk-low: #26354d; --risk-medium: #2c5ba6; --risk-high: #3d8bff; --risk-critical: #a9cbff;
+  --heat-0: #55301c; --heat-1: #7a3716; --heat-2: #a8460f; --heat-3: #e2621c; --heat-4: #ff9a5c;
+  --heat-ink-0: #ffffff; --heat-ink-1: #ffffff; --heat-ink-2: #ffffff; --heat-ink-3: #111318; --heat-ink-4: #111318;
+  --risk-emph: #e8602a; --risk-emph-track: #3a2419;
+  --tier-1: #cfe0ff; --tier-2: #7fb0ff; --tier-3: #3d8bff; --tier-4: #2c5ba6;
+  --tier-ink-1: #111318; --tier-ink-2: #111318; --tier-ink-3: #111318; --tier-ink-4: #ffffff;
+  --base-paid: var(--accent); --base-free: #2c5ba6; --base-churned: #5b5b62; --base-ghost: #2e2e33;
   --tip-bg: #f2f2f3; --tip-ink: #111111;
   --shadow-card: 0 12px 28px rgba(0, 0, 0, .2); /* dark cards lift with this shadow alone, no border */
 }

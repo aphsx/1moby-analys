@@ -105,18 +105,54 @@ export interface RunSummary {
     status: RunStatus;
     total_customers: number;
     finished_at: string | null;
+    /** First month (YYYY-MM) with any payment or usage in the run's Predict Data Source. */
+    data_start: string | null;
   };
   lifecycle: { active_paid: number; active_free: number; churned: number; ghost: number };
+  /** Churned customers who paid at some point (sub_stage "Churned Paid"). */
+  lifecycle_detail: { churned_ever_paid: number };
   churn: {
     eligible_count: number;
     by_risk: Record<RiskLevel, number>;
+    /** From the churn model version that scored this run. */
     thresholds: { medium: number; high: number; critical: number };
   };
   revenue: {
     expected_at_risk: number;
     high_risk_exposure: number;
-    /** The 24 months before the cutoff, oldest first, so this year can be drawn against last year. */
-    monthly_actual: { month: string; amount: number; n_payments: number }[];
+    /**
+     * The 24 months before the cutoff, oldest first, so this year can be drawn against last year.
+     * `n_payers` counts Payers: accounts that paid more than ฿0 that month.
+     */
+    monthly_actual: { month: string; amount: number; n_payments: number; n_payers: number }[];
+    /**
+     * The account with the largest increase from the first to the second half of the last 12
+     * months, with its 12 monthly amounts (oldest first). Null when revenue did not grow.
+     */
+    top_contributor: { acc_id: number; monthly: number[] } | null;
+  };
+  /** Accounts with usage > 0 per month, the same 24 months as `monthly_actual`. */
+  usage_monthly_senders: { month: string; senders: number }[];
+  /** Payers of the last 12 months ranked by what they paid; null when nobody paid. */
+  revenue_concentration: {
+    payers: number;
+    revenue: number;
+    tiers: { key: "top1" | "top5" | "top10" | "rest"; from_rank: number; to_rank: number; payers: number; revenue: number }[];
+    avg_top1: number;
+    /** The most lowest-paying payers whose summed revenue stays below `avg_top1`. */
+    bottom_k_below_top1_avg: number;
+  } | null;
+  /**
+   * Active Paid customers by the number of months they sent messages in the window before the
+   * cutoff, with the Backtest churn rate per bucket at `backtest_date` (cutoff − 6 months).
+   */
+  sending_months: {
+    window_months: number;
+    /** YYYY-MM of the first month in the window. */
+    window_start: string;
+    /** YYYY-MM-DD; null when the data is too short for a Backtest. */
+    backtest_date: string | null;
+    buckets: { months: number; count: number; backtest_n: number | null; backtest_churn_rate: number | null }[];
   };
   /** Active Paid customers only, the same scope as `revenue.expected_at_risk`, so the cells sum to it. */
   value_risk_matrix: {
@@ -135,8 +171,13 @@ export interface RunSummary {
     demand_30d: number;
     by_urgency: Record<UrgencyLevel, number>;
     topup_due_7d: number;
+    /**
+     * Share of customers predicted to top up within 14 days who did, in the latest backtest of the
+     * credit model version that scored this run. Null when the model card has none.
+     */
+    urgent_topup_hit_rate: number | null;
   };
-  /** "ต้องโทรก่อน": high value tier × high/critical risk, largest revenue_at_risk first. */
+  /** The head of the Call List: scored Active Paid customers, largest revenue_at_risk first. */
   top_priority: {
     acc_id: number;
     lifecycle_stage: LifecycleStage;
@@ -149,6 +190,8 @@ export interface RunSummary {
     priority_score: number;
     /** First of `churn_factors`, the main reason. */
     top_factor: ChurnFactor | null;
+    /** One flag per month of `sending_months`' window, oldest first: true when messages were sent. */
+    sending_month_flags: boolean[];
   }[];
   model_versions: { churn: string; clv: string; credit: string };
 }
@@ -166,6 +209,8 @@ export interface OutputsQuery {
   ever_paid?: "true" | "false" | "";
   segment?: string | "";
   needs_review?: "true" | "false" | "";
+  /** At most this many months with messages sent in the window before the cutoff. */
+  sending_months_max?: string | "";
 }
 
 export interface OutputsPage {

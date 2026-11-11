@@ -4,7 +4,7 @@ import { type PaymentEvent, type PredictionOutput } from "@moby/types";
 import { useState, type ReactNode } from "react";
 import { StatusPill } from "@/components/ui";
 import { formatBaht, formatCount, formatCredits, formatDate, formatDaysAgo, formatPercent } from "@/lib/format";
-import { CHANNEL_LABEL, LIFECYCLE_LABEL, SEGMENT_LABEL, VALUE_TIER_LABEL } from "@/lib/labels";
+import { CHANNEL_LABEL, LIFECYCLE_LABEL, valueTierLabel } from "@/lib/labels";
 import { daysBetween, overdueLabel, topupStats } from "./customer-model";
 
 // ShareBar parts take the one-hue risk ladder, darkest first (DESIGN.md §4, §7)
@@ -32,11 +32,8 @@ export function CustomerProfilePanel({ customer: c, payments, cutoffMs }: { cust
   return (
     <aside className="surface h-fit space-y-5 rounded-card p-5" aria-label="ข้อมูลลูกค้า">
       <div className="flex flex-wrap gap-2">
-        <StatusPill tone={c.customer_value_tier === "high" ? "accent" : "neutral"}>{VALUE_TIER_LABEL[c.customer_value_tier]}</StatusPill>
+        <StatusPill tone={c.customer_value_tier === "high" ? "accent" : "neutral"}>{valueTierLabel(c.customer_value_tier, c.lifecycle_stage)}</StatusPill>
         <StatusPill>{LIFECYCLE_LABEL[c.lifecycle_stage]}</StatusPill>
-        {c.segment && c.segment in SEGMENT_LABEL ? (
-          <StatusPill>{SEGMENT_LABEL[c.segment as keyof typeof SEGMENT_LABEL]}</StatusPill>
-        ) : null}
       </div>
 
       <Facts>

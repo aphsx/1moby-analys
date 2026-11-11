@@ -1,15 +1,21 @@
 "use client";
 /**
- * The overview's main block (docs/ui/DESIGN.md §7, RiskMap): rows are value tiers, columns are
- * risk levels, and each square's AREA is proportional to revenue at risk (side ∝ √value). Every
- * cell opens the customer list filtered to that cell.
+ * Value × risk heat grid (DASHBOARD.md §8.1): rows are Value Tiers (incl. `none`, predicted ฿0),
+ * columns are Churn Risk Levels. Each cell prints its count and ฿ at risk; fill = binned ฿ at risk.
+ * Selecting a cell shows its Playbook action and a link to the filtered list.
  */
 import Link from "next/link";
-import { type RunSummary } from "@moby/types";
-import { EmptyState, Panel } from "@/components/ui";
-import { formatBahtCompact, formatCount } from "@/lib/format";
-import { RISK_LABEL, VALUE_TIER_LABEL, riskRange } from "@/lib/labels";
+import { useEffect, useState } from "react";
+import { type RiskLevel, type RunSummary, type ValueTier } from "@moby/types";
+import { BUTTON, EmptyState, Panel, Provenance, Swatch } from "@/components/ui";
+import { formatBahtCompact, formatCount, formatPercent } from "@/lib/format";
+import { CELL_ACTION, RISK_LABEL, VALUE_TIER_LABEL, riskRange } from "@/lib/labels";
 import { MAP_RISKS, MAP_TIERS, type OverviewModel } from "./overview-model";
+
+const TIER_LABEL: Record<ValueTier, string> = { ...VALUE_TIER_LABEL, none: "คาดว่าไม่จ่าย" };
+const TIER_SUB: Record<ValueTier, string> = { high: "10% แรก", mid: "10–50%", low: "ครึ่งล่าง", none: "มูลค่า 6 เดือน ฿0" };
+/** One label per heat bin; keep in step with HEAT_BREAKS in overview-model.ts. */
+const LEGEND = ["ต่ำกว่า ฿0.5M", "฿0.5–1M", "฿1–2M", "฿2–5M", "เกิน ฿5M"];
 
 export function RiskMap({
   model,
@@ -20,89 +26,122 @@ export function RiskMap({
   thresholds: RunSummary["churn"]["thresholds"];
   runId: string;
 }) {
+  const [selected, setSelected] = useState(model.defaultCell);
+  // a new run starts on its own largest cell
+  useEffect(() => setSelected(model.defaultCell), [runId, model.defaultCell.tier, model.defaultCell.risk]);
   const ranges = riskRange(thresholds);
   const pct = (v: number) => `${Math.round(v * 100)}%`;
-  const max = Math.max(...model.cells.map((c) => c.revenueAtRisk), 0);
+  const cell = model.cells.find((c) => c.tier === selected.tier && c.risk === selected.risk)!;
+  const href = (tier: ValueTier, risk: RiskLevel) =>
+    `/customers?run=${encodeURIComponent(runId)}&customer_value_tier=${tier}&churn_risk_level=${risk}&sort=revenue_at_risk:desc`;
 
   return (
     <Panel
-      title="รายได้ที่เสี่ยงหายอยู่ที่ไหน"
-      info={`แถวคือกลุ่มมูลค่า (จากมูลค่า 6 เดือนของรอบนี้) คอลัมน์คือระดับโอกาสเลิกใช้ตามเกณฑ์ใน model card (${pct(thresholds.medium)}, ${pct(thresholds.high)}, ${pct(thresholds.critical)}) ขนาดคือรายได้ที่เสี่ยงหาย`}
-      meta="ขนาดสี่เหลี่ยมคือรายได้ที่เสี่ยงหาย · กดช่องเพื่อเปิดรายชื่อ"
+      title={`${formatPercent(model.highTier.share)} ของรายได้เสี่ยงหาย อยู่ในลูกค้ามูลค่าสูง ${formatCount(model.highTier.count)} ราย`}
+      info={`ตัวเลขใหญ่ = จำนวนลูกค้า · สีเข้มขึ้น = รายได้ที่เสี่ยงหายในช่องนั้นมากขึ้น · โอกาสเลิกใช้แบ่งด้วยเกณฑ์ ${pct(thresholds.medium)}, ${pct(thresholds.high)}, ${pct(thresholds.critical)} · มูลค่า 6 เดือน: 10% แรก = สูง, 10–50% = กลาง, ที่เหลือ = ต่ำ (จัดอันดับเฉพาะรายที่คาดว่าจะจ่ายมากกว่า ฿0) · คาดว่าไม่จ่าย = โมเดลคาดว่าจะจ่าย ฿0 ใน 6 เดือน · ไม่รวม ${formatCount(model.unscored)} รายที่ใช้งานไม่ถึง 90 วัน`}
+      meta={`ลูกค้า ${formatCount(model.scored)} รายที่ประเมินได้ · กดช่องเพื่อดูแนวทาง`}
+      right={<Provenance kind="forecast" />}
     >
-      {max <= 0 ? (
+      {model.atRisk <= 0 ? (
         <EmptyState title="ยังไม่มีรายได้ที่เสี่ยงหายในรอบนี้" />
       ) : (
         <>
-          {/* --map-max is the side of the largest square: 4 columns must fit 390px phones */}
-          <div
-            className="grid grid-cols-[64px_repeat(4,minmax(0,1fr))] gap-x-2 gap-y-4 [--map-max:56px] min-[860px]:grid-cols-[112px_repeat(4,minmax(0,1fr))] min-[860px]:gap-x-4 min-[860px]:[--map-max:112px]"
-          >
-            <div />
-            {MAP_RISKS.map((risk) => (
-              <div key={risk} className="text-micro text-muted">
-                <span className="text-text">{RISK_LABEL[risk]}</span>
-                <span className="num block whitespace-nowrap">{ranges[risk]}</span>
-              </div>
-            ))}
-            {MAP_TIERS.map((tier) => (
-              <Row key={tier} tier={tier} model={model} max={max} runId={runId} />
+          <div className="overflow-x-auto">
+            <div className="grid min-w-[520px] grid-cols-[112px_repeat(4,minmax(0,1fr))] gap-[3px]">
+              <div className="self-end pb-1 text-micro text-muted">มูลค่า ↓ · โอกาส →</div>
+              {MAP_RISKS.map((risk) => (
+                <div key={risk} className="pb-1">
+                  <p className="text-small font-medium text-text">{RISK_LABEL[risk]}</p>
+                  <p className="num text-micro text-muted">{ranges[risk]}</p>
+                </div>
+              ))}
+              {MAP_TIERS.map((tier) => (
+                <Row key={tier} tier={tier} model={model} selected={selected} onSelect={setSelected} />
+              ))}
+              <div className="pt-1 text-small text-muted">รวม</div>
+              {MAP_RISKS.map((risk) => (
+                <div key={risk} className="num pt-1 text-small text-muted">
+                  <p>{formatCount(model.colTotals[risk].count)} ราย</p>
+                  <p>{formatBahtCompact(model.colTotals[risk].revenueAtRisk)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-micro text-muted">
+            <span>รายได้ที่เสี่ยงหายต่อช่อง</span>
+            {LEGEND.map((l, i) => (
+              <Swatch key={l} color={`var(--heat-${i})`}>{l}</Swatch>
             ))}
           </div>
-          <p className="mt-5 border-t border-rule pt-3 text-small text-muted">
-            รวม <span className="num font-semibold text-text">{formatBahtCompact(model.atRisk)}</span> จากลูกค้า{" "}
-            <span className="num">{formatCount(model.scored)}</span> รายที่มีคะแนน
-            {model.unscored > 0 ? (
-              <>
-                {" "}· อีก <span className="num">{formatCount(model.unscored)}</span> รายใช้งานไม่ถึง 90 วัน ยังไม่มีคะแนน
-              </>
-            ) : null}
-          </p>
+
+          <div aria-live="polite" className="mt-4 flex flex-wrap items-end justify-between gap-3 rounded-control bg-raised p-4">
+            <div className="min-w-0 flex-[1_1_260px]">
+              <p className="text-micro text-muted">ช่องที่เลือก</p>
+              <p className="text-[15px] font-semibold text-text">
+                {TIER_LABEL[cell.tier]} × โอกาสเลิกใช้{RISK_LABEL[cell.risk]}
+              </p>
+              <p className="num mt-0.5 text-small text-muted">
+                {formatCount(cell.count)} ราย · รายได้เสี่ยงหาย {formatBahtCompact(cell.revenueAtRisk)} (
+                {formatPercent(model.atRisk > 0 ? cell.revenueAtRisk / model.atRisk : 0)} ของ {formatBahtCompact(model.atRisk)})
+              </p>
+              <p className="mt-1 text-body text-text">แนวทาง: {CELL_ACTION[cell.tier][cell.risk]}</p>
+            </div>
+            {cell.count > 0 ? (
+              <Link href={href(cell.tier, cell.risk)} className={BUTTON.primary}>
+                ดูรายชื่อ {formatCount(cell.count)} ราย →
+              </Link>
+            ) : (
+              <span className={`${BUTTON.secondary} pointer-events-none opacity-60`} aria-disabled>
+                ดูรายชื่อ 0 ราย
+              </span>
+            )}
+          </div>
         </>
       )}
     </Panel>
   );
 }
 
-function Row({ tier, model, max, runId }: { tier: (typeof MAP_TIERS)[number]; model: OverviewModel; max: number; runId: string }) {
-  const cells = model.cells.filter((c) => c.tier === tier);
-  const count = cells.reduce((a, c) => a + c.count, 0);
+function Row({
+  tier,
+  model,
+  selected,
+  onSelect,
+}: {
+  tier: ValueTier;
+  model: OverviewModel;
+  selected: { tier: ValueTier; risk: RiskLevel };
+  onSelect: (c: { tier: ValueTier; risk: RiskLevel }) => void;
+}) {
   return (
     <>
-      <div className="self-end pb-1">
-        <p className="text-small font-medium text-text">{VALUE_TIER_LABEL[tier]}</p>
-        <p className="num text-micro text-muted">{formatCount(count)} ราย</p>
+      <div className="self-center pr-2">
+        <p className="text-small font-medium text-text">{TIER_LABEL[tier]}</p>
+        <p className="text-micro text-muted">{TIER_SUB[tier]}</p>
       </div>
-      {cells.map((c) => {
-        const side = Math.sqrt(c.revenueAtRisk / max);
-        const href = `/customers?run=${encodeURIComponent(runId)}&customer_value_tier=${c.tier}&churn_risk_level=${c.risk}&sort=revenue_at_risk:desc`;
-        return (
-          <Link
-            key={c.risk}
-            href={href}
-            aria-label={`${VALUE_TIER_LABEL[c.tier]} ความเสี่ยง${RISK_LABEL[c.risk]}: ${formatCount(c.count)} ราย รายได้ที่เสี่ยงหาย ${formatBahtCompact(c.revenueAtRisk)}`}
-            className="group flex min-w-0 flex-col justify-end gap-1 rounded-control"
-          >
-            {c.revenueAtRisk > 0 ? (
-              <span
-                aria-hidden
-                className="block rounded-[2px] transition-opacity duration-150 group-hover:opacity-80"
-                style={{
-                  width: `calc(var(--map-max) * ${side})`,
-                  height: `calc(var(--map-max) * ${side})`,
-                  minWidth: 4,
-                  minHeight: 4,
-                  background: `var(--risk-${c.risk})`,
-                }}
-              />
-            ) : null}
-            <span className="num truncate text-micro text-text group-hover:underline">
-              {c.revenueAtRisk > 0 ? formatBahtCompact(c.revenueAtRisk) : "—"}
-            </span>
-            <span className="num truncate text-micro text-muted">{formatCount(c.count)} ราย</span>
-          </Link>
-        );
-      })}
+      {model.cells
+        .filter((c) => c.tier === tier)
+        .map((c) => {
+          const isSelected = c.tier === selected.tier && c.risk === selected.risk;
+          return (
+            <button
+              key={c.risk}
+              type="button"
+              aria-pressed={isSelected}
+              aria-label={`${TIER_LABEL[c.tier]} × โอกาสเลิกใช้${RISK_LABEL[c.risk]}: ${formatCount(c.count)} ราย รายได้เสี่ยงหาย ${formatBahtCompact(c.revenueAtRisk)}`}
+              onClick={() => onSelect({ tier: c.tier, risk: c.risk })}
+              className={`min-h-[76px] rounded-[6px] px-3 py-2.5 text-left transition-opacity duration-150 hover:opacity-90 ${
+                isSelected ? "outline outline-2 outline-offset-2 outline-[var(--text)]" : ""
+              }`}
+              style={{ background: `var(--heat-${c.bin})`, color: `var(--heat-ink-${c.bin})` }}
+            >
+              <span className="num block text-[20px] font-semibold leading-tight">{formatCount(c.count)}</span>
+              <span className="num block text-micro">{formatBahtCompact(c.revenueAtRisk)}</span>
+            </button>
+          );
+        })}
     </>
   );
 }
+

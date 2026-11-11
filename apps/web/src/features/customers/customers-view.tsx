@@ -14,7 +14,7 @@ import { RunScope } from "@/components/run-selector";
 import { Select } from "@/components/select";
 import { BUTTON, InfoTip, Skeleton, StatusPill, type PillTone } from "@/components/ui";
 import { formatBaht, formatBahtCompact, formatCount, formatDate, formatDaysAgo, formatDaysAhead, formatPercent } from "@/lib/format";
-import { CHANNEL_LABEL, LIFECYCLE_HELP, LIFECYCLE_LABEL, RISK_LABEL, URGENCY_LABEL, VALUE_TIER_HELP, VALUE_TIER_LABEL } from "@/lib/labels";
+import { CHANNEL_LABEL, LIFECYCLE_HELP, LIFECYCLE_LABEL, RISK_LABEL, URGENCY_LABEL, VALUE_TIER_HELP, VALUE_TIER_LABEL, valueTierLabel } from "@/lib/labels";
 import { EXPORT_ROW_CAP, exportOutputsCsv } from "./export-csv";
 import { pageItems } from "./page-items";
 import { humanizeFeature } from "./reasoning";
@@ -22,10 +22,10 @@ import { humanizeFeature } from "./reasoning";
 export const TAB_KEYS = ["paid", "free", "churned", "ghost"] as const;
 export type TabKey = (typeof TAB_KEYS)[number];
 /** Raw filters kept in the URL; presets set them, and dashboard links can set any combination. */
-export const FILTER_KEYS = ["customer_value_tier", "churn_risk_level", "credit_urgency_level", "ever_paid"] as const;
+export const FILTER_KEYS = ["customer_value_tier", "churn_risk_level", "credit_urgency_level", "ever_paid", "sending_months_max"] as const;
 export type FilterKey = (typeof FILTER_KEYS)[number];
 export type ListFilters = Record<FilterKey, string>;
-export const EMPTY_FILTERS: ListFilters = { customer_value_tier: "", churn_risk_level: "", credit_urgency_level: "", ever_paid: "" };
+export const EMPTY_FILTERS: ListFilters = { customer_value_tier: "", churn_risk_level: "", credit_urgency_level: "", ever_paid: "", sending_months_max: "" };
 
 export interface ListState {
   tab: TabKey;
@@ -276,7 +276,7 @@ export function CustomersView({ state, summary, presetCounts, runId, cutoff, dat
   }, [data]);
 
   const activePreset = tab.presets.find((p) => sameFilters(presetFilters(p), state.filters));
-  const chips = activePreset ? [] : filterChips(state.filters);
+  const chips = activePreset ? [] : filterChips(state.filters, tab.stage);
   const title = activePreset?.title ?? "ลูกค้าที่ตรงตัวกรอง";
   const help = activePreset?.help ?? LIFECYCLE_HELP[tab.stage];
   const unscored = summary ? summary.lifecycle.active_paid - summary.churn.eligible_count : 0;
@@ -584,7 +584,7 @@ function CustomerPanel({ row, tab, ctx, href, loading }: { row: PredictionOutput
   const scored = row.churn_probability != null && row.churn_risk_level != null;
   const subtitle =
     tab === "paid"
-      ? [VALUE_TIER_LABEL[row.customer_value_tier], scored && row.churn_risk_level ? `เสี่ยง${RISK_LABEL[row.churn_risk_level]}` : "ยังไม่มีคะแนน"]
+      ? [valueTierLabel(row.customer_value_tier, row.lifecycle_stage), scored && row.churn_risk_level ? `เสี่ยง${RISK_LABEL[row.churn_risk_level]}` : "ยังไม่มีคะแนน"]
           .filter(Boolean)
           .join(" · ")
       : LIFECYCLE_LABEL[row.lifecycle_stage];
@@ -747,10 +747,10 @@ function Dash() {
   return <span className="text-faint">—</span>;
 }
 
-function filterChips(filters: ListFilters): { key: FilterKey; label: string }[] {
+function filterChips(filters: ListFilters, stage: LifecycleStage): { key: FilterKey; label: string }[] {
   const chips: { key: FilterKey; label: string }[] = [];
   const tier = filters.customer_value_tier as keyof typeof VALUE_TIER_LABEL;
-  if (VALUE_TIER_LABEL[tier]) chips.push({ key: "customer_value_tier", label: VALUE_TIER_LABEL[tier] });
+  if (VALUE_TIER_LABEL[tier]) chips.push({ key: "customer_value_tier", label: valueTierLabel(tier, stage) });
   const risks = filters.churn_risk_level
     .split(",")
     .filter((r): r is keyof typeof RISK_LABEL => r in RISK_LABEL)
@@ -759,5 +759,8 @@ function filterChips(filters: ListFilters): { key: FilterKey; label: string }[] 
   const urgency = filters.credit_urgency_level as keyof typeof URGENCY_LABEL;
   if (URGENCY_LABEL[urgency]) chips.push({ key: "credit_urgency_level", label: URGENCY_LABEL[urgency] });
   if (filters.ever_paid) chips.push({ key: "ever_paid", label: filters.ever_paid === "true" ? "เคยเติมเงิน" : "ไม่เคยเติม" });
+  if (/^\d+$/.test(filters.sending_months_max)) {
+    chips.push({ key: "sending_months_max", label: `ส่งข้อความไม่เกิน ${filters.sending_months_max} เดือน` });
+  }
   return chips;
 }

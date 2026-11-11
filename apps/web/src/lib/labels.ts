@@ -43,6 +43,37 @@ export const VALUE_TIER_LABEL = {
   none: "ยังประเมินไม่ได้",
 } as const satisfies Record<ValueTier, string>;
 
+/**
+ * Value Tier `none` has two cases (GLOSSARY.md): an Active customer predicted to pay ฿0, or a
+ * Churned/Ghost customer with no CLV at all. Pick the label by stage.
+ */
+export const valueTierLabel = (tier: ValueTier, stage: LifecycleStage) =>
+  tier === "none" && stage.startsWith("Active") ? "คาดว่าไม่จ่าย" : VALUE_TIER_LABEL[tier];
+
+const ROUTINE = "สื่อสารตามรอบปกติ";
+const AUTOMATED = "ใช้อีเมลอัตโนมัติ ไม่คุ้มที่จะใช้คนติดต่อ";
+
+/**
+ * The Playbook (GLOSSARY.md): one fixed action per Value Tier × Churn Risk Level. It is the only
+ * "what to do" in the app: the heat grid and the customer page both read it (DASHBOARD.md §8.1).
+ */
+export const CELL_ACTION = {
+  high: {
+    low: "ลูกค้าหลักที่มั่นคง เหมาะกับการเสนอแพ็กเกจที่ใหญ่ขึ้น",
+    medium: "เฝ้าดูใกล้ชิด และเตรียมข้อเสนอพิเศษเพื่อรักษาไว้",
+    high: "โทรสอบถามความพึงพอใจและปัญหาการใช้งานภายใน 2 สัปดาห์",
+    critical: "ให้ Account Manager ติดต่อภายในสัปดาห์นี้ เริ่มจากรายที่เสี่ยงหายมากที่สุด",
+  },
+  mid: {
+    low: "กลุ่มที่โตได้ แนะนำบริการเสริม เช่น Email หรือ OTP",
+    medium: "สื่อสารตามรอบปกติ พร้อมแนะนำฟีเจอร์ที่ยังไม่ได้ใช้",
+    high: "ส่งแคมเปญรักษาลูกค้าแบบอัตโนมัติ แล้วติดตามผล",
+    critical: "เสนอส่วนลดเติมเครดิต และเช็กว่ามีปัญหาการใช้งานหรือไม่",
+  },
+  low: { low: ROUTINE, medium: ROUTINE, high: AUTOMATED, critical: AUTOMATED },
+  none: { low: ROUTINE, medium: ROUTINE, high: AUTOMATED, critical: AUTOMATED },
+} as const satisfies Record<ValueTier, Record<RiskLevel, string>>;
+
 export const VALUE_TIER_HELP = {
   high: "10% แรกของมูลค่า 6 เดือนในรอบทำนายนี้",
   mid: "อยู่ในช่วง 10–50% แรก",

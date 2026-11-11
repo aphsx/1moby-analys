@@ -10,11 +10,14 @@ import { formatPercent, formatSignedPercent } from "@/lib/format";
 /* ────────────────────────────────────────── */
 export function PageHeader({
   title,
+  meta,
   finding,
   action,
   scope,
 }: {
   title: ReactNode;
+  /** what the page's numbers cover, e.g. the data period */
+  meta?: ReactNode;
   /** what the data says, not how to use the screen (CONTENT.md §1) */
   finding?: ReactNode;
   action?: ReactNode;
@@ -26,6 +29,7 @@ export function PageHeader({
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h1 className="text-[24px] font-semibold leading-[1.25] text-text min-[860px]:text-title">{title}</h1>
+          {meta ? <p className="mt-1 text-small text-muted">{meta}</p> : null}
           {finding ? <div className="mt-1 max-w-[64ch] text-body text-muted">{finding}</div> : null}
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
@@ -205,6 +209,10 @@ export type KpiItem = {
   caption?: ReactNode;
   /** the number that answers the page's question */
   lead?: boolean;
+  /** provenance, right-aligned on the label row */
+  chip?: ReactNode;
+  /** a meter or split bar under the value; never a sparkline (DESIGN.md §6.2) */
+  viz?: ReactNode;
 };
 
 export function KpiStrip({ items }: { items: KpiItem[] }) {
@@ -216,11 +224,13 @@ export function KpiStrip({ items }: { items: KpiItem[] }) {
           <dt className="flex items-center gap-0.5 text-body text-muted">
             {k.label}
             {k.info ? <InfoTip label={k.label}>{k.info}</InfoTip> : null}
+            {k.chip ? <span className="ml-auto pl-2">{k.chip}</span> : null}
           </dt>
           <dd className={`num mt-1 text-text ${k.lead ? "text-lead font-semibold" : "text-kpi font-medium"}`}>
             {k.value}
             {k.unit ? <span className="ml-1 text-small font-normal text-muted">{k.unit}</span> : null}
           </dd>
+          {k.viz ? <dd className="mt-2">{k.viz}</dd> : null}
           {k.caption ? <dd className="mt-1 text-small text-muted">{k.caption}</dd> : null}
         </div>
       ))}
@@ -273,6 +283,21 @@ export function StatusPill({
       {children}
     </span>
   );
+}
+
+/** Legend key: a 10px square in the series colour + its label. */
+export function Swatch({ color, children }: { color: string; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] shadow-[inset_0_0_0_1px_var(--border)]" style={{ background: color }} />
+      <span className="num">{children}</span>
+    </span>
+  );
+}
+
+/** Provenance chip (DASHBOARD.md §3): imported data vs model output, so a prediction never reads as a fact. */
+export function Provenance({ kind }: { kind: "fact" | "forecast" }) {
+  return <StatusPill tone={kind === "fact" ? "neutral" : "accent"}>{kind === "fact" ? "ข้อมูลจริง" : "คาดการณ์"}</StatusPill>;
 }
 
 /* ────────────────────────────────────────── */

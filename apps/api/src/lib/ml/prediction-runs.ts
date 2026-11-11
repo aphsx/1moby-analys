@@ -215,5 +215,6 @@ export interface OutputsQueryParams {
   ever_paid?: string;
   segment?: string;
   needs_review?: string;
+  sending_months_max?: number;
 }
 
