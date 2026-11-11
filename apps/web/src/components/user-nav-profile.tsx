@@ -14,7 +14,7 @@ function initials(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-export default function UserNavProfile({ collapsed = false }: { collapsed?: boolean }) {
+export function UserNavProfile({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [confirmLogout, setConfirmLogout] = useState(false);

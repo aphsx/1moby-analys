@@ -25,8 +25,7 @@ import { useAsync } from "@/lib/use-async";
 import { ModelStatusCards } from "./model-status-cards";
 import { TrainPanel } from "./train-panel";
 import { TrainingHistoryTable } from "./training-history-table";
-import { getTimestamp, wait } from "./training-utils";
-import { promotedSummary } from "./training-run-utils";
+import { getTimestamp, promotedSummary, wait } from "./training-run-utils";
 
 /** Sort newest-first and fire completion/failure toasts on status transitions. */
 function applyTrainingRuns(

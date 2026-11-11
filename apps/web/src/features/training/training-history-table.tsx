@@ -15,13 +15,8 @@ import { EmptyState, ProgressMeter, SectionCard, Skeleton, StatusPill } from "@/
 import { deleteTrainingRun } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { formatRelative } from "@/features/runs/runs-utils";
-import {
-  primaryResultSummary,
-  promotedSummary,
-  runStatusLabel,
-  runStatusTone,
-} from "./training-run-utils";
-import { getTimestamp } from "./training-utils";
+import { runStatusLabel, runStatusTone } from "@/lib/run-status";
+import { getTimestamp, primaryResultSummary, promotedSummary } from "./training-run-utils";
 
 /** "1 ชม. 12 นาที" / "12 นาที" / "45 วิ" — duration between start and finish. */
 function formatDuration(startedAt: string, finishedAt: string | null): string {

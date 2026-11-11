@@ -23,8 +23,7 @@ import { SectionCard } from "@/components/ui";
 import { Select } from "@/components/select";
 import { ProgressCard } from "./progress-card";
 import { BUTTON } from "@/components/ui";
-import { formatFileSize, getCleanCounts } from "./training-utils";
-import { DEFAULT_HORIZON_DAYS } from "./training-run-utils";
+import { DEFAULT_HORIZON_DAYS, formatFileSize, getCleanCounts } from "./training-run-utils";
 import { formatCount } from "@/lib/format";
 
 const fieldCls =

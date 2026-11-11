@@ -82,7 +82,7 @@ function MessageRow({ msg }: { msg: ChatMsg }) {
 /* ═══════════════════════════════════════════════════════════
    AIChatWidget
 ═══════════════════════════════════════════════════════════ */
-export default function AIChatWidget() {
+export function AIChatWidget() {
   const messages = useChatStore((s) => s.messages);
   const streaming = useChatStore((s) => s.streaming);
   const thinkingStep = useChatStore((s) => s.thinkingStep);

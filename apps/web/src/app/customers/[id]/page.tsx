@@ -1,49 +1,11 @@
 import type { Metadata } from "next";
 import { pageTitle } from "@/lib/nav";
-import { CustomerDetailClient } from "@/features/customers/customer-detail-client";
+import { type CustomerDetailSearchParams, customersHrefFromParams, firstParam } from "@/features/customers/customers-filters";
+import { CustomerDetailView } from "@/features/customers/customer-detail-view";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   return { title: pageTitle(`/customers/${id}`) };
-}
-
-type CustomerDetailSearchParams = {
-  run?: string | string[];
-  tab?: string | string[];
-  search?: string | string[];
-  customer_value_tier?: string | string[];
-  churn_risk_level?: string | string[];
-  credit_urgency_level?: string | string[];
-  ever_paid?: string | string[];
-  sort?: string | string[];
-  page?: string | string[];
-};
-
-const CUSTOMER_LIST_QUERY_KEYS = [
-  "run",
-  "tab",
-  "search",
-  "customer_value_tier",
-  "churn_risk_level",
-  "credit_urgency_level",
-  "ever_paid",
-  "sort",
-  "page",
-] as const;
-
-function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
-}
-
-function customersHrefFromParams(searchParams: CustomerDetailSearchParams): string {
-  const params = new URLSearchParams();
-  CUSTOMER_LIST_QUERY_KEYS.forEach((key) => {
-    const value = firstParam(searchParams[key]);
-    if (value) params.set(key, value);
-  });
-
-  const query = params.toString();
-  return query ? `/customers?${query}` : "/customers";
 }
 
 export default async function CustomerDetailPage({
@@ -57,7 +19,7 @@ export default async function CustomerDetailPage({
   const resolvedSearchParams = await searchParams;
   const run = firstParam(resolvedSearchParams.run);
   return (
-    <CustomerDetailClient
+    <CustomerDetailView
       accId={id}
       requestedRunId={run}
       customersHref={customersHrefFromParams(resolvedSearchParams)}

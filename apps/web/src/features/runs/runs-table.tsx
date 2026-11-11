@@ -16,7 +16,8 @@ import { deletePredictionRun, retryPredictionRun } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { formatCount } from "@/lib/format";
 import { useRunStore } from "@/stores/run-store";
-import { formatRelative, runStatusLabel, runStatusTone } from "./runs-utils";
+import { runStatusLabel, runStatusTone } from "@/lib/run-status";
+import { formatRelative } from "./runs-utils";
 
 /** Auto-created runs are named "Auto — {source} {YYYY-MM-DD}" by the import API. */
 const AUTO_RUN_PREFIX = "Auto — ";
