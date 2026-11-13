@@ -567,7 +567,10 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
 
 ## Phase 6: ML structure (`apps/ml`, every PR gated by the golden run)
 
-- [ ] **6.1 Dead code** `[structure]`
+Every step below left the golden run unchanged (30,697 Prediction Outputs) and, from 6.5 on, the registry rows too (model versions, evaluations, champions, the training run's results).
+
+- [x] **6.1 Dead code** `[structure]`
+  _Done. `cli/train_v2.py` / `predict_v2.py` were already gone._
   Grep-confirm each one.
   - `_promotion_decision` (`training/runner.py:1368`) and `_beats_existing_champion` (`:1397`),
     about 70 lines replaced by `promotion.py`
@@ -577,7 +580,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
   - `_incumbent_backtests` (`runner.py:649`), which becomes a call to
     `_incumbent_backtests_by_metric(..., "pr_auc")`
 
-- [ ] **6.2 One database module: `src/db.py`** `[structure]`
+- [x] **6.2 One database module: `src/db.py`** `[structure]`
+  _Done: `src/db.py` (`engine()`, `to_json`, `from_json`, `update_run`, `load_run`)._
   - One cached engine replaces the 32 `create_engine(database_url())` calls.
   - One JSON helper replaces `registry.py:23`, `outcomes/runner.py:752` and `repository.py:148`.
   - One "JSON or string" loader replaces `runner.py:657`, `:678`, `:1413` and
@@ -586,7 +590,8 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
     `:1334`, `registry.py:782` and `:823`, and `outcomes/runner.py:499`. Run-row CRUD leaves the
     model registry.
 
-- [ ] **6.3 One home for constants** `[structure]`
+- [x] **6.3 One home for constants** `[structure]`
+  _Done. The ML-internal values (seed, early stopping, feature-set names) sit at module level in `constants.py`, because `verify_constants_sync` compares only class attributes with `enums.ts`._
   Move them into `src/constants.py` and change no values.
   - `RANDOM_SEED`:
     - defined 5 times: `datasets.py:26`, `leakage.py:27`, `churn_trainer.py:69`,
@@ -599,13 +604,15 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
   - Status literals (`runner.py:158`, `:186`, `:326`) → `RunStatus`; `_risk_level` literals
     (`prediction/runner.py:416-420`) → `RiskLevel`.
 
-- [ ] **6.4 One logging and one progress shape** `[structure]`
+- [x] **6.4 One logging and one progress shape** `[structure]`
+  _Done. `scripts/golden_run.py` now configures logging like the CLIs, so the golden log still shows training progress._
   - Turn the 27 `print()` calls in training into `logger` calls, as prediction already does.
   - Training progress is `{phase, pct}` and prediction progress is `{step, pct}`. Use
     `{phase, pct}` for both, and update the web reader in the same PR.
   - Fix the stale "24-feature" docstring (`prediction/runner.py:93`; the list has 27).
 
-- [ ] **6.5 Split `training/runner.py` (1,487 lines)** `[structure]`
+- [x] **6.5 Split `training/runner.py` (1,487 lines)** `[structure]`
+  _Done. `_resolve_candidates` is imported at the top but keeps its underscore: `churn_trainer.py` is bug-fix-only, so it takes no renames._
   - `_train_and_register_churn` (`:336`, 311 lines), `_clv` (`:780`, 277) and `_credit` (`:1062`, 291)
     share a tail of about 150 lines. Extract it as `_register_and_promote()` and
     `_persist_evaluations()`. The tail is: next version → feature contract → save artifacts → insert
@@ -614,24 +621,28 @@ Steps 5.2–5.4 and 5.12 are replaced by the UI refactor plan, [`docs/ui/REFACTO
   - Make `_resolve_candidates` public and import it at the top of the file (it is imported privately
     inside a function at `:281`).
 
-- [ ] **6.6 Split `prediction/runner.py` (1,423 lines)** `[structure]`
+- [x] **6.6 Split `prediction/runner.py` (1,423 lines)** `[structure]`
+  _Done. Functions that cross a module boundary dropped their underscore; `p_alive_cuts` / `post_check` became `load_p_alive_cuts` / `run_post_check` so they no longer clash with the runner's locals of the same name._
   Into `scoring.py` (apply the churn, CLV and credit models), `derived.py` (descriptive and derived
   fields, Segments) and `persistence.py` (`OUTPUT_COLUMNS`, `_replace_outputs`, `_post_check`, the
   run row). The long functions go with them: `_run_prediction_inner` (175 lines),
   `_build_output_rows` (116), `_apply_derived` (106), `_apply_descriptive` (96).
 
-- [ ] **6.7 Break up the long registry functions** `[structure]`
+- [x] **6.7 Break up the long registry functions** `[structure]`
+  _Done. Checked beyond the golden run with a registry scenario (promote, re-activate, guarded deletes, repoint/clear, auto-promote): identical before and after._
   Split `promote_model_version` (`registry.py:200`, 158 lines), `delete_model_version` (`:360`, 199)
   and `repoint_production_away_from_training_run` (`:638`, 99) into named steps.
 
-- [ ] **6.8 Load clean data once per run** `[structure]`
+- [x] **6.8 Load clean data once per run** `[structure]`
+  _Done._
   - Today each validation gate calls `load_clean_dataset` (`validation.py:159`, `:180`, `:254`,
     `:274`), so a Training Run reads its train data 5 times and a Prediction Run reads its predict
     data 3 times.
   - Load it once in the runner and pass a `CleanDataset` into the gates. The checks themselves don't
     change.
 
-- [ ] **6.9 FastAPI `api/` cleanup** `[structure]`
+- [x] **6.9 FastAPI `api/` cleanup** `[structure]`
+  _Done. A missing request field is now a 422 instead of a hand-written 400._
   - Delete `api/database.py`, which is async SQLAlchemy only for `/health`. `/health` uses
     `src/db.py` instead, and `asyncpg` leaves `requirements.in`.
   - Drop CORS (`main.py:46`); the service is internal only.
