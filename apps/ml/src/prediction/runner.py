@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from src.constants import (
     DerivedThresholds,
@@ -30,7 +30,8 @@ from src.constants import (
 )
 from src.training import repository
 from src.training.artifacts import load_artifacts
-from src.training.data import database_url, load_predict_clean
+from src.db import PREDICTION_RUNS, engine, load_run, update_run
+from src.training.data import load_predict_clean
 from src.training.drift import (
     compute_feature_drift,
     drift_anomalies,
@@ -53,7 +54,6 @@ from src.training.validation import (
 
 logger = logging.getLogger(__name__)
 
-_UNSET = object()  # sentinel — distinguishes "not supplied" from None in _update_run
 
 # Priority score weights (OUTPUT-CONTRACT §5.2) — single source of truth.
 # Priority ranking key. priority_score ranks by expected money at risk
@@ -1168,7 +1168,7 @@ OUTPUT_COLUMNS = [
 
 
 def _delete_outputs(prediction_run_id: str) -> None:
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         conn.execute(
             text("DELETE FROM ml_prediction_outputs WHERE prediction_run_id = CAST(:run_id AS UUID)"),
             {"run_id": prediction_run_id},
@@ -1223,7 +1223,7 @@ def _replace_outputs(prediction_run_id: str, rows: list[dict[str, Any]]) -> None
         f"INSERT INTO ml_prediction_outputs ({', '.join(OUTPUT_COLUMNS)}) VALUES ({placeholders})"
         f" ON CONFLICT (prediction_run_id, acc_id) DO UPDATE SET {upsert_set}"
     )
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         conn.execute(
             text(
                 "DELETE FROM ml_prediction_outputs WHERE prediction_run_id = CAST(:id AS UUID)"
@@ -1235,7 +1235,7 @@ def _replace_outputs(prediction_run_id: str, rows: list[dict[str, Any]]) -> None
 
 
 def _post_check(prediction_run_id: str, frame: pd.DataFrame) -> dict[str, Any]:
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         inserted = conn.execute(
             text(
                 "SELECT count(*) FROM ml_prediction_outputs WHERE prediction_run_id = CAST(:id AS UUID)"
@@ -1297,7 +1297,7 @@ def _save_postcheck_report(
     source_id: str,
     post_check: dict[str, Any],
 ) -> None:
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         conn.execute(
             text(
                 """
@@ -1328,67 +1328,15 @@ def _save_postcheck_report(
 
 
 def _load_run(prediction_run_id: str) -> dict[str, Any]:
-    with create_engine(database_url()).connect() as conn:
-        row = (
-            conn.execute(
-                text(
-                    """
-                SELECT id::text, predict_source_id::text, status, cutoff_date, created_by,
-                       model_overrides_json
-                FROM ml_prediction_runs WHERE id = CAST(:id AS UUID)
-                """
-                ),
-                {"id": prediction_run_id},
-            )
-            .mappings()
-            .first()
-        )
-    if row is None:
-        raise RuntimeError(f"Prediction run {prediction_run_id} not found")
-    return dict(row)
+    return load_run(
+        PREDICTION_RUNS,
+        prediction_run_id,
+        "id::text, predict_source_id::text, status, cutoff_date, created_by, model_overrides_json",
+    )
 
 
-def _update_run(
-    prediction_run_id: str,
-    *,
-    status: str | None = None,
-    progress: dict[str, Any] | None = None,
-    error_message: str | None = _UNSET,  # type: ignore[assignment]
-    total_customers: int | None = None,
-    model_versions: dict[str, str] | None = None,
-    mark_started: bool = False,
-    mark_finished: bool = False,
-) -> None:
-    sets: list[str] = []
-    params: dict[str, Any] = {"id": prediction_run_id}
-    if status is not None:
-        sets.append("status = :status")
-        params["status"] = status
-    if progress is not None:
-        sets.append("progress_json = CAST(:progress AS JSONB)")
-        params["progress"] = json.dumps(progress, ensure_ascii=False)
-    if error_message is not _UNSET:
-        sets.append("error_message = :error_message")
-        params["error_message"] = error_message
-    if total_customers is not None:
-        sets.append("total_customers = :total_customers")
-        params["total_customers"] = total_customers
-    if model_versions is not None:
-        sets.append("model_versions_json = CAST(:model_versions AS JSONB)")
-        params["model_versions"] = json.dumps(model_versions)
-    if mark_started:
-        sets.append("started_at = COALESCE(started_at, NOW())")
-    if mark_finished:
-        sets.append("finished_at = NOW()")
-    if not sets:
-        return
-    with create_engine(database_url()).begin() as conn:
-        conn.execute(
-            text(
-                f"UPDATE ml_prediction_runs SET {', '.join(sets)} WHERE id = CAST(:id AS UUID)"
-            ),
-            params,
-        )
+def _update_run(prediction_run_id: str, **fields: Any) -> None:
+    update_run(PREDICTION_RUNS, prediction_run_id, **fields)
 
 
 # ── Scalar helpers ───────────────────────────────────────────────

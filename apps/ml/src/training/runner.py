@@ -8,7 +8,6 @@ promotion gate → artifacts + registry + production alias.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, Callable
 
@@ -16,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from src.constants import FEATURE_SET_CHURN_CLV, FEATURE_SET_CREDIT, RANDOM_SEED, RunStatus
+from src.db import TRAINING_RUNS, from_json, load_run, update_run
 from src.training import promotion
 from src.training import repository
 from src.training.artifacts import save_artifacts, verify_artifact_load
@@ -51,8 +51,6 @@ from src.training.registry import (
     insert_model_version,
     next_version,
     promote_model_version,
-    update_training_run,
-    load_training_run,
 )
 from src.training.validation import (
     ValidationCheck,
@@ -150,7 +148,8 @@ def run_training(training_run_id: str) -> None:
         _run_training_inner(training_run_id)
     except Exception as exc:  # noqa: BLE001 - §2: every failure ends at status=failed.
         logger.exception("training run %s failed", training_run_id)
-        update_training_run(
+        update_run(
+            TRAINING_RUNS,
             training_run_id,
             status=RunStatus.FAILED,
             error_message=f"{type(exc).__name__}: {exc}",
@@ -161,7 +160,11 @@ def run_training(training_run_id: str) -> None:
 
 
 def _run_training_inner(training_run_id: str) -> None:
-    run = load_training_run(training_run_id)
+    run = load_run(
+        TRAINING_RUNS,
+        training_run_id,
+        "id::text, source_id::text, status, cutoff_date, horizon_days, created_by, training_config_json",
+    )
     source_id = run["source_id"]
     cutoff = pd.Timestamp(run["cutoff_date"])
     if cutoff != month_start(cutoff):
@@ -176,9 +179,10 @@ def _run_training_inner(training_run_id: str) -> None:
 
     def progress(phase: str, pct: int) -> None:
         logger.info(f"[progress] {pct:3d}% {phase}")
-        update_training_run(training_run_id, progress={"phase": phase, "pct": pct})
+        update_run(TRAINING_RUNS, training_run_id, progress={"phase": phase, "pct": pct})
 
-    update_training_run(
+    update_run(
+        TRAINING_RUNS,
         training_run_id,
         status=RunStatus.IN_PROGRESS,
         mark_started=True,
@@ -277,7 +281,8 @@ def _run_training_inner(training_run_id: str) -> None:
         credit_cutoff = cutoff
 
     from src.training.churn_trainer import _resolve_candidates
-    update_training_run(
+    update_run(
+        TRAINING_RUNS,
         training_run_id,
         training_config={
             "cutoff_date": str(cutoff.date()),
@@ -318,7 +323,8 @@ def _run_training_inner(training_run_id: str) -> None:
     )
 
     progress("completed", 100)
-    update_training_run(
+    update_run(
+        TRAINING_RUNS,
         training_run_id,
         status=RunStatus.COMPLETED,
         results=results,
@@ -651,9 +657,7 @@ def _incumbent_backtests_by_metric(model_type: str, metric_key: str) -> dict[str
     champion = current_champion(model_type)
     if champion is None:
         return None
-    card = champion.get("model_card_json") or {}
-    if isinstance(card, str):
-        card = json.loads(card)
+    card = from_json(champion.get("model_card_json") or {})
     rows = card.get("backtests", []) or []
     out = {
         row["cutoff_date"]: row["metrics"][metric_key]
@@ -669,8 +673,7 @@ def _incumbent_primary_test(model_type: str, metric_key: str) -> float | None:
     if champion is None:
         return None
     metrics = champion.get("metrics_json") or {}
-    if isinstance(metrics, str):
-        metrics = json.loads(metrics)
+    metrics = from_json(metrics)
     value = metrics.get(metric_key) if isinstance(metrics, dict) else None
     return float(value) if isinstance(value, (int, float)) else None
 

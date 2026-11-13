@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-from src.training.data import database_url
+from src.db import engine, to_json
 from src.training.features import FeatureSetContract
 from src.training.validation import ValidationReport
 
@@ -25,7 +24,7 @@ def save_validation_report(
     """
 
     row = report.to_validation_report_row()
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         report_id = conn.execute(
             text(
                 """
@@ -64,9 +63,9 @@ def save_validation_report(
                 "validation_type": row["validation_type"],
                 "status": row["status"],
                 "row_count": row["row_count"],
-                "stats_json": _json_dumps(row["stats_json"]),
-                "anomalies_json": _json_dumps(row["anomalies_json"]),
-                "drift_json": _json_dumps(row["drift_json"]),
+                "stats_json": to_json(row["stats_json"]),
+                "anomalies_json": to_json(row["anomalies_json"]),
+                "drift_json": to_json(row["drift_json"]),
             },
         ).scalar_one()
 
@@ -96,7 +95,7 @@ def save_feature_set_contract(contract: FeatureSetContract) -> str:
     name/version/model_type tuple.
     """
 
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         feature_set_id = conn.execute(
             text(
                 """
@@ -134,9 +133,9 @@ def save_feature_set_contract(contract: FeatureSetContract) -> str:
                 "name": contract.name,
                 "version": contract.version,
                 "model_type": contract.model_type,
-                "feature_names_json": _json_dumps(contract.feature_names),
-                "feature_schema_json": _json_dumps(contract.feature_schema),
-                "transform_config_json": _json_dumps(contract.transform_config),
+                "feature_names_json": to_json(contract.feature_names),
+                "feature_schema_json": to_json(contract.feature_schema),
+                "transform_config_json": to_json(contract.transform_config),
                 "feature_code_hash": contract.feature_code_hash,
                 "status": contract.status,
             },
@@ -145,5 +144,3 @@ def save_feature_set_contract(contract: FeatureSetContract) -> str:
     return str(feature_set_id)
 
 
-def _json_dumps(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False)

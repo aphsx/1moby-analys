@@ -27,7 +27,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from src.constants import RunStatus
 from src.outcomes.metrics import (
@@ -37,7 +37,8 @@ from src.outcomes.metrics import (
     realized_credit_metrics,
 )
 from src.training import repository
-from src.training.data import database_url, load_predict_clean
+from src.db import PREDICTION_RUNS, engine, from_json, load_run, to_json
+from src.training.data import load_predict_clean
 from src.training.labels import (
     CREDIT_HORIZONS,
     LabelConfig,
@@ -453,7 +454,7 @@ def find_actuals_source() -> ActualsSource | None:
     max(payment_date::date, make_date(year, month, 1)) per source.
     """
 
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         row = conn.execute(
             text(
                 """
@@ -486,29 +487,16 @@ def find_actuals_source() -> ActualsSource | None:
     )
 
 
-_RUN_SELECT = """
-SELECT id::text AS id,
-       predict_source_id::text AS predict_source_id,
-       status,
-       cutoff_date,
-       model_versions_json
-FROM ml_prediction_runs
-"""
+_RUN_COLUMNS = "id::text AS id, predict_source_id::text AS predict_source_id, status, cutoff_date, model_versions_json"
+_RUN_SELECT = f"SELECT {_RUN_COLUMNS}\nFROM {PREDICTION_RUNS}\n"
 
 
 def _load_run(prediction_run_id: str) -> dict[str, Any]:
-    with create_engine(database_url()).connect() as conn:
-        row = conn.execute(
-            text(_RUN_SELECT + "WHERE id = CAST(:id AS UUID)"),
-            {"id": prediction_run_id},
-        ).mappings().first()
-    if row is None:
-        raise RuntimeError(f"Prediction run {prediction_run_id} not found")
-    return dict(row)
+    return load_run(PREDICTION_RUNS, prediction_run_id, _RUN_COLUMNS)
 
 
 def _completed_runs() -> list[dict[str, Any]]:
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         rows = conn.execute(
             text(_RUN_SELECT + "WHERE status = :status ORDER BY cutoff_date, created_at"),
             {"status": RunStatus.COMPLETED},
@@ -517,7 +505,7 @@ def _completed_runs() -> list[dict[str, Any]]:
 
 
 def _measured_run_ids() -> set[str]:
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         rows = conn.execute(
             text(
                 """
@@ -532,9 +520,7 @@ def _measured_run_ids() -> set[str]:
 
 
 def _served_versions(run: dict[str, Any]) -> dict[str, str]:
-    versions = run.get("model_versions_json") or {}
-    if isinstance(versions, str):
-        versions = json.loads(versions)
+    versions = from_json(run.get("model_versions_json") or {})
     return {str(key): str(value) for key, value in versions.items() if value}
 
 
@@ -543,7 +529,7 @@ def _model_version_row(model_type: str, version: str | None) -> dict[str, Any] |
 
     if not version:
         return None
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         row = conn.execute(
             text(
                 """
@@ -557,8 +543,7 @@ def _model_version_row(model_type: str, version: str | None) -> dict[str, Any] |
     if row is None:
         return None
     card = row["model_card_json"] or {}
-    if isinstance(card, str):
-        card = json.loads(card)
+    card = from_json(card)
     return {
         "id": row["id"],
         "training_run_id": row["training_run_id"],
@@ -584,7 +569,7 @@ def _card_thresholds(version_row: dict[str, Any] | None) -> dict[str, float] | N
 def _load_outputs(prediction_run_id: str) -> pd.DataFrame:
     """Served predictions for the run, with the credit interval JSON flattened."""
 
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         frame = pd.read_sql_query(
             text(
                 """
@@ -654,7 +639,7 @@ def _replace_evaluation(
         "actuals_source_id": actuals.source_id,
         "actuals_max_activity_date": str(actuals.max_activity_date.date()),
     }
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         conn.execute(
             text(
                 """
@@ -699,11 +684,11 @@ def _replace_evaluation(
                 "dataset_split": PRODUCTION_DATASET_SPLIT,
                 "cutoff_date": str(cutoff.date()),
                 "horizon_days": result.horizon_days,
-                "metrics": _json(result.metrics),
-                "context": _json(context),
-                "confusion_matrix": _json(result.confusion_matrix) if result.confusion_matrix else None,
-                "calibration": _json(result.calibration) if result.calibration else None,
-                "lift_table": _json(result.lift_table) if result.lift_table else None,
+                "metrics": to_json(result.metrics),
+                "context": to_json(context),
+                "confusion_matrix": to_json(result.confusion_matrix) if result.confusion_matrix else None,
+                "calibration": to_json(result.calibration) if result.calibration else None,
+                "lift_table": to_json(result.lift_table) if result.lift_table else None,
             },
         )
 
@@ -749,5 +734,3 @@ def _save_outcome_report(
         logger.exception("failed to save realized-outcome report for run %s", run["id"])
 
 
-def _json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, default=str)

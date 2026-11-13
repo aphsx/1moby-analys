@@ -15,7 +15,8 @@ from sqlalchemy import create_engine, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.training.data import database_url, load_predict_clean, load_train_clean  # noqa: E402
+from src.db import database_url  # noqa: E402
+from src.training.data import load_predict_clean, load_train_clean  # noqa: E402
 from src.training.features import (  # noqa: E402
     CREDIT_TIER_A_FEATURES,
     FeatureSetContract,

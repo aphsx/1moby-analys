@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from src.training.data import (
@@ -15,9 +15,9 @@ from src.training.data import (
     CleanDataset,
     CleanTableSet,
     SourceKind,
-    database_url,
     load_clean_dataset,
 )
+from src.db import engine
 from src.training.features import CREDIT_TIER_A_FEATURES, build_all_features
 from src.training.labels import LabelConfig, build_label_set
 
@@ -199,7 +199,7 @@ def check_train_label_viability(
 
 
 def _check_source_readiness(source_id: str, tables: CleanTableSet) -> ValidationReport:
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         table_checks = _readiness_table_checks(conn, tables)
         source = (
             _load_source(conn, tables.source_table, source_id)
@@ -236,7 +236,7 @@ def _check_source_readiness(source_id: str, tables: CleanTableSet) -> Validation
 
 
 def _check_schema_quality(source_id: str, tables: CleanTableSet) -> ValidationReport:
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         structure_checks = _schema_structure_checks(conn, tables)
 
     if any(check.severity == "blocker" and not check.passed for check in structure_checks):

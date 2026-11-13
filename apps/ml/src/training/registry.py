@@ -8,20 +8,15 @@ recorded in `ml_model_activation_history`.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-from src.training.data import database_url
+from src.db import engine, to_json
 
 PRODUCTION_ALIAS = "production"
-
-
-def _json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, default=str)
 
 
 def next_version(model_type: str) -> str:
@@ -34,7 +29,7 @@ def next_version(model_type: str) -> str:
     from src.training.artifacts import models_dir
 
     prefix = f"{model_type}-{datetime.now(timezone.utc).strftime('%Y.%m')}"
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         registered = conn.execute(
             text("SELECT version FROM ml_model_versions WHERE model_type = :model_type AND version LIKE :prefix"),
             {"model_type": model_type, "prefix": f"{prefix}.%"},
@@ -61,7 +56,7 @@ def insert_model_version(
     model_card: dict[str, Any],
     status: str = "candidate",
 ) -> str:
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         version_id = conn.execute(
             text(
                 """
@@ -90,13 +85,13 @@ def insert_model_version(
                 "status": status,
                 "artifact_path": artifact_path,
                 "artifact_checksum": artifact_checksum,
-                "metrics": _json(metrics),
-                "validation_metrics": _json(validation_metrics),
-                "test_metrics": _json(test_metrics),
-                "feature_names": _json(feature_names),
-                "label_definition": _json(label_definition),
-                "training_data_snapshot": _json(training_data_snapshot),
-                "model_card": _json(model_card),
+                "metrics": to_json(metrics),
+                "validation_metrics": to_json(validation_metrics),
+                "test_metrics": to_json(test_metrics),
+                "feature_names": to_json(feature_names),
+                "label_definition": to_json(label_definition),
+                "training_data_snapshot": to_json(training_data_snapshot),
+                "model_card": to_json(model_card),
             },
         ).scalar_one()
     return str(version_id)
@@ -119,7 +114,7 @@ def insert_evaluation(
     lift_table: list[dict[str, Any]] | None = None,
     feature_importance: list[dict[str, Any]] | None = None,
 ) -> str:
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         evaluation_id = conn.execute(
             text(
                 """
@@ -149,11 +144,11 @@ def insert_evaluation(
                 "horizon_days": horizon_days,
                 "baseline_name": baseline_name,
                 "feature_set_id": feature_set_id,
-                "metrics": _json(metrics),
-                "confusion_matrix": _json(confusion_matrix) if confusion_matrix else None,
-                "calibration": _json(calibration) if calibration else None,
-                "lift_table": _json(lift_table) if lift_table else None,
-                "feature_importance": _json(feature_importance) if feature_importance else None,
+                "metrics": to_json(metrics),
+                "confusion_matrix": to_json(confusion_matrix) if confusion_matrix else None,
+                "calibration": to_json(calibration) if calibration else None,
+                "lift_table": to_json(lift_table) if lift_table else None,
+                "feature_importance": to_json(feature_importance) if feature_importance else None,
             },
         ).scalar_one()
     return str(evaluation_id)
@@ -162,7 +157,7 @@ def insert_evaluation(
 def current_champion(model_type: str) -> dict[str, Any] | None:
     """Champion version row via the production alias, or None."""
 
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         row = conn.execute(
             text(
                 """
@@ -186,7 +181,7 @@ def version_for_serving(model_type: str, model_version_id: str) -> dict[str, Any
     or has no artifact — the caller falls back to the production champion.
     """
 
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         row = conn.execute(
             text(
                 """
@@ -218,7 +213,7 @@ def promote_model_version(
     a specific version from the UI.
     """
 
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         # Activation is a read-modify-write operation. Serialize promotions
         # per model type so two simultaneous operators cannot both observe the
         # same incumbent and leave alias/is_active out of sync.
@@ -391,7 +386,7 @@ def delete_model_version(
 
     from src.training.artifacts import models_dir
 
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         row = conn.execute(
             text(
                 """
@@ -579,7 +574,7 @@ def clear_production_champion(
     version for a model type and no prediction runs still reference it.
     """
 
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         conn.execute(
             text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
             {"lock_key": f"model-promotion:{model_type}"},
@@ -658,7 +653,7 @@ def repoint_production_away_from_training_run(
     repointed: list[dict[str, str]] = []
     cleared: list[dict[str, str]] = []
 
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         champions = conn.execute(
             text(
                 """
@@ -676,7 +671,7 @@ def repoint_production_away_from_training_run(
 
     for champ in champions:
         model_type = champ["model_type"]
-        with create_engine(database_url()).connect() as conn:
+        with engine().connect() as conn:
             replacement = conn.execute(
                 text(
                     """
@@ -727,7 +722,7 @@ def repoint_production_away_from_training_run(
                 }
             )
 
-    with create_engine(database_url()).begin() as conn:
+    with engine().begin() as conn:
         conn.execute(
             text(
                 """
@@ -756,7 +751,7 @@ def activate_model_version(
     then reuses the same promotion transaction with action='manual_override'.
     """
 
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         row = conn.execute(
             text(
                 """
@@ -784,61 +779,3 @@ def activate_model_version(
 
 
 # ── Training run lifecycle ───────────────────────────────────────
-
-
-def update_training_run(
-    training_run_id: str,
-    *,
-    status: str | None = None,
-    progress: dict[str, Any] | None = None,
-    results: list[dict[str, Any]] | None = None,
-    error_message: str | None = None,
-    training_config: dict[str, Any] | None = None,
-    mark_started: bool = False,
-    mark_finished: bool = False,
-) -> None:
-    sets: list[str] = []
-    params: dict[str, Any] = {"id": training_run_id}
-    if status is not None:
-        sets.append("status = :status")
-        params["status"] = status
-    if progress is not None:
-        sets.append("progress_json = CAST(:progress AS JSONB)")
-        params["progress"] = _json(progress)
-    if results is not None:
-        sets.append("results_json = CAST(:results AS JSONB)")
-        params["results"] = _json(results)
-    if error_message is not None:
-        sets.append("error_message = :error_message")
-        params["error_message"] = error_message
-    if training_config is not None:
-        sets.append("training_config_json = CAST(:training_config AS JSONB)")
-        params["training_config"] = _json(training_config)
-    if mark_started:
-        sets.append("started_at = COALESCE(started_at, NOW())")
-    if mark_finished:
-        sets.append("finished_at = NOW()")
-    if not sets:
-        return
-    with create_engine(database_url()).begin() as conn:
-        conn.execute(
-            text(f"UPDATE ml_training_runs SET {', '.join(sets)} WHERE id = CAST(:id AS UUID)"),
-            params,
-        )
-
-
-def load_training_run(training_run_id: str) -> dict[str, Any]:
-    with create_engine(database_url()).connect() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT id::text, source_id::text, status, cutoff_date, horizon_days,
-                       created_by, training_config_json
-                FROM ml_training_runs WHERE id = CAST(:id AS UUID)
-                """
-            ),
-            {"id": training_run_id},
-        ).mappings().first()
-    if row is None:
-        raise RuntimeError(f"Training run {training_run_id} not found")
-    return dict(row)

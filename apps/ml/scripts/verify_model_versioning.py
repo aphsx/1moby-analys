@@ -25,7 +25,7 @@ def next_version_with(registered: list[str]) -> str:
     engine = mock.MagicMock()
     conn = engine.connect.return_value.__enter__.return_value
     conn.execute.return_value.scalars.return_value.all.return_value = registered
-    with mock.patch.object(registry, "create_engine", return_value=engine):
+    with mock.patch.object(registry, "engine", return_value=engine):
         return registry.next_version("churn")
 
 

@@ -7,14 +7,14 @@ schema shape in both flows.
 
 from __future__ import annotations
 
-import os
-import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
+
+from src.db import engine
 
 
 SourceKind = Literal["train", "predict"]
@@ -55,18 +55,6 @@ PREDICT_TABLES = CleanTableSet(
 )
 
 
-def database_url() -> str:
-    """DATABASE_URL with the driver named explicitly.
-
-    SQLAlchemy 2.1 maps a bare postgresql:// URL to psycopg 3, but the image ships psycopg2,
-    and postgres:// (what Railway issues) is not accepted at all.
-    """
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        raise RuntimeError("DATABASE_URL environment variable is required.")
-    return re.sub(r"^postgres(?:ql)?://", "postgresql+psycopg2://", url)
-
-
 def load_train_clean(source_id: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Load `train_clean_*` rows for model training/retraining."""
 
@@ -82,7 +70,7 @@ def load_predict_clean(source_id: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.D
 
 
 def load_clean_dataset(source_id: str, tables: CleanTableSet) -> CleanDataset:
-    with create_engine(database_url()).connect() as conn:
+    with engine().connect() as conn:
         customers = _load_customers(conn, tables.customers_table, source_id)
         payments = _load_payments(conn, tables.payments_table, source_id)
         usage = _load_usage(conn, tables.usage_table, source_id)

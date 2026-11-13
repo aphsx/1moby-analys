@@ -41,7 +41,7 @@ def dump(out: Path) -> None:
     from sqlalchemy import create_engine, text
 
     from src.prediction.runner import run_prediction
-    from src.training.data import database_url
+    from src.db import database_url
     from src.training.runner import run_training
 
     engine = create_engine(database_url())

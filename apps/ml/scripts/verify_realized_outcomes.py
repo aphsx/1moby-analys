@@ -36,7 +36,8 @@ from src.outcomes.runner import (  # noqa: E402
     find_actuals_source,
 )
 from src.training import labels as training_labels  # noqa: E402
-from src.training.data import database_url, load_predict_clean  # noqa: E402
+from src.db import database_url  # noqa: E402
+from src.training.data import load_predict_clean  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

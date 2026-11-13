@@ -68,7 +68,7 @@ def parse_args() -> ProfileConfig:
 
 def db_url() -> str:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from src.training.data import database_url
+    from src.db import database_url
 
     return database_url()
 

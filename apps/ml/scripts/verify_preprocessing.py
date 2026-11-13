@@ -15,7 +15,8 @@ from sqlalchemy import create_engine, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.training.data import database_url, load_train_clean  # noqa: E402
+from src.db import database_url  # noqa: E402
+from src.training.data import load_train_clean  # noqa: E402
 from src.training.features import build_all_features  # noqa: E402
 from src.training.preprocessing import (  # noqa: E402
     check_preprocessing_safety,
