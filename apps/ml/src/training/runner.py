@@ -32,7 +32,7 @@ from src.training.churn_trainer import (
 )
 from src.training.clv_trainer import CLV_CHAMPION, backtest_clv, train_clv
 from src.training.credit_trainer import backtest_credit, train_credit
-from src.training.data import load_train_clean
+from src.training.data import TRAIN_TABLES, load_clean_dataset
 from src.training.drift import build_feature_baseline
 from src.training.datasets import (
     BACKTEST_STEP_MONTHS,
@@ -174,12 +174,14 @@ def _run_training_inner(training_run_id: str) -> None:
     progress("gates", 3)
 
     # ── Gates 1–5 (§2 steps 3–5) ──────────────────────────────────
+    # The train data is read once: the gates and the training datasets share it.
+    clean = load_clean_dataset(source_id=source_id, tables=TRAIN_TABLES)
     gate_reports = [
         check_train_source_readiness(source_id),
-        check_train_schema_quality(source_id),
-        check_train_cutoff_feasibility(source_id, label_config),
-        check_train_label_viability(source_id, label_config),
-        check_train_feature_leakage(source_id, cutoff),
+        check_train_schema_quality(source_id, clean),
+        check_train_cutoff_feasibility(source_id, label_config, clean),
+        check_train_label_viability(source_id, label_config, clean),
+        check_train_feature_leakage(source_id, cutoff, clean),
     ]
     for report in gate_reports:
         repository.save_validation_report(report, training_run_id=training_run_id)
@@ -191,7 +193,7 @@ def _run_training_inner(training_run_id: str) -> None:
 
     # ── Data + datasets (§2 steps 2, 6–7) ─────────────────────────
     progress("features", 8)
-    customers, payments, usage = load_train_clean(source_id)
+    customers, payments, usage = clean.customers, clean.payments, clean.usage
     td = build_training_datasets(customers, payments, usage, cutoff, horizon_days, progress)
     datasets_c1, backtest_sets = td.primary, td.backtests
     datasets_credit, credit_backtest_sets, credit_cutoff = td.credit, td.credit_backtests, td.credit_cutoff

@@ -120,43 +120,47 @@ def check_predict_source_readiness(source_id: str) -> ValidationReport:
     return _check_source_readiness(source_id=source_id, tables=PREDICT_TABLES)
 
 
-def check_train_schema_quality(source_id: str) -> ValidationReport:
+def check_train_schema_quality(source_id: str, dataset: CleanDataset | None = None) -> ValidationReport:
     """Gate 2 schema/data quality checks for a train source."""
 
-    return _check_schema_quality(source_id=source_id, tables=TRAIN_TABLES)
+    return _check_schema_quality(source_id=source_id, tables=TRAIN_TABLES, dataset=dataset)
 
 
-def check_predict_schema_quality(source_id: str) -> ValidationReport:
+def check_predict_schema_quality(source_id: str, dataset: CleanDataset | None = None) -> ValidationReport:
     """Gate 2 schema/data quality checks for a predict source."""
 
-    return _check_schema_quality(source_id=source_id, tables=PREDICT_TABLES)
+    return _check_schema_quality(source_id=source_id, tables=PREDICT_TABLES, dataset=dataset)
 
 
 def check_train_feature_leakage(
     source_id: str,
     cutoff_date: pd.Timestamp,
+    dataset: CleanDataset | None = None,
 ) -> ValidationReport:
     """Gate 5 PIT/leakage checks for train features."""
 
-    return _check_feature_leakage(source_id=source_id, tables=TRAIN_TABLES, cutoff_date=cutoff_date)
+    return _check_feature_leakage(source_id=source_id, tables=TRAIN_TABLES, cutoff_date=cutoff_date, dataset=dataset)
 
 
 def check_predict_feature_leakage(
     source_id: str,
     cutoff_date: pd.Timestamp,
+    dataset: CleanDataset | None = None,
 ) -> ValidationReport:
     """Gate 5 PIT/leakage checks for predict features."""
 
-    return _check_feature_leakage(source_id=source_id, tables=PREDICT_TABLES, cutoff_date=cutoff_date)
+    return _check_feature_leakage(source_id=source_id, tables=PREDICT_TABLES, cutoff_date=cutoff_date, dataset=dataset)
 
 
 def check_train_cutoff_feasibility(
     source_id: str,
     config: LabelConfig,
+    dataset: CleanDataset | None = None,
 ) -> ValidationReport:
     """Gate 3 cutoff/horizon feasibility checks for a train source."""
 
-    dataset = load_clean_dataset(source_id=source_id, tables=TRAIN_TABLES)
+    if dataset is None:
+        dataset = load_clean_dataset(source_id=source_id, tables=TRAIN_TABLES)
     checks = _cutoff_feasibility_checks(dataset, config)
 
     return ValidationReport(
@@ -174,10 +178,12 @@ def check_train_cutoff_feasibility(
 def check_train_label_viability(
     source_id: str,
     config: LabelConfig,
+    dataset: CleanDataset | None = None,
 ) -> ValidationReport:
     """Gate 4 label viability checks for train labels."""
 
-    dataset = load_clean_dataset(source_id=source_id, tables=TRAIN_TABLES)
+    if dataset is None:
+        dataset = load_clean_dataset(source_id=source_id, tables=TRAIN_TABLES)
     label_set = build_label_set(
         dataset.customers,
         dataset.payments,
@@ -235,7 +241,9 @@ def _check_source_readiness(source_id: str, tables: CleanTableSet) -> Validation
     )
 
 
-def _check_schema_quality(source_id: str, tables: CleanTableSet) -> ValidationReport:
+def _check_schema_quality(
+    source_id: str, tables: CleanTableSet, dataset: CleanDataset | None = None
+) -> ValidationReport:
     with engine().connect() as conn:
         structure_checks = _schema_structure_checks(conn, tables)
 
@@ -251,7 +259,8 @@ def _check_schema_quality(source_id: str, tables: CleanTableSet) -> ValidationRe
             checks=structure_checks,
         )
 
-    dataset = load_clean_dataset(source_id=source_id, tables=tables)
+    if dataset is None:
+        dataset = load_clean_dataset(source_id=source_id, tables=tables)
     checks = structure_checks + _schema_quality_checks(dataset)
 
     return ValidationReport(
@@ -270,8 +279,10 @@ def _check_feature_leakage(
     source_id: str,
     tables: CleanTableSet,
     cutoff_date: pd.Timestamp,
+    dataset: CleanDataset | None = None,
 ) -> ValidationReport:
-    dataset = load_clean_dataset(source_id=source_id, tables=tables)
+    if dataset is None:
+        dataset = load_clean_dataset(source_id=source_id, tables=tables)
     feature_result = build_all_features(
         dataset.customers,
         dataset.payments,

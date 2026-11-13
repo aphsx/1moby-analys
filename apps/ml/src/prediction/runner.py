@@ -17,7 +17,7 @@ import pandas as pd
 from src.constants import LifecycleStage, RunStatus
 from src.training import repository
 from src.training.artifacts import load_artifacts
-from src.training.data import load_predict_clean
+from src.training.data import PREDICT_TABLES, load_clean_dataset
 from src.training.drift import compute_feature_drift, drift_anomalies, drift_report_status
 from src.training.features import build_all_features
 from src.training.preprocessing import transform_features
@@ -184,10 +184,12 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
 
     # ── Gates on the predict source ───────────────────────────────
     progress("quality gates", 10)
+    # The predict data is read once: the gates and scoring share it.
+    clean = load_clean_dataset(source_id=source_id, tables=PREDICT_TABLES)
     gate_reports = [
         check_predict_source_readiness(source_id),
-        check_predict_schema_quality(source_id),
-        check_predict_feature_leakage(source_id, cutoff),
+        check_predict_schema_quality(source_id, clean),
+        check_predict_feature_leakage(source_id, cutoff, clean),
     ]
     for report in gate_reports:
         repository.save_validation_report(report, prediction_run_id=prediction_run_id)
@@ -198,7 +200,7 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
             + ", ".join(r.validation_type for r in failed)
         )
 
-    customers, payments, usage = load_predict_clean(source_id)
+    customers, payments, usage = clean.customers, clean.payments, clean.usage
 
     progress("features", 20)
     feature_result = build_all_features(customers, payments, usage, cutoff)
