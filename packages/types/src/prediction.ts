@@ -53,7 +53,7 @@ export interface PredictionRun {
   created_at: string;
   finished_at: string | null;
   error_message: string | null;
-  progress: { step: string; pct: number } | null;
+  progress: { phase: string; pct: number } | null;
   /** Non-fatal problems in a completed run, e.g. churn explanations that could not be computed. */
   warnings: string[];
 }

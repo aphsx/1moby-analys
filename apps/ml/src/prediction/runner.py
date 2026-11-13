@@ -89,9 +89,9 @@ def _feature_contract_guard(
 ) -> None:
     """Validate required columns; allow legacy compatible hashes.
 
-    Feature hashes are now model-specific. Existing churn/CLV champions were
-    trained on the original 24-feature contract, while credit uses the extended
-    27-feature contract. If an older artifact's hash differs but all of its
+    Feature hashes are model-specific: churn and CLV use the 27-feature contract
+    (tier_a_27), credit the extended 31-feature one (tier_a_31). If an older
+    artifact's hash differs but all of its
     serialized preprocessor columns are present, prediction remains safe.
     """
 
@@ -215,7 +215,7 @@ def run_prediction(prediction_run_id: str) -> None:
             prediction_run_id,
             status=RunStatus.FAILED,
             error_message=f"{type(exc).__name__}: {exc}",
-            progress={"step": "failed", "pct": 100},
+            progress={"phase": "failed", "pct": 100},
             mark_finished=True,
         )
         raise
@@ -226,9 +226,9 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
     source_id = run["predict_source_id"]
     cutoff = pd.Timestamp(run["cutoff_date"])
 
-    def progress(step: str, pct: int) -> None:
-        logger.info("[%s] %d%% %s", prediction_run_id[:8], pct, step)
-        _update_run(prediction_run_id, progress={"step": step, "pct": pct})
+    def progress(phase: str, pct: int) -> None:
+        logger.info("[%s] %d%% %s", prediction_run_id[:8], pct, phase)
+        _update_run(prediction_run_id, progress={"phase": phase, "pct": pct})
 
     _update_run(prediction_run_id, status=RunStatus.IN_PROGRESS, mark_started=True)
     progress("load data", 5)
@@ -393,7 +393,7 @@ def _run_prediction_inner(prediction_run_id: str) -> None:
         error_message=None,
         total_customers=int(len(frame)),
         model_versions=model_versions,
-        progress={"step": "completed", "pct": 100, "warnings": warnings},
+        progress={"phase": "completed", "pct": 100, "warnings": warnings},
         mark_finished=True,
     )
     logger.info(

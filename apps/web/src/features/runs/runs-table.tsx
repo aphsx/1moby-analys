@@ -210,7 +210,7 @@ function RunRow({
           </div>
           {inProgress && run.progress && (
             <div className="max-w-[240px]">
-              <ProgressMeter value={run.progress.pct} label={run.progress.step} />
+              <ProgressMeter value={run.progress.pct} label={run.progress.phase} />
             </div>
           )}
         </div>

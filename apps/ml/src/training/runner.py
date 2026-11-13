@@ -175,7 +175,7 @@ def _run_training_inner(training_run_id: str) -> None:
     label_config = LabelConfig(cutoff_date=cutoff, horizon_days=horizon_days)
 
     def progress(phase: str, pct: int) -> None:
-        print(f"[progress] {pct:3d}% {phase}")
+        logger.info(f"[progress] {pct:3d}% {phase}")
         update_training_run(training_run_id, progress={"phase": phase, "pct": pct})
 
     update_training_run(
@@ -206,14 +206,14 @@ def _run_training_inner(training_run_id: str) -> None:
     if failed_gates:
         names = ", ".join(f"{r.validation_type}" for r in failed_gates)
         raise RuntimeError(f"Quality gates failed: {names}")
-    print(f"Gates 1–5 passed ({len(gate_reports)} reports)")
+    logger.info(f"Gates 1–5 passed ({len(gate_reports)} reports)")
 
     # ── Data + datasets (§2 steps 2, 6–7) ─────────────────────────
     progress("features", 8)
     customers, payments, usage = load_train_clean(source_id)
     activity_min, activity_max = _activity_range(payments, usage)
     datasets_c1 = build_cutoff_datasets(customers, payments, usage, cutoff, horizon_days)
-    print(
+    logger.info(
         f"C1={cutoff.date()} churn n={len(datasets_c1.churn.frame)} "
         f"clv n={len(datasets_c1.clv.frame)} credit n={len(datasets_c1.credit.frame)}"
     )
@@ -229,8 +229,8 @@ def _run_training_inner(training_run_id: str) -> None:
         min_history_days=MIN_BACKTEST_HISTORY_DAYS,
     )
     if not backtest_dates:
-        print(
-            "WARNING: data span supports no backtest cutoffs — model stability "
+        logger.warning(
+            "data span supports no backtest cutoffs — model stability "
             "across time is unverified for this run."
         )
     backtest_sets: list[CutoffDatasets] = []
@@ -240,7 +240,7 @@ def _run_training_inner(training_run_id: str) -> None:
                 build_cutoff_datasets(customers, payments, usage, old_cutoff, horizon_days)
             )
         except Exception as exc:  # noqa: BLE001 - an infeasible old cutoff shrinks the backtest.
-            print(f"backtest cutoff {old_cutoff.date()} skipped: {exc}")
+            logger.warning(f"backtest cutoff {old_cutoff.date()} skipped: {exc}")
 
     # ── Credit datasets at credit's own fresher cutoff ────────────
     credit_cutoff = month_start(activity_max - pd.Timedelta(days=CREDIT_LABEL_WINDOW_DAYS))
@@ -266,10 +266,10 @@ def _run_training_inner(training_run_id: str) -> None:
                         build_cutoff_datasets(customers, payments, usage, old_cutoff, horizon_days)
                     )
                 except Exception as exc:  # noqa: BLE001 - infeasible old cutoff shrinks the backtest.
-                    print(f"credit backtest cutoff {old_cutoff.date()} skipped: {exc}")
-            print(f"credit C1={credit_cutoff.date()} n={len(datasets_credit.credit.frame)}")
+                    logger.warning(f"credit backtest cutoff {old_cutoff.date()} skipped: {exc}")
+            logger.info(f"credit C1={credit_cutoff.date()} n={len(datasets_credit.credit.frame)}")
         except Exception as exc:  # noqa: BLE001 - fall back to the shared cutoff.
-            print(f"credit cutoff {credit_cutoff.date()} infeasible ({exc}); using shared C1")
+            logger.warning(f"credit cutoff {credit_cutoff.date()} infeasible ({exc}); using shared C1")
             datasets_credit = datasets_c1
             credit_backtest_sets = backtest_sets
             credit_cutoff = cutoff
@@ -324,7 +324,7 @@ def _run_training_inner(training_run_id: str) -> None:
         results=results,
         mark_finished=True,
     )
-    print("Training run completed.")
+    logger.info("Training run completed.")
 
 
 # ── Churn ────────────────────────────────────────────────────────
@@ -347,14 +347,14 @@ def _train_and_register_churn(
     # frame features+labels directly (no per-cutoff refit inside the trainer), so
     # pooling is leakage-safe — the same protocol already used for credit.
     dataset = pool_train_rows(datasets.churn, [bt.churn for bt in backtest_sets])
-    print(
+    logger.info(
         f"churn: pooled train rows {int((dataset.frame['split'] == 'train').sum())} "
         f"from {1 + len(backtest_sets)} cutoffs"
     )
     preprocessor = fit_preprocessor(
         dataset.features("train"), _feature_schema_for_dataset(datasets, dataset)
     )
-    training = train_churn_candidates(dataset, preprocessor, progress=lambda m: print(m), candidates=None)
+    training = train_churn_candidates(dataset, preprocessor, progress=logger.info, candidates=None)
 
     # ── Evaluate EVERY candidate, then apply the two-stage promotion policy ──
     # (promotion.py) §8: Stage 1 safety gates decide eligibility (leakage,
@@ -375,8 +375,8 @@ def _train_and_register_churn(
             f"churn: {candidate.name} finalize ({attempt_index + 1}/{n_candidates})",
             int(base_pct),
         )
-        print(f"churn: evaluating candidate {candidate.name} (#{attempt_index + 1})")
-        result = finalize_churn_candidate(training, candidate, progress=lambda m: print(m))
+        logger.info(f"churn: evaluating candidate {candidate.name} (#{attempt_index + 1})")
+        result = finalize_churn_candidate(training, candidate, progress=logger.info)
         progress(
             f"churn: {candidate.name} leakage suite",
             int(base_pct + candidate_span * 0.35),
@@ -440,7 +440,7 @@ def _train_and_register_churn(
         for d in decision.candidates
     ]
     for entry in selection_log:
-        print(f"churn: {entry['candidate']} eligible={entry['eligible']} champion={entry['is_champion']} — {entry['reason']}")
+        logger.info(f"churn: {entry['candidate']} eligible={entry['eligible']} champion={entry['is_champion']} — {entry['reason']}")
 
     # Serve the safety/quality winner. Opaque champions such as TabICL are valid
     # predictors; prediction emits probabilities normally and leaves per-row
@@ -627,7 +627,7 @@ def _train_and_register_churn(
         promote_model_version(
             model_type="churn", model_version_id=version_id, reason=reason, created_by=created_by
         )
-    print(f"churn: promoted={promote} — {reason}")
+    logger.info(f"churn: promoted={promote} — {reason}")
 
     return {
         "model_type": "churn",
@@ -770,7 +770,7 @@ def _train_and_register_clv(
     # and never leaks (it fits RFM at the primary cutoff and never sees
     # post-cutoff labels).
     dataset = pool_train_rows(datasets.clv, [bt.clv for bt in backtest_sets])
-    print(
+    logger.info(
         f"clv: pooled train rows {int((dataset.frame['split'] == 'train').sum())} "
         f"from {1 + len(backtest_sets)} cutoffs"
     )
@@ -779,7 +779,7 @@ def _train_and_register_clv(
     )
     result = train_clv(
         dataset, payments, datasets.cutoff_date, horizon_days, preprocessor,
-        progress=lambda m: print(m),
+        progress=logger.info,
     )
 
     progress("clv: backtests", 65)
@@ -796,7 +796,7 @@ def _train_and_register_clv(
                 "baselines": baseline_metrics,
             }
         )
-        print(f"clv backtest {bt.cutoff_date.date()}: composite {champion_metrics.get('clv_composite')}")
+        logger.info(f"clv backtest {bt.cutoff_date.date()}: composite {champion_metrics.get('clv_composite')}")
 
     progress("clv: leakage tests", 68)
     leakage = run_regression_leakage_suite(dataset, preprocessor, ["future_revenue_6m"])
@@ -804,7 +804,7 @@ def _train_and_register_clv(
         training_run_id, source_id, datasets.cutoff_date, "clv",
         int(len(dataset.frame)), leakage,
     )
-    print(f"clv: leakage suite passed={leakage['passed']}")
+    logger.info(f"clv: leakage suite passed={leakage['passed']}")
 
     baseline_best_name = max(
         CLV_BASELINE_NAMES,
@@ -865,7 +865,7 @@ def _train_and_register_clv(
         }
     ]
     for entry in clv_selection_log:
-        print(f"clv: {entry['candidate']} eligible={entry['eligible']} — {entry['reason']}")
+        logger.info(f"clv: {entry['candidate']} eligible={entry['eligible']} — {entry['reason']}")
 
     progress("clv: artifacts + registry", 70)
     version = next_version("clv")
@@ -1018,7 +1018,7 @@ def _train_and_register_clv(
         promote_model_version(
             model_type="clv", model_version_id=version_id, reason=reason, created_by=created_by
         )
-    print(f"clv: promoted={promote} — {reason}")
+    logger.info(f"clv: promoted={promote} — {reason}")
 
     return {
         "model_type": "clv",
@@ -1051,7 +1051,7 @@ def _train_and_register_credit(
     # test stay at the latest cutoff) so the model sees the same customers in
     # different behavioural regimes instead of one static snapshot.
     dataset = pool_train_rows(datasets.credit, [bt.credit for bt in backtest_sets])
-    print(
+    logger.info(
         f"credit: pooled train rows {int((dataset.frame['split'] == 'train').sum())} "
         f"from {1 + len(backtest_sets)} cutoffs"
     )
@@ -1059,7 +1059,7 @@ def _train_and_register_credit(
         dataset.features("train"), _feature_schema_for_dataset(datasets, dataset)
     )
     result = train_credit(
-        dataset, preprocessor, topup_censor_days=float(horizon_days), progress=lambda m: print(m)
+        dataset, preprocessor, topup_censor_days=float(horizon_days), progress=logger.info
     )
 
     progress("credit: backtests", 85)
@@ -1078,7 +1078,7 @@ def _train_and_register_credit(
                 "baselines": {k: v["test"] for k, v in baseline_metrics.items()},
             }
         )
-        print(f"credit backtest {bt.cutoff_date.date()}: coverage {champion_metrics['coverage_p10_p90']}")
+        logger.info(f"credit backtest {bt.cutoff_date.date()}: coverage {champion_metrics['coverage_p10_p90']}")
 
     progress("credit: leakage tests", 88)
     leakage = run_regression_leakage_suite(
@@ -1088,7 +1088,7 @@ def _train_and_register_credit(
         training_run_id, source_id, datasets.cutoff_date, "credit",
         int(len(dataset.frame)), leakage,
     )
-    print(f"credit: leakage suite passed={leakage['passed']}")
+    logger.info(f"credit: leakage suite passed={leakage['passed']}")
 
     # Gate per TRAINING §11: credit PRIMARY metric is interval coverage.
     # Baselines are point forecasts with no interval → MAE comparison used as a
@@ -1149,7 +1149,7 @@ def _train_and_register_credit(
         }
     ]
     for entry in credit_selection_log:
-        print(f"credit: {entry['candidate']} eligible={entry['eligible']} — {entry['reason']}")
+        logger.info(f"credit: {entry['candidate']} eligible={entry['eligible']} — {entry['reason']}")
 
     progress("credit: artifacts + registry", 92)
     version = next_version("credit")
@@ -1315,7 +1315,7 @@ def _train_and_register_credit(
         promote_model_version(
             model_type="credit", model_version_id=version_id, reason=reason, created_by=created_by
         )
-    print(f"credit: promoted={promote} — {reason}")
+    logger.info(f"credit: promoted={promote} — {reason}")
 
     return {
         "model_type": "credit",
