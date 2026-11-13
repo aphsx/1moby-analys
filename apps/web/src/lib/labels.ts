@@ -83,9 +83,9 @@ export const VALUE_TIER_HELP = {
 
 // apps/ml/src/constants.py: URGENCY_CRITICAL_DAYS = 14, WARNING = 30, MONITOR = 90
 export const URGENCY_LABEL = {
-  critical: "ต้องเติมใน 14 วัน",
-  warning: "ต้องเติมใน 15–30 วัน",
-  monitor: "ต้องเติมใน 31–90 วัน",
+  critical: "อาจเติมใน 14 วัน",
+  warning: "อาจเติมใน 15–30 วัน",
+  monitor: "อาจเติมใน 31–90 วัน",
   stable: "เกิน 90 วัน",
 } as const satisfies Record<UrgencyLevel, string>;
 

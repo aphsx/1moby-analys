@@ -224,8 +224,8 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
   },
   urgent_topup_recall: {
     label: "Urgent recall",
-    tooltip: "bucket \"ต้อง top-up ≤14 วัน\" เตือนครบแค่ไหน — เป้า > 0.7",
-    help: "ในลูกค้าที่เครดิตใกล้หมดจริง (ต้องเติมภายใน ~14 วัน) โมเดลเตือนครบกี่ % — สูง = ไม่พลาดเคสเร่งด่วน",
+    tooltip: "bucket \"อาจเติม ≤ 14 วัน\" เตือนครบแค่ไหน — เป้า > 0.7",
+    help: "ในลูกค้าที่เติมเครดิตจริงภายใน 14 วัน โมเดลเตือนไว้ล่วงหน้าได้กี่ % — สูง = ไม่พลาดเคสเร่งด่วน",
     goodRange: "> 70%",
     fmt: pct1,
     higherIsBetter: true,
@@ -239,7 +239,7 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
   },
   urgent_recall: {
     label: "Urgent recall",
-    tooltip: "bucket \"ต้อง top-up ≤14 วัน\" เตือนครบแค่ไหน — เป้า > 0.7",
+    tooltip: "bucket \"อาจเติม ≤ 14 วัน\" เตือนครบแค่ไหน — เป้า > 0.7",
     help: "ในลูกค้าที่เครดิตใกล้หมดจริง โมเดลเตือนครบกี่ %",
     goodRange: "> 70%",
     fmt: pct1,

@@ -111,8 +111,8 @@ export const TABS: Record<TabKey, TabConfig> = {
       },
       {
         key: "credit",
-        label: "ต้องเติมใน 14 วัน",
-        title: "ต้องเติมเครดิตใน 14 วัน",
+        label: "อาจเติมใน 14 วัน",
+        title: "อาจเติมเครดิตใน 14 วัน",
         help: "คาดว่าจะเติมเครดิตครั้งถัดไปภายใน 14 วันนับจากวันตัดข้อมูล (โมเดลทำนายวันชำระครั้งถัดไป ไม่ได้ทำนายว่าเครดิตหมด)",
         filters: { credit_urgency_level: "critical" },
         sort: "estimated_days_until_topup:asc",
@@ -143,8 +143,8 @@ export const TABS: Record<TabKey, TabConfig> = {
       { key: "all", label: "ทั้งหมด", title: "ใช้งานแต่ไม่ได้เติมเงิน", help: LIFECYCLE_HELP["Active Free"], filters: {} },
       {
         key: "soon",
-        label: "ต้องเติมใน 14 วัน",
-        title: "ต้องเติมเครดิตใน 14 วัน",
+        label: "อาจเติมใน 14 วัน",
+        title: "อาจเติมเครดิตใน 14 วัน",
         help: "คาดว่าจะเติมเครดิตครั้งถัดไปภายใน 14 วันนับจากวันตัดข้อมูล",
         filters: { credit_urgency_level: "critical" },
         sort: "estimated_days_until_topup:asc",
