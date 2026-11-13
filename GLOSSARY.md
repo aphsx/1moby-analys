@@ -86,9 +86,9 @@ was predicted.
 _Avoid_: actuals, ground truth, backfill
 
 **Backtest**:
-Looking back to a date six months before the Cutoff Date in the same Data Source, where what happened next
-is already known: e.g. what share of the Customers who sent messages in only one of the five months before
-that date went on to churn. It involves no predictions, unlike a Realized Outcome.
+Measuring at an earlier cutoff in the same data, where what happened next is already known. Training
+backtests each candidate model at older cutoffs; the overview backtests a behaviour (how Sending Months
+relate to churn) six months before the Cutoff Date. Unlike a Realized Outcome, it never waits for new data.
 _Avoid_: holdout, lookback
 
 ## Customer classifications
@@ -124,6 +124,11 @@ A grouping each Prediction Run gives a Customer from their Lifecycle Stage, valu
 Tiers count as one), health (Churn Risk Level, or the predicted chance they are still active) and usage
 growth. It describes a Customer; it is not what to do about them, which is the Playbook.
 _Avoid_: cluster, cohort, group, action group
+
+**Sending Months**:
+How many of the months in the 180 days before a date a Customer sent messages in (at most 5 for a
+month-start date). Not "active months": "Active" means a Lifecycle Stage.
+_Avoid_: active months, usage months
 
 ## Acting on predictions
 
