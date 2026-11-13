@@ -89,7 +89,7 @@ HIGH_THRESHOLD_BAND = (0.35, 0.85)
 
 # Default candidate pool — explicit list, not environment-detection.
 # Override via CHURN_CANDIDATES env var (comma-separated) or the
-# `candidates` kwarg on train_churn_candidates / train_churn.
+# `candidates` kwarg on train_churn_candidates.
 # TabICL is in the default pool on every host (CUDA/MPS/CPU). In-context rows are
 # capped (TABICL_MAX_ROWS) so panel-pooled churn sets stay tractable; tree models
 # still use the full pooled set. If it wins the gate it is served as production
@@ -458,25 +458,6 @@ def finalize_churn_candidate(
         test_ci_json=test_ci,
         hosmer_lemeshow_json=hl,
     )
-
-
-def train_churn(
-    dataset: SplitFrame,
-    preprocessor: PreprocessorConfig,
-    *,
-    lgbm_trials: int = LGBM_TRIALS,
-    xgb_trials: int = XGB_TRIALS,
-    candidates: list[str] | None = None,
-    progress: Callable[[str], None] | None = None,
-) -> ChurnTrainResult:
-    """Convenience wrapper: finalize the top-CV candidate."""
-
-    training = train_churn_candidates(
-        dataset, preprocessor,
-        lgbm_trials=lgbm_trials, xgb_trials=xgb_trials,
-        candidates=candidates, progress=progress,
-    )
-    return finalize_churn_candidate(training, training.candidates[0], progress)
 
 
 def refit_for_backtest(

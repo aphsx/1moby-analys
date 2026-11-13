@@ -298,21 +298,21 @@ def _run_training_inner(training_run_id: str) -> None:
     # ── Churn ─────────────────────────────────────────────────────
     results.append(
         _train_and_register_churn(
-            training_run_id, datasets_c1, backtest_sets, horizon_days, created_by, progress
+            training_run_id, source_id, datasets_c1, backtest_sets, horizon_days, created_by, progress
         )
     )
 
     # ── CLV ───────────────────────────────────────────────────────
     results.append(
         _train_and_register_clv(
-            training_run_id, datasets_c1, backtest_sets, payments, horizon_days, created_by, progress
+            training_run_id, source_id, datasets_c1, backtest_sets, payments, horizon_days, created_by, progress
         )
     )
 
     # ── Credit ────────────────────────────────────────────────────
     results.append(
         _train_and_register_credit(
-            training_run_id, datasets_credit, credit_backtest_sets, horizon_days, created_by, progress
+            training_run_id, source_id, datasets_credit, credit_backtest_sets, horizon_days, created_by, progress
         )
     )
 
@@ -331,6 +331,7 @@ def _run_training_inner(training_run_id: str) -> None:
 
 def _train_and_register_churn(
     training_run_id: str,
+    source_id: str,
     datasets: CutoffDatasets,
     backtest_sets: list[CutoffDatasets],
     horizon_days: int,
@@ -353,7 +354,6 @@ def _train_and_register_churn(
         dataset.features("train"), _feature_schema_for_dataset(datasets, dataset)
     )
     training = train_churn_candidates(dataset, preprocessor, progress=lambda m: print(m), candidates=None)
-    source_id = source_id_of(training_run_id)
 
     # ── Evaluate EVERY candidate, then apply the two-stage promotion policy ──
     # (promotion.py) §8: Stage 1 safety gates decide eligibility (leakage,
@@ -362,7 +362,7 @@ def _train_and_register_churn(
     # a ranking-first composite. No early break — the champion is the best model
     # on quality, not the first that squeaks past a hairline threshold.
     progress("churn: evaluate candidates + promotion policy", 35)
-    incumbent_backtests = _incumbent_backtests("churn")
+    incumbent_backtests = _incumbent_backtests_by_metric("churn", "pr_auc")
     incumbent_primary_test = _incumbent_primary_test("churn", "pr_auc")
     attempts: list[dict[str, Any]] = []
     n_candidates = len(training.candidates)
@@ -642,30 +642,10 @@ def _train_and_register_churn(
     }
 
 
-def _incumbent_backtests(model_type: str) -> dict[str, float] | None:
-    """The current champion's per-cutoff backtest PR-AUC, for apples-to-apples
-    comparison. None when there is no incumbent or no stored backtests."""
-
-    champion = current_champion(model_type)
-    if champion is None:
-        return None
-    card = champion.get("model_card_json") or {}
-    if isinstance(card, str):
-        card = json.loads(card)
-    rows = card.get("backtests", []) or []
-    out = {
-        row["cutoff_date"]: row["metrics"]["pr_auc"]
-        for row in rows
-        if isinstance(row.get("metrics"), dict) and "pr_auc" in row["metrics"]
-    }
-    return out or None
-
-
 def _incumbent_backtests_by_metric(model_type: str, metric_key: str) -> dict[str, float] | None:
     """Per-cutoff backtest metric for the current champion, keyed by cutoff date string.
 
-    Parallel to _incumbent_backtests() but parameterised on metric_key so it works
-    for any model type (CLV → spearman, Credit → coverage_p10_p90).
+    Churn reads pr_auc, CLV spearman, credit coverage_p10_p90.
     """
     champion = current_champion(model_type)
     if champion is None:
@@ -775,6 +755,7 @@ def _churn_backtest_baselines(
 
 def _train_and_register_clv(
     training_run_id: str,
+    source_id: str,
     datasets: CutoffDatasets,
     backtest_sets: list[CutoffDatasets],
     payments: pd.DataFrame,
@@ -819,7 +800,7 @@ def _train_and_register_clv(
     progress("clv: leakage tests", 68)
     leakage = run_regression_leakage_suite(dataset, preprocessor, ["future_revenue_6m"])
     _save_leakage_report(
-        training_run_id, source_id_of(training_run_id), datasets.cutoff_date, "clv",
+        training_run_id, source_id, datasets.cutoff_date, "clv",
         int(len(dataset.frame)), leakage,
     )
     print(f"clv: leakage suite passed={leakage['passed']}")
@@ -1057,6 +1038,7 @@ def _train_and_register_clv(
 
 def _train_and_register_credit(
     training_run_id: str,
+    source_id: str,
     datasets: CutoffDatasets,
     backtest_sets: list[CutoffDatasets],
     horizon_days: int,
@@ -1102,7 +1084,7 @@ def _train_and_register_credit(
         dataset, preprocessor, ["future_credit_usage_30d", "future_credit_usage_90d"]
     )
     _save_leakage_report(
-        training_run_id, source_id_of(training_run_id), datasets.cutoff_date, "credit",
+        training_run_id, source_id, datasets.cutoff_date, "credit",
         int(len(dataset.frame)), leakage,
     )
     print(f"credit: leakage suite passed={leakage['passed']}")
@@ -1359,81 +1341,6 @@ def _feature_schema_for_dataset(
         feature_name: cutoff_datasets.feature_result.feature_schema[feature_name]
         for feature_name in dataset.feature_names
     }
-
-
-def _promotion_decision(
-    *,
-    beats_baselines: bool,
-    leakage_passed: bool,
-    calibration_ok: bool,
-    calibration_label: str,
-    artifact_ok: bool,
-    champion_check: tuple[bool, str],
-) -> tuple[bool, str]:
-    champion_ok, champion_reason = champion_check
-    failures: list[str] = []
-    if not beats_baselines:
-        failures.append("แพ้ baseline บน primary metric อย่างน้อย 1 split/cutoff (gate ข้อ 3)")
-    if not leakage_passed:
-        failures.append("leakage test suite ไม่ผ่าน (gate ข้อ 2)")
-    if not calibration_ok:
-        failures.append(f"calibration ไม่ผ่าน: {calibration_label} (gate ข้อ 5)")
-    if not artifact_ok:
-        failures.append("artifact load test ไม่ผ่าน (gate ข้อ 6)")
-    if not champion_ok:
-        failures.append(champion_reason)
-    if failures:
-        return False, "ไม่ promote — " + "; ".join(failures)
-    return True, (
-        f"ชนะ baseline ทุกตัวทุก cutoff, {calibration_label}, leakage ผ่าน, "
-        f"artifact load ผ่าน — {champion_reason}"
-    )
-
-
-def _beats_existing_champion(
-    model_type: str,
-    metric_key: str,
-    backtest_rows: list[dict[str, Any]],
-    tolerance: bool = False,
-) -> tuple[bool, str]:
-    """Promotion gate №4 — compare against the stored champion's backtests.
-
-    The previous champion's model card stores its own backtest metrics under
-    the same protocol, so an apples-to-apples comparison reads them from there.
-    """
-
-    champion = current_champion(model_type)
-    if champion is None:
-        return True, "ไม่มี champion เดิม (รุ่นแรก)"
-    card = champion.get("model_card_json") or {}
-    if isinstance(card, str):
-        card = json.loads(card)
-    old_rows = {row["cutoff_date"]: row["metrics"] for row in card.get("backtests", [])}
-    if not old_rows or not backtest_rows:
-        return True, f"เทียบ champion เดิม {champion['version']} ไม่ได้ (ไม่มี backtest ร่วม) — ยอมให้ผ่าน"
-
-    wins, comparisons = 0, 0
-    for row in backtest_rows:
-        old = old_rows.get(row["cutoff_date"])
-        if old is None or metric_key not in old:
-            continue
-        comparisons += 1
-        new_value = row["metrics"][metric_key]
-        old_value = old[metric_key]
-        if tolerance:
-            if abs(new_value - 0.80) <= abs(old_value - 0.80) + 1e-9:
-                wins += 1
-        elif new_value >= old_value - 1e-9:
-            wins += 1
-    if comparisons == 0:
-        return True, f"ไม่มี backtest cutoff ร่วมกับ champion เดิม {champion['version']} — ยอมให้ผ่าน"
-    if wins == comparisons:
-        return True, f"ชนะ/เสมอ champion เดิม {champion['version']} ทุก backtest cutoff"
-    return False, f"แพ้ champion เดิม {champion['version']} บน backtest {comparisons - wins}/{comparisons} cutoff (gate ข้อ 4)"
-
-
-def source_id_of(training_run_id: str) -> str:
-    return load_training_run(training_run_id)["source_id"]
 
 
 def _save_leakage_report(
