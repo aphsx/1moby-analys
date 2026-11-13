@@ -34,6 +34,7 @@ import optuna
 import pandas as pd
 import xgboost as xgb
 
+from src.constants import EARLY_STOPPING_ROUNDS, RANDOM_SEED, DerivedThresholds
 from src.training.baselines import (
     credit_last_30d_carryover,
     credit_moving_avg_90d,
@@ -47,13 +48,11 @@ from sklearn.metrics import mean_absolute_error
 
 logger = logging.getLogger(__name__)
 
-RANDOM_SEED = 42
-EARLY_STOPPING_ROUNDS = 50
 QUANTILES = [0.10, 0.25, 0.50, 0.75, 0.90]
 HORIZONS = CREDIT_HORIZONS  # single source in labels.py
 CREDIT_TRIALS = 30
 TARGET_COVERAGE = 0.80
-URGENT_TOPUP_DAYS = 14
+URGENT_TOPUP_DAYS = DerivedThresholds.URGENCY_CRITICAL_DAYS  # equal by design: the ≤14-day urgency SLA
 
 # Top-up timing model (XGBoost AFT — handles the ~70% censored rows that the
 # observed-only alternatives would silently drop). The small distribution ×
@@ -703,7 +702,7 @@ def train_topup_model(
             dtrain,
             num_boost_round=TOPUP_AFT_ROUNDS,
             evals=[(dval, "validation")],
-            early_stopping_rounds=50,
+            early_stopping_rounds=EARLY_STOPPING_ROUNDS,
             verbose_eval=False,
         )
         days_val = np.clip(booster.predict(dval), 0.0, TOPUP_RAW_PRED_CAP)

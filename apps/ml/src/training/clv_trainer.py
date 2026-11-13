@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from lifetimes import BetaGeoFitter, GammaGammaFitter
 
-from src.constants import DerivedThresholds
+from src.constants import EARLY_STOPPING_ROUNDS, RANDOM_SEED, DerivedThresholds
 from src.training.baselines import ClvSegmentMeanBaseline, clv_carryover_scores
 from src.training.datasets import SplitFrame
 from src.training.metrics import (
@@ -60,9 +60,7 @@ def derive_p_alive_thresholds(p_alive_values: np.ndarray) -> dict[str, float]:
     watch = max(watch, at_risk + 1e-6)
     return {"p_alive_at_risk": round(at_risk, 4), "p_alive_watch": round(watch, 4)}
 
-RANDOM_SEED = 42
 BGNBD_PENALIZERS = [float(v) for v in np.logspace(-4, 0, 9)]
-EARLY_STOPPING_ROUNDS = 50
 CLV_CHAMPION = "twopart"
 
 

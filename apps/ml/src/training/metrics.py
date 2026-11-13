@@ -35,6 +35,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+from src.constants import RANDOM_SEED
+
 
 # ── Churn (binary classification) ────────────────────────────────
 
@@ -211,7 +213,7 @@ def bootstrap_ci(
     ranking_scores: np.ndarray | None = None,
     n_boot: int = 1000,
     alpha: float = 0.05,
-    seed: int = 42,
+    seed: int = RANDOM_SEED,
 ) -> dict[str, dict[str, float]]:
     """Percentile bootstrap confidence intervals for all churn_metrics keys.
 
@@ -267,7 +269,7 @@ def bootstrap_ci_regression(
     *,
     n_boot: int = 1000,
     alpha: float = 0.05,
-    seed: int = 42,
+    seed: int = RANDOM_SEED,
 ) -> dict[str, dict[str, float]]:
     """Percentile bootstrap 95% CI for all clv_metrics keys (Spearman, RMSLE, etc.).
 
@@ -316,7 +318,7 @@ def bootstrap_ci_credit(
     *,
     n_boot: int = 500,
     alpha: float = 0.05,
-    seed: int = 42,
+    seed: int = RANDOM_SEED,
 ) -> dict[str, dict[str, float]]:
     """Percentile bootstrap 95% CI for all credit_metrics keys (coverage, pinball, etc.).
 

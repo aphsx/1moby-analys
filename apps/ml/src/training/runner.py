@@ -15,6 +15,7 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from src.constants import FEATURE_SET_CHURN_CLV, FEATURE_SET_CREDIT, RANDOM_SEED, RunStatus
 from src.training import promotion
 from src.training import repository
 from src.training.artifacts import save_artifacts, verify_artifact_load
@@ -151,7 +152,7 @@ def run_training(training_run_id: str) -> None:
         logger.exception("training run %s failed", training_run_id)
         update_training_run(
             training_run_id,
-            status="failed",
+            status=RunStatus.FAILED,
             error_message=f"{type(exc).__name__}: {exc}",
             progress={"phase": "failed", "pct": 100},
             mark_finished=True,
@@ -179,12 +180,12 @@ def _run_training_inner(training_run_id: str) -> None:
 
     update_training_run(
         training_run_id,
-        status="in_progress",
+        status=RunStatus.IN_PROGRESS,
         mark_started=True,
         training_config={
             "cutoff_date": str(cutoff.date()),
             "horizon_days": horizon_days,
-            "seed": 42,
+            "seed": RANDOM_SEED,
             "backtest_step_months": BACKTEST_STEP_MONTHS,
             "max_backtests": MAX_BACKTESTS,
         },
@@ -281,7 +282,7 @@ def _run_training_inner(training_run_id: str) -> None:
         training_config={
             "cutoff_date": str(cutoff.date()),
             "horizon_days": horizon_days,
-            "seed": 42,
+            "seed": RANDOM_SEED,
             "backtest_step_months": BACKTEST_STEP_MONTHS,
             "max_backtests": MAX_BACKTESTS,
             "min_backtest_history_days": MIN_BACKTEST_HISTORY_DAYS,
@@ -319,7 +320,7 @@ def _run_training_inner(training_run_id: str) -> None:
     progress("completed", 100)
     update_training_run(
         training_run_id,
-        status="completed",
+        status=RunStatus.COMPLETED,
         results=results,
         mark_finished=True,
     )
@@ -475,7 +476,7 @@ def _train_and_register_churn(
     version = next_version("churn")
     feature_contract = build_feature_set_contract(
         datasets.feature_result,
-        name="tier_a_27",
+        name=FEATURE_SET_CHURN_CLV,
         version="v1",
         model_type="churn",
         feature_names=dataset.feature_names,
@@ -870,7 +871,7 @@ def _train_and_register_clv(
     version = next_version("clv")
     feature_contract = build_feature_set_contract(
         datasets.feature_result,
-        name="tier_a_27",
+        name=FEATURE_SET_CHURN_CLV,
         version="v1",
         model_type="clv",
         feature_names=dataset.feature_names,
@@ -1154,7 +1155,7 @@ def _train_and_register_credit(
     version = next_version("credit")
     feature_contract = build_feature_set_contract(
         datasets.feature_result,
-        name="tier_a_31",
+        name=FEATURE_SET_CREDIT,
         version="v1",
         model_type="credit",
         feature_names=dataset.feature_names,

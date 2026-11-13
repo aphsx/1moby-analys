@@ -419,12 +419,12 @@ def _risk_level(probability: float, thresholds: dict[str, float]) -> str | None:
     ):
         return None
     if probability >= thresholds["critical"]:
-        return "critical"
+        return RiskLevel.CRITICAL
     if probability >= thresholds["high"]:
-        return "high"
+        return RiskLevel.HIGH
     if probability >= thresholds["medium"]:
-        return "medium"
-    return "low"
+        return RiskLevel.MEDIUM
+    return RiskLevel.LOW
 
 
 def _churn_shap_factors(

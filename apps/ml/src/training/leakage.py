@@ -18,13 +18,13 @@ from scipy.stats import spearmanr
 from sklearn.metrics import roc_auc_score
 from sklearn.tree import DecisionTreeClassifier
 
+from src.constants import RANDOM_SEED
 from src.training.churn_trainer import ChurnCandidate, clone_candidate_model
 from src.training.datasets import SplitFrame, check_split_contamination
 from src.training.preprocessing import PreprocessorConfig, transform_features
 
 logger = logging.getLogger(__name__)
 
-RANDOM_SEED = 42
 SINGLE_FEATURE_AUC_LIMIT = 0.90
 SHUFFLE_AUC_TOLERANCE = 0.07
 SUSPECT_DROP_LIMIT = 0.30

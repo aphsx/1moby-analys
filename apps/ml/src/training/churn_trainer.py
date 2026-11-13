@@ -45,6 +45,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, brier_score_loss
 
+from src.constants import EARLY_STOPPING_ROUNDS, RANDOM_SEED
 from src.training.baselines import (
     ChurnLogisticBaseline,
     churn_recency_rule_scores,
@@ -66,7 +67,6 @@ from src.training.preprocessing import PreprocessorConfig, transform_features
 
 logger = logging.getLogger(__name__)
 
-RANDOM_SEED = 42
 # Reduced from 100 → 40: at this dataset's labelled size (~1.5–2k active-paid
 # rows per cutoff) a 100-trial Optuna search overfits the validation slice with
 # negligible CV PR-AUC gain. 40 TPE trials retain the useful search budget while
@@ -74,7 +74,6 @@ RANDOM_SEED = 42
 # incumbent) is the real arbiter, not search depth.
 LGBM_TRIALS = 40
 XGB_TRIALS = 50
-EARLY_STOPPING_ROUNDS = 50
 # Usable band for the high-risk decision threshold (§13): clip the max-F2 point
 # so it never lands in an unusable extreme.
 HIGH_THRESHOLD_BAND = (0.35, 0.85)
@@ -416,7 +415,7 @@ def finalize_churn_candidate(
         threshold=thresholds["high"],
         ranking_scores=raw_test,
         n_boot=1000,
-        seed=42,
+        seed=RANDOM_SEED,
     )
     notify(
         f"churn: {candidate.name} test PR-AUC 95% CI "

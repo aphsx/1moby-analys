@@ -11,6 +11,18 @@ from __future__ import annotations
 
 from typing import Final
 
+# ── ML-internal settings ──────────────────────────────────────────────────────
+# Module-level on purpose: they are not part of the cross-service string contract,
+# and scripts/verify_constants_sync.py only compares class attributes.
+
+#: One seed for every split, sampler, model and bootstrap, so a training run is reproducible.
+RANDOM_SEED: Final = 42
+#: LightGBM early-stopping patience (rounds without validation improvement).
+EARLY_STOPPING_ROUNDS: Final = 50
+#: Feature-set names recorded in each Model Version's feature contract.
+FEATURE_SET_CHURN_CLV: Final = "tier_a_27"
+FEATURE_SET_CREDIT: Final = "tier_a_31"
+
 
 class ModelType:
     CHURN: Final = "churn"

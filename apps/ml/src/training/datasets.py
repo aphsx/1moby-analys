@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+from src.constants import RANDOM_SEED
 from src.training.features import (
     MINIMUM_TIER_A_FEATURES,
     FeatureBuildResult,
@@ -23,7 +24,6 @@ from src.training.features import (
 )
 from src.training.labels import LabelConfig, build_label_set
 
-RANDOM_SEED = 42
 
 # Split: train / validation / test = 60 / 20 / 20.
 # First carve off the holdout (val+test), then halve it into val and test.
