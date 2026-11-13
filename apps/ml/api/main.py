@@ -1,62 +1,45 @@
 """
 1Moby Analytics ML API — internal-only.
 
-All user-facing routes are now served by the Elysia API service (apps/api/).
-FastAPI exists here for:
-  - Docker healthcheck (GET /health)
-  - Internal ML v2 endpoints once the new training/prediction logic is wired
+All user-facing routes are served by the Elysia API service (apps/api/). FastAPI exists here for:
+  - the Docker healthcheck (GET /health)
+  - internal job triggers (training, prediction, outcome backfill), spawned as CLIs
+  - synchronous model-registry operations (activate, delete, repoint production)
+
+Every /internal route needs the x-internal-token header. There is no CORS: only the API
+calls this service, server to server.
 """
+import hmac
 import os
-from contextlib import asynccontextmanager
+import subprocess
+import sys
 from pathlib import Path
 
-from fastapi import FastAPI, Request, HTTPException, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends, FastAPI, Header, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import text
 
-from api.database import get_db, engine
+from src.db import engine
 
 MODEL_DIR = Path(os.getenv("MODEL_DIR", str(Path(__file__).parent.parent.parent / "models")))
-
-ALLOWED_ORIGINS = [
-    o.strip() for o in
-    os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-    if o.strip()
-]
+APP_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _require_internal_token(request: Request) -> None:
-    import hmac as _hmac
-    token    = request.headers.get("x-internal-token", "")
+def require_internal_token(x_internal_token: str = Header(default="")) -> None:
     expected = os.getenv("INTERNAL_SERVICE_TOKEN", "")
-    if not expected or not _hmac.compare_digest(token, expected):
+    if not expected or not hmac.compare_digest(x_internal_token, expected):
         raise HTTPException(403, "Invalid internal token")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("[ML API] Starting up...")
-    yield
-    print("[ML API] Shutting down...")
-    await engine.dispose()
-
-
-app = FastAPI(title="1Moby ML API (internal)", version="6.0", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="1Moby ML API (internal)", version="6.0")
+internal = [Depends(require_internal_token)]
 
 
 # ── Health ─────────────────────────────────────────────────────────
 @app.get("/health")
-async def health(db: AsyncSession = Depends(get_db)):
-    await db.execute(text("SELECT 1"))
+def health():
+    with engine().connect() as conn:
+        conn.execute(text("SELECT 1"))
     return {
         "status": "ok",
         "db": "connected",
@@ -70,15 +53,10 @@ async def health(db: AsyncSession = Depends(get_db)):
 # as a detached subprocess so the HTTP call returns immediately; the runner
 # itself owns all status/progress updates on the run row.
 
-import subprocess
-import sys
-
-APP_ROOT = Path(__file__).resolve().parents[1]
-
 
 def _spawn_job(module: str, *args: str) -> int:
-    # Inherit stdout/stderr so training/prediction progress prints appear in
-    # `docker compose logs ml` — same pipeline everywhere, easier to debug on CPU.
+    # The child inherits stdout/stderr, so the CLIs' log lines (logging.basicConfig in
+    # src/cli/*.py) appear in `docker compose logs ml`.
     process = subprocess.Popen(
         [sys.executable, "-m", module, *args],
         cwd=str(APP_ROOT),
@@ -87,130 +65,129 @@ def _spawn_job(module: str, *args: str) -> int:
     return process.pid
 
 
-@app.post("/internal/training-runs")
-async def internal_training_run(request: Request):
-    _require_internal_token(request)
-    body = await request.json()
-    training_run_id = body.get("training_run_id")
-    if not training_run_id:
-        raise HTTPException(400, "training_run_id is required")
-    pid = _spawn_job("src.cli.train", "--training-run-id", training_run_id)
-    return {"accepted": True, "training_run_id": training_run_id, "pid": pid}
+class TrainingRunTrigger(BaseModel):
+    training_run_id: str
 
 
-@app.post("/internal/prediction-runs")
-async def internal_prediction_run(request: Request):
-    _require_internal_token(request)
-    body = await request.json()
-    prediction_run_id = body.get("prediction_run_id")
-    if not prediction_run_id:
-        raise HTTPException(400, "prediction_run_id is required")
-    pid = _spawn_job("src.cli.predict", "--prediction-run-id", prediction_run_id)
-    return {"accepted": True, "prediction_run_id": prediction_run_id, "pid": pid}
+class PredictionRunTrigger(BaseModel):
+    prediction_run_id: str
 
 
-@app.post("/internal/outcome-backfill")
-async def internal_outcome_backfill(request: Request):
+class OutcomeBackfillTrigger(BaseModel):
+    prediction_run_id: str | None = None
+    force: bool = False
+
+
+@app.post("/internal/training-runs", dependencies=internal)
+def internal_training_run(body: TrainingRunTrigger):
+    pid = _spawn_job("src.cli.train", "--training-run-id", body.training_run_id)
+    return {"accepted": True, "training_run_id": body.training_run_id, "pid": pid}
+
+
+@app.post("/internal/prediction-runs", dependencies=internal)
+def internal_prediction_run(body: PredictionRunTrigger):
+    pid = _spawn_job("src.cli.predict", "--prediction-run-id", body.prediction_run_id)
+    return {"accepted": True, "prediction_run_id": body.prediction_run_id, "pid": pid}
+
+
+@app.post("/internal/outcome-backfill", dependencies=internal)
+def internal_outcome_backfill(body: OutcomeBackfillTrigger | None = None):
     """Realized-outcome backfill (TRAINING-PIPELINE §15).
 
     Body (all optional): { prediction_run_id, force }. Without an id the job
     measures every unmeasured completed prediction run; results land in
     ml_model_evaluations (evaluation_type='production_holdout').
     """
-    _require_internal_token(request)
-    try:
-        body = await request.json()
-    except Exception:  # noqa: BLE001 - an empty body means "backfill everything".
-        body = {}
-    if not isinstance(body, dict):
-        body = {}
+    body = body or OutcomeBackfillTrigger()
     args: list[str] = []
-    prediction_run_id = body.get("prediction_run_id")
-    if prediction_run_id:
-        args += ["--prediction-run-id", str(prediction_run_id)]
-    if body.get("force"):
+    if body.prediction_run_id:
+        args += ["--prediction-run-id", body.prediction_run_id]
+    if body.force:
         args.append("--force")
     pid = _spawn_job("src.cli.backfill_outcomes", *args)
-    return {"accepted": True, "prediction_run_id": prediction_run_id, "pid": pid}
+    return {"accepted": True, "prediction_run_id": body.prediction_run_id, "pid": pid}
 
 
-@app.post("/internal/model-activate")
-async def internal_model_activate(request: Request):
+# ── Synchronous model-registry operations ──────────────────────────
+# Plain `def`, so FastAPI runs them in its threadpool instead of blocking the event loop.
+# A registry ValueError (a production or in-use version) is a 400, which the API answers as 409.
+
+
+class ModelActivate(BaseModel):
+    model_type: str
+    model_version_id: str
+    reason: str | None = None
+    created_by: str | None = None
+
+
+class RepointProduction(BaseModel):
+    training_run_id: str
+    created_by: str | None = None
+
+
+class ModelDelete(BaseModel):
+    model_type: str
+    model_version_id: str
+    created_by: str | None = None
+    auto_promote_sole_remaining: bool = True
+
+
+@app.post("/internal/model-activate", dependencies=internal)
+def internal_model_activate(body: ModelActivate):
     """Manually pin a model version to production (UI override).
 
-    Synchronous: reuses the gate's promotion transaction so the registry stays
-    consistent (one active version per type, alias + activation history).
+    Reuses the gate's promotion transaction so the registry stays consistent (one active
+    version per type, alias + activation history).
     """
-    _require_internal_token(request)
-    body = await request.json()
-    model_type = body.get("model_type")
-    model_version_id = body.get("model_version_id")
-    if not model_type or not model_version_id:
-        raise HTTPException(400, "model_type and model_version_id are required")
-
     from src.training.registry import activate_model_version
 
     try:
         result = activate_model_version(
-            model_type=model_type,
-            model_version_id=model_version_id,
-            reason=body.get("reason"),
-            created_by=body.get("created_by"),
+            model_type=body.model_type,
+            model_version_id=body.model_version_id,
+            reason=body.reason,
+            created_by=body.created_by,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     return {"activated": True, **result}
 
 
-@app.post("/internal/repoint-production-for-training-run")
-async def internal_repoint_production_for_training_run(request: Request):
+@app.post("/internal/repoint-production-for-training-run", dependencies=internal)
+def internal_repoint_production_for_training_run(body: RepointProduction):
     """Move production off champions owned by a training run before deleting it.
 
-    Synchronous: only safe when no prediction runs reference versions from the
-    run (the API checks that first). Repoints to the newest remaining version
-    per model type, or clears production when no replacement exists.
+    Only safe when no prediction runs reference versions from the run (the API checks that
+    first). Repoints to the newest remaining version per model type, or clears production
+    when no replacement exists.
     """
-    _require_internal_token(request)
-    body = await request.json()
-    training_run_id = body.get("training_run_id")
-    if not training_run_id:
-        raise HTTPException(400, "training_run_id is required")
-
     from src.training.registry import repoint_production_away_from_training_run
 
     try:
         result = repoint_production_away_from_training_run(
-            training_run_id=training_run_id,
-            created_by=body.get("created_by"),
+            training_run_id=body.training_run_id,
+            created_by=body.created_by,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     return {"ok": True, **result}
 
 
-@app.post("/internal/model-delete")
-async def internal_model_delete(request: Request):
+@app.post("/internal/model-delete", dependencies=internal)
+def internal_model_delete(body: ModelDelete):
     """Permanently delete a non-production model version (UI action).
 
-    Synchronous: removes the on-disk artifacts and the registry row in one
-    transaction. The production champion is protected — registry raises if the
-    caller targets it.
+    Removes the registry row in one transaction, then the on-disk artifacts. The production
+    champion is protected — the registry raises if the caller targets it.
     """
-    _require_internal_token(request)
-    body = await request.json()
-    model_type = body.get("model_type")
-    model_version_id = body.get("model_version_id")
-    if not model_type or not model_version_id:
-        raise HTTPException(400, "model_type and model_version_id are required")
-
     from src.training.registry import delete_model_version
 
     try:
         result = delete_model_version(
-            model_type=model_type,
-            model_version_id=model_version_id,
-            created_by=body.get("created_by"),
-            auto_promote_sole_remaining=body.get("auto_promote_sole_remaining", True),
+            model_type=body.model_type,
+            model_version_id=body.model_version_id,
+            created_by=body.created_by,
+            auto_promote_sole_remaining=body.auto_promote_sole_remaining,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))

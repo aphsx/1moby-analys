@@ -176,7 +176,8 @@ def backfill_run(run: dict[str, Any], actuals: ActualsSource) -> None:
     measured = [result for result in results if result.measured]
     for result in measured:
         version_row = version_rows[result.model_type]
-        assert version_row is not None  # measured implies the version resolved
+        if version_row is None:  # measured implies the version resolved
+            raise RuntimeError(f"{result.model_type} was measured without a resolved model version")
         _replace_evaluation(
             run_id=run_id,
             version_row=version_row,
