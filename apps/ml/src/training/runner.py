@@ -25,6 +25,7 @@ from src.training.baselines import (
     CREDIT_BASELINE_NAMES,
 )
 from src.training.churn_trainer import (
+    _resolve_candidates,
     finalize_churn_candidate,
     refit_for_backtest,
     train_churn_candidates,
@@ -34,9 +35,11 @@ from src.training.credit_trainer import backtest_credit, train_credit
 from src.training.data import load_train_clean
 from src.training.drift import build_feature_baseline
 from src.training.datasets import (
+    BACKTEST_STEP_MONTHS,
+    MAX_BACKTESTS,
+    MIN_BACKTEST_HISTORY_DAYS,
     CutoffDatasets,
-    adaptive_backtest_cutoffs,
-    build_cutoff_datasets,
+    build_training_datasets,
     month_start,
     pool_train_rows,
 )
@@ -113,32 +116,6 @@ CREDIT_PROMOTION_CONFIG = promotion.PromotionConfig(
 COVERAGE_RANGE = (0.75, 0.90)
 BACKTEST_COVERAGE_RANGE = (0.70, 0.92)
 CREDIT_MAE_TOLERANCE = 1.10
-BACKTEST_STEP_MONTHS = 2
-# Backtest count adapts to the uploaded data span (§3): every step-month
-# cutoff with ≥MIN_BACKTEST_HISTORY_DAYS of history and a full label window
-# is used, capped at MAX_BACKTESTS for runtime.
-MAX_BACKTESTS = 6
-MIN_BACKTEST_HISTORY_DAYS = 365
-# Credit labels need only 30/90d of post-cutoff data, so credit trains at its
-# own fresher month-aligned cutoff instead of wasting the newest months on the
-# churn/CLV 180d horizon.
-CREDIT_LABEL_WINDOW_DAYS = 90
-
-
-def _activity_range(payments: pd.DataFrame, usage: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timestamp]:
-    """Min/max activity dates (payments + positive usage), matching the label
-    definition of activity in labels.py."""
-
-    dates = pd.concat(
-        [
-            payments.loc[payments["payment_date"].notna(), "payment_date"],
-            usage.loc[(usage["usage"] > 0) & usage["period"].notna(), "period"],
-        ],
-        ignore_index=True,
-    )
-    if dates.empty:
-        raise RuntimeError("No payment or usage activity found for this source")
-    return pd.Timestamp(dates.min()), pd.Timestamp(dates.max())
 
 
 def run_training(training_run_id: str) -> None:
@@ -215,72 +192,11 @@ def _run_training_inner(training_run_id: str) -> None:
     # ── Data + datasets (§2 steps 2, 6–7) ─────────────────────────
     progress("features", 8)
     customers, payments, usage = load_train_clean(source_id)
-    activity_min, activity_max = _activity_range(payments, usage)
-    datasets_c1 = build_cutoff_datasets(customers, payments, usage, cutoff, horizon_days)
-    logger.info(
-        f"C1={cutoff.date()} churn n={len(datasets_c1.churn.frame)} "
-        f"clv n={len(datasets_c1.clv.frame)} credit n={len(datasets_c1.credit.frame)}"
-    )
+    td = build_training_datasets(customers, payments, usage, cutoff, horizon_days, progress)
+    datasets_c1, backtest_sets = td.primary, td.backtests
+    datasets_credit, credit_backtest_sets, credit_cutoff = td.credit, td.credit_backtests, td.credit_cutoff
+    activity_min, activity_max = td.activity_min, td.activity_max
 
-    progress("backtest datasets", 12)
-    backtest_dates = adaptive_backtest_cutoffs(
-        cutoff,
-        activity_min,
-        activity_max,
-        label_window_days=horizon_days,
-        step_months=BACKTEST_STEP_MONTHS,
-        max_backtests=MAX_BACKTESTS,
-        min_history_days=MIN_BACKTEST_HISTORY_DAYS,
-    )
-    if not backtest_dates:
-        logger.warning(
-            "data span supports no backtest cutoffs — model stability "
-            "across time is unverified for this run."
-        )
-    backtest_sets: list[CutoffDatasets] = []
-    for old_cutoff in backtest_dates:
-        try:
-            backtest_sets.append(
-                build_cutoff_datasets(customers, payments, usage, old_cutoff, horizon_days)
-            )
-        except Exception as exc:  # noqa: BLE001 - an infeasible old cutoff shrinks the backtest.
-            logger.warning(f"backtest cutoff {old_cutoff.date()} skipped: {exc}")
-
-    # ── Credit datasets at credit's own fresher cutoff ────────────
-    credit_cutoff = month_start(activity_max - pd.Timedelta(days=CREDIT_LABEL_WINDOW_DAYS))
-    datasets_credit = datasets_c1
-    credit_backtest_sets = backtest_sets
-    if credit_cutoff > cutoff:
-        try:
-            datasets_credit = build_cutoff_datasets(
-                customers, payments, usage, credit_cutoff, horizon_days
-            )
-            credit_backtest_sets = []
-            for old_cutoff in adaptive_backtest_cutoffs(
-                credit_cutoff,
-                activity_min,
-                activity_max,
-                label_window_days=CREDIT_LABEL_WINDOW_DAYS,
-                step_months=BACKTEST_STEP_MONTHS,
-                max_backtests=MAX_BACKTESTS,
-                min_history_days=MIN_BACKTEST_HISTORY_DAYS,
-            ):
-                try:
-                    credit_backtest_sets.append(
-                        build_cutoff_datasets(customers, payments, usage, old_cutoff, horizon_days)
-                    )
-                except Exception as exc:  # noqa: BLE001 - infeasible old cutoff shrinks the backtest.
-                    logger.warning(f"credit backtest cutoff {old_cutoff.date()} skipped: {exc}")
-            logger.info(f"credit C1={credit_cutoff.date()} n={len(datasets_credit.credit.frame)}")
-        except Exception as exc:  # noqa: BLE001 - fall back to the shared cutoff.
-            logger.warning(f"credit cutoff {credit_cutoff.date()} infeasible ({exc}); using shared C1")
-            datasets_credit = datasets_c1
-            credit_backtest_sets = backtest_sets
-            credit_cutoff = cutoff
-    else:
-        credit_cutoff = cutoff
-
-    from src.training.churn_trainer import _resolve_candidates
     update_run(
         TRAINING_RUNS,
         training_run_id,
@@ -479,15 +395,7 @@ def _train_and_register_churn(
         comparable, key=lambda name: result.baseline_metrics[name]["test"]["pr_auc"]
     )
 
-    version = next_version("churn")
-    feature_contract = build_feature_set_contract(
-        datasets.feature_result,
-        name=FEATURE_SET_CHURN_CLV,
-        version="v1",
-        model_type="churn",
-        feature_names=dataset.feature_names,
-    )
-    feature_set_id = repository.save_feature_set_contract(feature_contract)
+    version, feature_contract, feature_set_id = _new_version("churn", datasets, FEATURE_SET_CHURN_CLV, dataset.feature_names)
 
     model_card = {
         "model_type": "churn",
@@ -518,122 +426,48 @@ def _train_and_register_churn(
         "trained_by": created_by,
     }
 
-    artifact_path, checksum = save_artifacts(
-        model_type="churn",
-        version=version,
-        model_object=result.champion.model,
-        preprocessor=preprocessor,
-        feature_names=dataset.feature_names,
-        metrics={
-            "validation": result.validation_metrics,
-            "test": result.test_metrics,
-            "backtests": backtest_rows,
-            "baselines": result.baseline_metrics,
-        },
-        model_card=model_card,
-        calibrator=result.calibrator,
-        thresholds=result.thresholds,
-        feature_baseline=build_feature_baseline(
-            dataset.features("train"), dataset.feature_names, datasets.cutoff_date
-        ),
-    )
-
-    version_id = insert_model_version(
-        training_run_id=training_run_id,
-        feature_set_id=feature_set_id,
-        model_type="churn",
-        version=version,
-        artifact_path=artifact_path,
-        artifact_checksum=checksum,
-        metrics=round_metrics(result.test_metrics),
-        validation_metrics=round_metrics(result.validation_metrics),
-        test_metrics=round_metrics(result.test_metrics),
-        feature_names=dataset.feature_names,
-        label_definition={
-            "label": "churned = no payment and no positive usage in horizon",
-            "population": "Active Paid at cutoff",
-            "horizon_days": horizon_days,
-        },
-        training_data_snapshot={
-            "rows": int(len(dataset.frame)),
-            "splits": {s: int((dataset.frame["split"] == s).sum()) for s in ("train", "validation", "test")},
-            "positive_rate": result.test_metrics["positive_rate"],
-        },
-        model_card=model_card,
-    )
-
-    # Evaluations: champion holdout + backtests, baselines per split
-    insert_evaluation(
-        model_version_id=version_id, training_run_id=training_run_id, model_type="churn",
-        evaluation_type="holdout", dataset_split="validation",
-        metrics=round_metrics(result.validation_metrics),
-        cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
-        feature_set_id=feature_set_id,
-    )
     # Flatten bootstrap CIs for key metrics into the test metrics dict so they
     # are persisted without a schema change. Full CI dict lives in test_ci_json.
-    test_metrics_persisted = dict(round_metrics(result.test_metrics))
-    if result.test_ci_json:
-        for _k in ("pr_auc", "roc_auc", "brier", "bss", "log_loss"):
-            if _k in result.test_ci_json:
-                _ci = result.test_ci_json[_k]
-                test_metrics_persisted[f"{_k}_ci_lower"] = _ci["ci_lower"]
-                test_metrics_persisted[f"{_k}_ci_upper"] = _ci["ci_upper"]
-
+    test_metrics_persisted = _flatten_ci(
+        result.test_metrics, result.test_ci_json, ("pr_auc", "roc_auc", "brier", "bss", "log_loss")
+    )
     # Extend calibration JSON with Hosmer-Lemeshow result (no schema change needed).
     calibration_persisted = {
         **result.calibration_json,
         **({"hosmer_lemeshow": result.hosmer_lemeshow_json} if result.hosmer_lemeshow_json else {}),
     }
-
-    insert_evaluation(
-        model_version_id=version_id, training_run_id=training_run_id, model_type="churn",
-        evaluation_type="holdout", dataset_split="test",
-        metrics=test_metrics_persisted,
-        cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
+    promote, reason = _register_and_promote(
+        model_type="churn",
+        version=version,
+        training_run_id=training_run_id,
         feature_set_id=feature_set_id,
-        confusion_matrix=result.confusion_json,
-        calibration=calibration_persisted,
-        lift_table=result.lift_table_json,
-        feature_importance=result.feature_importance,
+        datasets=datasets,
+        dataset=dataset,
+        preprocessor=preprocessor,
+        model_object=result.champion.model,
+        model_card=model_card,
+        result=result,
+        backtest_rows=backtest_rows,
+        horizon_days=horizon_days,
+        artifact_extras={"calibrator": result.calibrator, "thresholds": result.thresholds},
+        label_definition={
+            "label": "churned = no payment and no positive usage in horizon",
+            "population": "Active Paid at cutoff",
+            "horizon_days": horizon_days,
+        },
+        snapshot_extra={"positive_rate": result.test_metrics["positive_rate"]},
+        test_metrics_persisted=test_metrics_persisted,
+        test_details={
+            "confusion_matrix": result.confusion_json,
+            "calibration": calibration_persisted,
+            "lift_table": result.lift_table_json,
+            "feature_importance": result.feature_importance,
+        },
+        backtest_horizon_days=horizon_days,
+        winner=decision.winner,
+        summary=decision.summary,
+        created_by=created_by,
     )
-    for row in backtest_rows:
-        insert_evaluation(
-            model_version_id=version_id, training_run_id=training_run_id, model_type="churn",
-            evaluation_type="backtest", dataset_split="backtest",
-            metrics=row["metrics"], cutoff_date=row["cutoff_date"], horizon_days=horizon_days,
-            feature_set_id=feature_set_id,
-        )
-        for baseline_name, metrics in row["baselines"].items():
-            insert_evaluation(
-                model_version_id=version_id, training_run_id=training_run_id, model_type="churn",
-                evaluation_type="baseline", dataset_split="backtest",
-                metrics=round_metrics(metrics), cutoff_date=row["cutoff_date"],
-                horizon_days=horizon_days, baseline_name=baseline_name,
-            )
-    for baseline_name, splits in result.baseline_metrics.items():
-        for split_name, metrics in splits.items():
-            insert_evaluation(
-                model_version_id=version_id, training_run_id=training_run_id, model_type="churn",
-                evaluation_type="baseline", dataset_split=split_name,
-                metrics=round_metrics(metrics), cutoff_date=str(datasets.cutoff_date.date()),
-                horizon_days=horizon_days, baseline_name=baseline_name,
-            )
-
-    # Artifact load is the final safety gate — verified only for the chosen
-    # winner (we don't serialize losing candidates). A winner whose artifact
-    # can't reload is unsafe: do not promote, keep the incumbent.
-    artifact_ok = verify_artifact_load(artifact_path, dataset.features("test").head(5))
-    promote = decision.winner is not None and artifact_ok
-    if decision.winner is not None and not artifact_ok:
-        reason = "ไม่ promote — artifact load test ไม่ผ่าน (safety gate)"
-    else:
-        reason = decision.summary
-    if promote:
-        promote_model_version(
-            model_type="churn", model_version_id=version_id, reason=reason, created_by=created_by
-        )
-    logger.info(f"churn: promoted={promote} — {reason}")
 
     return {
         "model_type": "churn",
@@ -871,15 +705,7 @@ def _train_and_register_clv(
         logger.info(f"clv: {entry['candidate']} eligible={entry['eligible']} — {entry['reason']}")
 
     progress("clv: artifacts + registry", 70)
-    version = next_version("clv")
-    feature_contract = build_feature_set_contract(
-        datasets.feature_result,
-        name=FEATURE_SET_CHURN_CLV,
-        version="v1",
-        model_type="clv",
-        feature_names=dataset.feature_names,
-    )
-    feature_set_id = repository.save_feature_set_contract(feature_contract)
+    version, feature_contract, feature_set_id = _new_version("clv", datasets, FEATURE_SET_CHURN_CLV, dataset.feature_names)
 
     model_card = {
         "model_type": "clv",
@@ -926,102 +752,35 @@ def _train_and_register_clv(
         "magnitude_slope": result.magnitude_slope,
         "magnitude_intercept": result.magnitude_intercept,
     }
-    artifact_path, checksum = save_artifacts(
+    promote, reason = _register_and_promote(
         model_type="clv",
         version=version,
-        model_object=model_object,
-        preprocessor=preprocessor,
-        feature_names=dataset.feature_names,
-        metrics={
-            "validation": result.validation_metrics,
-            "test": result.test_metrics,
-            "backtests": backtest_rows,
-            "baselines": result.baseline_metrics,
-        },
-        model_card=model_card,
-        thresholds=result.p_alive_thresholds or None,
-        feature_baseline=build_feature_baseline(
-            dataset.features("train"), dataset.feature_names, datasets.cutoff_date
-        ),
-    )
-
-    version_id = insert_model_version(
         training_run_id=training_run_id,
         feature_set_id=feature_set_id,
-        model_type="clv",
-        version=version,
-        artifact_path=artifact_path,
-        artifact_checksum=checksum,
-        metrics=round_metrics(result.test_metrics),
-        validation_metrics=round_metrics(result.validation_metrics),
-        test_metrics=round_metrics(result.test_metrics),
-        feature_names=dataset.feature_names,
+        datasets=datasets,
+        dataset=dataset,
+        preprocessor=preprocessor,
+        model_object=model_object,
+        model_card=model_card,
+        result=result,
+        backtest_rows=backtest_rows,
+        horizon_days=horizon_days,
+        artifact_extras={"thresholds": result.p_alive_thresholds or None},
         label_definition={
             "label": "future_revenue_6m = sum(amount) in horizon",
             "population": "Active at cutoff",
             "horizon_days": horizon_days,
         },
-        training_data_snapshot={
-            "rows": int(len(dataset.frame)),
-            "splits": {s: int((dataset.frame["split"] == s).sum()) for s in ("train", "validation", "test")},
-        },
-        model_card=model_card,
+        snapshot_extra={},
+        test_metrics_persisted=_flatten_ci(
+            result.test_metrics, result.test_ci_json, ("spearman", "rmsle", "top_decile_capture")
+        ),
+        test_details={},
+        backtest_horizon_days=horizon_days,
+        winner=clv_decision.winner,
+        summary=clv_decision.summary,
+        created_by=created_by,
     )
-
-    insert_evaluation(
-        model_version_id=version_id, training_run_id=training_run_id, model_type="clv",
-        evaluation_type="holdout", dataset_split="validation",
-        metrics=round_metrics(result.validation_metrics),
-        cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
-        feature_set_id=feature_set_id,
-    )
-    # Flatten bootstrap CIs for key metrics into the test metrics dict.
-    clv_test_metrics_persisted = dict(round_metrics(result.test_metrics))
-    if result.test_ci_json:
-        for _k in ("spearman", "rmsle", "top_decile_capture"):
-            if _k in result.test_ci_json:
-                _ci = result.test_ci_json[_k]
-                clv_test_metrics_persisted[f"{_k}_ci_lower"] = _ci["ci_lower"]
-                clv_test_metrics_persisted[f"{_k}_ci_upper"] = _ci["ci_upper"]
-    insert_evaluation(
-        model_version_id=version_id, training_run_id=training_run_id, model_type="clv",
-        evaluation_type="holdout", dataset_split="test",
-        metrics=clv_test_metrics_persisted,
-        cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
-        feature_set_id=feature_set_id,
-    )
-    for row in backtest_rows:
-        insert_evaluation(
-            model_version_id=version_id, training_run_id=training_run_id, model_type="clv",
-            evaluation_type="backtest", dataset_split="backtest", metrics=row["metrics"],
-            cutoff_date=row["cutoff_date"], horizon_days=horizon_days, feature_set_id=feature_set_id,
-        )
-        for baseline_name, metrics in row["baselines"].items():
-            insert_evaluation(
-                model_version_id=version_id, training_run_id=training_run_id, model_type="clv",
-                evaluation_type="baseline", dataset_split="backtest", metrics=round_metrics(metrics),
-                cutoff_date=row["cutoff_date"], horizon_days=horizon_days, baseline_name=baseline_name,
-            )
-    for baseline_name, splits in result.baseline_metrics.items():
-        for split_name, metrics in splits.items():
-            insert_evaluation(
-                model_version_id=version_id, training_run_id=training_run_id, model_type="clv",
-                evaluation_type="baseline", dataset_split=split_name, metrics=round_metrics(metrics),
-                cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
-                baseline_name=baseline_name,
-            )
-
-    artifact_ok = verify_artifact_load(artifact_path, dataset.features("test").head(5))
-    promote = clv_decision.winner is not None and artifact_ok
-    if clv_decision.winner is not None and not artifact_ok:
-        reason = "ไม่ promote — artifact load test ไม่ผ่าน (safety gate)"
-    else:
-        reason = clv_decision.summary
-    if promote:
-        promote_model_version(
-            model_type="clv", model_version_id=version_id, reason=reason, created_by=created_by
-        )
-    logger.info(f"clv: promoted={promote} — {reason}")
 
     return {
         "model_type": "clv",
@@ -1155,15 +914,7 @@ def _train_and_register_credit(
         logger.info(f"credit: {entry['candidate']} eligible={entry['eligible']} — {entry['reason']}")
 
     progress("credit: artifacts + registry", 92)
-    version = next_version("credit")
-    feature_contract = build_feature_set_contract(
-        datasets.feature_result,
-        name=FEATURE_SET_CREDIT,
-        version="v1",
-        model_type="credit",
-        feature_names=dataset.feature_names,
-    )
-    feature_set_id = repository.save_feature_set_contract(feature_contract)
+    version, feature_contract, feature_set_id = _new_version("credit", datasets, FEATURE_SET_CREDIT, dataset.feature_names)
 
     baseline_best_name = min(
         CREDIT_BASELINE_NAMES, key=lambda name: result.baseline_metrics[name]["test"]["mae_30d"]
@@ -1224,8 +975,173 @@ def _train_and_register_credit(
         "horizons": result.horizons,
         "topup_model": result.topup_model,
     }
-    artifact_path, checksum = save_artifacts(
+    promote, reason = _register_and_promote(
         model_type="credit",
+        version=version,
+        training_run_id=training_run_id,
+        feature_set_id=feature_set_id,
+        datasets=datasets,
+        dataset=dataset,
+        preprocessor=preprocessor,
+        model_object=model_object,
+        model_card=model_card,
+        result=result,
+        backtest_rows=backtest_rows,
+        horizon_days=horizon_days,
+        artifact_extras={},
+        label_definition={
+            "label": "future_credit_usage_30d/90d = sum(usage) in horizon windows",
+            "population": "customers with activity history",
+        },
+        snapshot_extra={},
+        test_metrics_persisted=_flatten_ci(
+            result.test_metrics,
+            result.test_ci_json,
+            ("coverage_p10_p90", "mae_30d", "mae_90d", "pinball_composite_30d", "pinball_composite_90d"),
+        ),
+        test_details={},
+        backtest_horizon_days=None,
+        winner=credit_decision.winner,
+        summary=credit_decision.summary,
+        created_by=created_by,
+        extra_gate=(
+            beats_baselines,
+            f"ไม่ promote — MAE เกิน tolerance {CREDIT_MAE_TOLERANCE}× baseline (gate ข้อ 3)",
+        ),
+    )
+
+    return {
+        "model_type": "credit",
+        "primary_metric_name": "Coverage p10–p90",
+        "primary_metric_value": coverage,
+        "baseline_name": "target_75pct",
+        "baseline_value": COVERAGE_RANGE[0],
+        "calibration_ece": None,
+        "leakage_passed": bool(leakage["passed"]),
+        "promoted": promote,
+        "promote_reason": reason,
+        "new_version": version if promote else None,
+    }
+
+
+# ── Shared tail: register a Model Version, persist its evaluations, promote ──
+
+
+def _new_version(
+    model_type: str, datasets: CutoffDatasets, feature_set: str, feature_names: list[str]
+) -> tuple[str, Any, str]:
+    """The next version number, its feature contract, and the saved contract's id."""
+    version = next_version(model_type)
+    feature_contract = build_feature_set_contract(
+        datasets.feature_result,
+        name=feature_set,
+        version="v1",
+        model_type=model_type,
+        feature_names=feature_names,
+    )
+    return version, feature_contract, repository.save_feature_set_contract(feature_contract)
+
+
+def _flatten_ci(
+    test_metrics: dict[str, Any], test_ci_json: dict[str, Any] | None, keys: tuple[str, ...]
+) -> dict[str, Any]:
+    """Rounded test metrics plus `<key>_ci_lower` / `<key>_ci_upper` for each bootstrap CI."""
+    persisted = dict(round_metrics(test_metrics))
+    if test_ci_json:
+        for key in keys:
+            if key in test_ci_json:
+                persisted[f"{key}_ci_lower"] = test_ci_json[key]["ci_lower"]
+                persisted[f"{key}_ci_upper"] = test_ci_json[key]["ci_upper"]
+    return persisted
+
+
+def _persist_evaluations(
+    *,
+    version_id: str,
+    training_run_id: str,
+    model_type: str,
+    cutoff_date: str,
+    horizon_days: int,
+    feature_set_id: str,
+    validation_metrics: dict[str, Any],
+    test_metrics_persisted: dict[str, Any],
+    test_details: dict[str, Any],
+    backtest_rows: list[dict[str, Any]],
+    baseline_metrics: dict[str, dict[str, Any]],
+    backtest_horizon_days: int | None,
+) -> None:
+    """Holdout (validation, test), backtest and baseline evaluation rows for one Model Version.
+
+    `backtest_horizon_days` is written on the backtest and baseline rows; credit passes None
+    because its backtests mix the 30- and 90-day horizons.
+    """
+    own = {"model_version_id": version_id, "training_run_id": training_run_id, "model_type": model_type}
+    horizon = {} if backtest_horizon_days is None else {"horizon_days": backtest_horizon_days}
+    insert_evaluation(
+        **own, evaluation_type="holdout", dataset_split="validation",
+        metrics=round_metrics(validation_metrics),
+        cutoff_date=cutoff_date, horizon_days=horizon_days, feature_set_id=feature_set_id,
+    )
+    insert_evaluation(
+        **own, evaluation_type="holdout", dataset_split="test",
+        metrics=test_metrics_persisted,
+        cutoff_date=cutoff_date, horizon_days=horizon_days, feature_set_id=feature_set_id,
+        **test_details,
+    )
+    for row in backtest_rows:
+        insert_evaluation(
+            **own, evaluation_type="backtest", dataset_split="backtest",
+            metrics=row["metrics"], cutoff_date=row["cutoff_date"], feature_set_id=feature_set_id, **horizon,
+        )
+        for baseline_name, metrics in row["baselines"].items():
+            insert_evaluation(
+                **own, evaluation_type="baseline", dataset_split="backtest",
+                metrics=round_metrics(metrics), cutoff_date=row["cutoff_date"],
+                baseline_name=baseline_name, **horizon,
+            )
+    for baseline_name, splits in baseline_metrics.items():
+        for split_name, metrics in splits.items():
+            insert_evaluation(
+                **own, evaluation_type="baseline", dataset_split=split_name,
+                metrics=round_metrics(metrics), cutoff_date=cutoff_date,
+                baseline_name=baseline_name, **horizon,
+            )
+
+
+def _register_and_promote(
+    *,
+    model_type: str,
+    version: str,
+    training_run_id: str,
+    feature_set_id: str,
+    datasets: CutoffDatasets,
+    dataset: Any,
+    preprocessor: Any,
+    model_object: Any,
+    model_card: dict[str, Any],
+    result: Any,
+    backtest_rows: list[dict[str, Any]],
+    horizon_days: int,
+    artifact_extras: dict[str, Any],
+    label_definition: dict[str, Any],
+    snapshot_extra: dict[str, Any],
+    test_metrics_persisted: dict[str, Any],
+    test_details: dict[str, Any],
+    backtest_horizon_days: int | None,
+    winner: Any,
+    summary: str,
+    created_by: str | None,
+    extra_gate: tuple[bool, str] = (True, ""),
+) -> tuple[bool, str]:
+    """Save the artifacts, insert the Model Version and its evaluations, then promote it when
+    the policy picked a winner, `extra_gate` holds and the artifact reloads.
+
+    Artifact load is the final safety gate, verified only for the chosen winner (losing
+    candidates are not serialized): a winner whose artifact cannot reload is unsafe, so the
+    incumbent stays. Returns (promoted, reason).
+    """
+    artifact_path, checksum = save_artifacts(
+        model_type=model_type,
         version=version,
         model_object=model_object,
         preprocessor=preprocessor,
@@ -1240,12 +1156,12 @@ def _train_and_register_credit(
         feature_baseline=build_feature_baseline(
             dataset.features("train"), dataset.feature_names, datasets.cutoff_date
         ),
+        **artifact_extras,
     )
-
     version_id = insert_model_version(
         training_run_id=training_run_id,
         feature_set_id=feature_set_id,
-        model_type="credit",
+        model_type=model_type,
         version=version,
         artifact_path=artifact_path,
         artifact_checksum=checksum,
@@ -1253,85 +1169,44 @@ def _train_and_register_credit(
         validation_metrics=round_metrics(result.validation_metrics),
         test_metrics=round_metrics(result.test_metrics),
         feature_names=dataset.feature_names,
-        label_definition={
-            "label": "future_credit_usage_30d/90d = sum(usage) in horizon windows",
-            "population": "customers with activity history",
-        },
+        label_definition=label_definition,
         training_data_snapshot={
             "rows": int(len(dataset.frame)),
             "splits": {s: int((dataset.frame["split"] == s).sum()) for s in ("train", "validation", "test")},
+            **snapshot_extra,
         },
         model_card=model_card,
     )
-
-    insert_evaluation(
-        model_version_id=version_id, training_run_id=training_run_id, model_type="credit",
-        evaluation_type="holdout", dataset_split="validation",
-        metrics=round_metrics(result.validation_metrics),
-        cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
+    _persist_evaluations(
+        version_id=version_id,
+        training_run_id=training_run_id,
+        model_type=model_type,
+        cutoff_date=str(datasets.cutoff_date.date()),
+        horizon_days=horizon_days,
         feature_set_id=feature_set_id,
+        validation_metrics=result.validation_metrics,
+        test_metrics_persisted=test_metrics_persisted,
+        test_details=test_details,
+        backtest_rows=backtest_rows,
+        baseline_metrics=result.baseline_metrics,
+        backtest_horizon_days=backtest_horizon_days,
     )
-    # Flatten bootstrap CIs for key metrics into the test metrics dict.
-    credit_test_metrics_persisted = dict(round_metrics(result.test_metrics))
-    if result.test_ci_json:
-        for _k in ("coverage_p10_p90", "mae_30d", "mae_90d", "pinball_composite_30d", "pinball_composite_90d"):
-            if _k in result.test_ci_json:
-                _ci = result.test_ci_json[_k]
-                credit_test_metrics_persisted[f"{_k}_ci_lower"] = _ci["ci_lower"]
-                credit_test_metrics_persisted[f"{_k}_ci_upper"] = _ci["ci_upper"]
-    insert_evaluation(
-        model_version_id=version_id, training_run_id=training_run_id, model_type="credit",
-        evaluation_type="holdout", dataset_split="test",
-        metrics=credit_test_metrics_persisted,
-        cutoff_date=str(datasets.cutoff_date.date()), horizon_days=horizon_days,
-        feature_set_id=feature_set_id,
-    )
-    for row in backtest_rows:
-        insert_evaluation(
-            model_version_id=version_id, training_run_id=training_run_id, model_type="credit",
-            evaluation_type="backtest", dataset_split="backtest", metrics=row["metrics"],
-            cutoff_date=row["cutoff_date"], feature_set_id=feature_set_id,
-        )
-        for baseline_name, metrics in row["baselines"].items():
-            insert_evaluation(
-                model_version_id=version_id, training_run_id=training_run_id, model_type="credit",
-                evaluation_type="baseline", dataset_split="backtest", metrics=round_metrics(metrics),
-                cutoff_date=row["cutoff_date"], baseline_name=baseline_name,
-            )
-    for baseline_name, splits in result.baseline_metrics.items():
-        for split_name, metrics in splits.items():
-            insert_evaluation(
-                model_version_id=version_id, training_run_id=training_run_id, model_type="credit",
-                evaluation_type="baseline", dataset_split=split_name, metrics=round_metrics(metrics),
-                cutoff_date=str(datasets.cutoff_date.date()), baseline_name=baseline_name,
-            )
 
     artifact_ok = verify_artifact_load(artifact_path, dataset.features("test").head(5))
-    promote = credit_decision.winner is not None and beats_baselines and artifact_ok
-    if credit_decision.winner is not None and not artifact_ok:
+    gate_ok, gate_reason = extra_gate
+    promote = winner is not None and gate_ok and artifact_ok
+    if winner is not None and not artifact_ok:
         reason = "ไม่ promote — artifact load test ไม่ผ่าน (safety gate)"
-    elif credit_decision.winner is not None and not beats_baselines:
-        reason = f"ไม่ promote — MAE เกิน tolerance {CREDIT_MAE_TOLERANCE}× baseline (gate ข้อ 3)"
+    elif winner is not None and not gate_ok:
+        reason = gate_reason
     else:
-        reason = credit_decision.summary
+        reason = summary
     if promote:
         promote_model_version(
-            model_type="credit", model_version_id=version_id, reason=reason, created_by=created_by
+            model_type=model_type, model_version_id=version_id, reason=reason, created_by=created_by
         )
-    logger.info(f"credit: promoted={promote} — {reason}")
-
-    return {
-        "model_type": "credit",
-        "primary_metric_name": "Coverage p10–p90",
-        "primary_metric_value": coverage,
-        "baseline_name": "target_75pct",
-        "baseline_value": COVERAGE_RANGE[0],
-        "calibration_ece": None,
-        "leakage_passed": bool(leakage["passed"]),
-        "promoted": promote,
-        "promote_reason": reason,
-        "new_version": version if promote else None,
-    }
+    logger.info(f"{model_type}: promoted={promote} — {reason}")
+    return promote, reason
 
 
 # ── Shared helpers ───────────────────────────────────────────────

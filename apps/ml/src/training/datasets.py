@@ -9,7 +9,9 @@ cutoff — never by re-splitting the same rows.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -23,6 +25,8 @@ from src.training.features import (
     feature_names_for_model,
 )
 from src.training.labels import LabelConfig, build_label_set
+
+logger = logging.getLogger(__name__)
 
 
 # Split: train / validation / test = 60 / 20 / 20.
@@ -305,3 +309,134 @@ def adaptive_backtest_cutoffs(
         if (cutoff - pd.Timestamp(min_activity)).days >= min_history_days
         and cutoff + pd.Timedelta(days=label_window_days) <= pd.Timestamp(max_activity)
     ]
+
+
+# ── The datasets one Training Run trains and backtests on ─────────
+
+BACKTEST_STEP_MONTHS = 2
+# Backtest count adapts to the uploaded data span (§3): every step-month
+# cutoff with ≥MIN_BACKTEST_HISTORY_DAYS of history and a full label window
+# is used, capped at MAX_BACKTESTS for runtime.
+MAX_BACKTESTS = 6
+MIN_BACKTEST_HISTORY_DAYS = 365
+# Credit labels need only 30/90d of post-cutoff data, so credit trains at its
+# own fresher month-aligned cutoff instead of wasting the newest months on the
+# churn/CLV 180d horizon.
+CREDIT_LABEL_WINDOW_DAYS = 90
+
+
+def activity_range(payments: pd.DataFrame, usage: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Min/max activity dates (payments + positive usage), matching the label
+    definition of activity in labels.py."""
+
+    dates = pd.concat(
+        [
+            payments.loc[payments["payment_date"].notna(), "payment_date"],
+            usage.loc[(usage["usage"] > 0) & usage["period"].notna(), "period"],
+        ],
+        ignore_index=True,
+    )
+    if dates.empty:
+        raise RuntimeError("No payment or usage activity found for this source")
+    return pd.Timestamp(dates.min()), pd.Timestamp(dates.max())
+
+
+@dataclass
+class TrainingDatasets:
+    """Churn/CLV datasets at the run's cutoff plus their backtests, and credit's own set."""
+
+    primary: CutoffDatasets
+    backtests: list[CutoffDatasets]
+    credit: CutoffDatasets
+    credit_backtests: list[CutoffDatasets]
+    credit_cutoff: pd.Timestamp
+    activity_min: pd.Timestamp
+    activity_max: pd.Timestamp
+
+
+def build_training_datasets(
+    customers: pd.DataFrame,
+    payments: pd.DataFrame,
+    usage: pd.DataFrame,
+    cutoff: pd.Timestamp,
+    horizon_days: int,
+    progress: Callable[[str, int], None],
+) -> TrainingDatasets:
+    """Datasets at the cutoff (C1), at every feasible older cutoff (backtests), and at
+    credit's fresher cutoff when the data allows one. An infeasible older cutoff shrinks
+    the backtest instead of failing the run."""
+
+    activity_min, activity_max = activity_range(payments, usage)
+    datasets_c1 = build_cutoff_datasets(customers, payments, usage, cutoff, horizon_days)
+    logger.info(
+        f"C1={cutoff.date()} churn n={len(datasets_c1.churn.frame)} "
+        f"clv n={len(datasets_c1.clv.frame)} credit n={len(datasets_c1.credit.frame)}"
+    )
+
+    progress("backtest datasets", 12)
+    backtest_dates = adaptive_backtest_cutoffs(
+        cutoff,
+        activity_min,
+        activity_max,
+        label_window_days=horizon_days,
+        step_months=BACKTEST_STEP_MONTHS,
+        max_backtests=MAX_BACKTESTS,
+        min_history_days=MIN_BACKTEST_HISTORY_DAYS,
+    )
+    if not backtest_dates:
+        logger.warning(
+            "data span supports no backtest cutoffs — model stability "
+            "across time is unverified for this run."
+        )
+    backtest_sets: list[CutoffDatasets] = []
+    for old_cutoff in backtest_dates:
+        try:
+            backtest_sets.append(
+                build_cutoff_datasets(customers, payments, usage, old_cutoff, horizon_days)
+            )
+        except Exception as exc:  # noqa: BLE001 - an infeasible old cutoff shrinks the backtest.
+            logger.warning(f"backtest cutoff {old_cutoff.date()} skipped: {exc}")
+
+    # ── Credit datasets at credit's own fresher cutoff ────────────
+    credit_cutoff = month_start(activity_max - pd.Timedelta(days=CREDIT_LABEL_WINDOW_DAYS))
+    datasets_credit = datasets_c1
+    credit_backtest_sets = backtest_sets
+    if credit_cutoff > cutoff:
+        try:
+            datasets_credit = build_cutoff_datasets(
+                customers, payments, usage, credit_cutoff, horizon_days
+            )
+            credit_backtest_sets = []
+            for old_cutoff in adaptive_backtest_cutoffs(
+                credit_cutoff,
+                activity_min,
+                activity_max,
+                label_window_days=CREDIT_LABEL_WINDOW_DAYS,
+                step_months=BACKTEST_STEP_MONTHS,
+                max_backtests=MAX_BACKTESTS,
+                min_history_days=MIN_BACKTEST_HISTORY_DAYS,
+            ):
+                try:
+                    credit_backtest_sets.append(
+                        build_cutoff_datasets(customers, payments, usage, old_cutoff, horizon_days)
+                    )
+                except Exception as exc:  # noqa: BLE001 - infeasible old cutoff shrinks the backtest.
+                    logger.warning(f"credit backtest cutoff {old_cutoff.date()} skipped: {exc}")
+            logger.info(f"credit C1={credit_cutoff.date()} n={len(datasets_credit.credit.frame)}")
+        except Exception as exc:  # noqa: BLE001 - fall back to the shared cutoff.
+            logger.warning(f"credit cutoff {credit_cutoff.date()} infeasible ({exc}); using shared C1")
+            datasets_credit = datasets_c1
+            credit_backtest_sets = backtest_sets
+            credit_cutoff = cutoff
+    else:
+        credit_cutoff = cutoff
+
+    return TrainingDatasets(
+        primary=datasets_c1,
+        backtests=backtest_sets,
+        credit=datasets_credit,
+        credit_backtests=credit_backtest_sets,
+        credit_cutoff=credit_cutoff,
+        activity_min=activity_min,
+        activity_max=activity_max,
+    )
