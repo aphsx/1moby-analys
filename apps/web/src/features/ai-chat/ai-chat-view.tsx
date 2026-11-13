@@ -104,7 +104,7 @@ export function AIChatView() {
           )}
         </header>
 
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#f8fafc] px-4 py-4">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-ground px-4 py-4">
           <div className="mx-auto w-full max-w-3xl">
             {!activeId ? (
               <NoConversation onCreate={() => createConversation()} />

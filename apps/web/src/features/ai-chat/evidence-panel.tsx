@@ -11,7 +11,7 @@ export function EvidencePanel({ evidence }: { evidence: ChatEvidence }) {
   if (!hasData) return null;
 
   return (
-    <div className="mt-2 overflow-hidden rounded-control border border-border bg-[#f8fafc]">
+    <div className="mt-2 overflow-hidden rounded-control border border-border bg-ground">
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 px-3 py-2 text-micro text-muted transition-colors hover:bg-raised"
