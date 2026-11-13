@@ -100,6 +100,14 @@ currently stopped.
 
 5. **Deploy** with the manual workflow run (repo secret `RAILWAY_TOKEN`).
 
+## Roadmap
+
+- **AI chat retrieval:** enable the `vector` extension and knowledge tables, ingest `docs/`, real retrieval.
+- **CLV calibration:** on the sample workbook the predicted 6-month CLV of scored customers is 1.64× what
+  they paid in the last 6 months (1.45× without the largest account). A log-space retrain with promotion
+  gates needs a populated database; the serve-time whale-tail blend is a stopgap.
+- **Notifications:** real email when a training or prediction run finishes.
+
 ## Documentation
 
 | Doc | Purpose |
