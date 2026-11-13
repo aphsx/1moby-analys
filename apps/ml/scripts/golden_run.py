@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import logging
 import math
 import sys
 from pathlib import Path
@@ -155,4 +156,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # same format as the CLIs (src/cli/*.py), so the runners' progress shows in the golden log
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     raise SystemExit(main())
