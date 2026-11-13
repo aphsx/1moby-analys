@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.engine import Connection
 
 from src.db import engine, to_json
 
@@ -198,6 +199,121 @@ def version_for_serving(model_type: str, model_version_id: str) -> dict[str, Any
     return dict(row)
 
 
+# ── Production alias: named steps, each on the caller's transaction ─────────
+
+
+def _lock_model_type(conn: Connection, model_type: str) -> None:
+    """Serialize alias changes per model type, so two operators cannot both observe the same
+    incumbent and leave alias/is_active out of sync (released at commit)."""
+    conn.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+        {"lock_key": f"model-promotion:{model_type}"},
+    )
+
+
+def _production_version_id(conn: Connection, model_type: str) -> str | None:
+    return conn.execute(
+        text(
+            """
+            SELECT model_version_id::text FROM ml_model_aliases
+            WHERE model_type = :model_type AND alias = :alias
+            """
+        ),
+        {"model_type": model_type, "alias": PRODUCTION_ALIAS},
+    ).scalar()
+
+
+def _archive_other_versions(conn: Connection, model_type: str, model_version_id: str) -> None:
+    conn.execute(
+        text(
+            """
+            UPDATE ml_model_versions
+            SET is_active = FALSE, status = 'archived', deactivated_at = NOW()
+            WHERE model_type = :model_type
+              AND id != CAST(:version_id AS UUID)
+              AND (is_active = TRUE OR status = 'production')
+            """
+        ),
+        {"model_type": model_type, "version_id": model_version_id},
+    )
+
+
+def _mark_production(
+    conn: Connection, model_type: str, model_version_id: str, *, keep_activated_at: bool = False
+) -> None:
+    """Flag a version as production. `keep_activated_at` keeps the first activation time (a repair
+    of an already-active version is not a new activation)."""
+    activated = "COALESCE(activated_at, NOW())" if keep_activated_at else "NOW()"
+    conn.execute(
+        text(
+            f"""
+            UPDATE ml_model_versions
+            SET is_active = TRUE, status = 'production',
+                activated_at = {activated}, deactivated_at = NULL
+            WHERE id = CAST(:version_id AS UUID) AND model_type = :model_type
+            """
+        ),
+        {"version_id": model_version_id, "model_type": model_type},
+    )
+
+
+def _point_production_alias(
+    conn: Connection, model_type: str, model_version_id: str, created_by: str | None
+) -> None:
+    conn.execute(
+        text(
+            """
+            INSERT INTO ml_model_aliases (model_type, alias, model_version_id, created_by)
+            VALUES (:model_type, :alias, CAST(:version_id AS UUID), :created_by)
+            ON CONFLICT ON CONSTRAINT uq_ml_model_aliases_type_alias
+            DO UPDATE SET model_version_id = EXCLUDED.model_version_id,
+                          created_by = COALESCE(EXCLUDED.created_by, ml_model_aliases.created_by),
+                          updated_at = NOW()
+            """
+        ),
+        {
+            "model_type": model_type,
+            "alias": PRODUCTION_ALIAS,
+            "version_id": model_version_id,
+            "created_by": created_by,
+        },
+    )
+
+
+def _record_activation(
+    conn: Connection,
+    *,
+    model_type: str,
+    previous: str | None,
+    new: str | None,
+    action: str,
+    reason: str,
+    created_by: str | None,
+) -> None:
+    """One ml_model_activation_history row; `previous` / `new` are version ids or None."""
+    conn.execute(
+        text(
+            """
+            INSERT INTO ml_model_activation_history (
+              model_type, previous_model_version_id, new_model_version_id,
+              action, reason, created_by
+            ) VALUES (
+              :model_type, CAST(:previous AS UUID), CAST(:new AS UUID),
+              :action, :reason, :created_by
+            )
+            """
+        ),
+        {
+            "model_type": model_type,
+            "previous": previous,
+            "new": new,
+            "action": action,
+            "reason": reason,
+            "created_by": created_by,
+        },
+    )
+
+
 def promote_model_version(
     *,
     model_type: str,
@@ -214,13 +330,7 @@ def promote_model_version(
     """
 
     with engine().begin() as conn:
-        # Activation is a read-modify-write operation. Serialize promotions
-        # per model type so two simultaneous operators cannot both observe the
-        # same incumbent and leave alias/is_active out of sync.
-        conn.execute(
-            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
-            {"lock_key": f"model-promotion:{model_type}"},
-        )
+        _lock_model_type(conn, model_type)
         target = conn.execute(
             text(
                 """
@@ -236,126 +346,139 @@ def promote_model_version(
         if not target["artifact_path"]:
             raise ValueError(f"{model_type} version {model_version_id} has no artifact to activate")
 
-        previous = conn.execute(
-            text(
-                """
-                SELECT model_version_id::text FROM ml_model_aliases
-                WHERE model_type = :model_type AND alias = :alias
-                """
-            ),
-            {"model_type": model_type, "alias": PRODUCTION_ALIAS},
-        ).scalar()
-
+        previous = _production_version_id(conn, model_type)
         # A retry or an operator clicking an already active version is a
         # successful no-op. Do not create a fake activation event with the same
         # version as both previous and new, but do repair status/alias drift.
-        if previous == model_version_id:
-            conn.execute(
-                text(
-                    """
-                    UPDATE ml_model_versions
-                    SET is_active = FALSE, status = 'archived', deactivated_at = NOW()
-                    WHERE model_type = :model_type
-                      AND id != CAST(:version_id AS UUID)
-                      AND (is_active = TRUE OR status = 'production')
-                    """
-                ),
-                {"version_id": model_version_id, "model_type": model_type},
+        already_active = previous == model_version_id
+        _archive_other_versions(conn, model_type, model_version_id)
+        _mark_production(conn, model_type, model_version_id, keep_activated_at=already_active)
+        _point_production_alias(conn, model_type, model_version_id, created_by)
+        if not already_active:
+            _record_activation(
+                conn, model_type=model_type, previous=previous, new=model_version_id,
+                action=action, reason=reason, created_by=created_by,
             )
-            conn.execute(
-                text(
-                    """
-                    UPDATE ml_model_versions
-                    SET is_active = TRUE, status = 'production',
-                        activated_at = COALESCE(activated_at, NOW()),
-                        deactivated_at = NULL
-                    WHERE id = CAST(:version_id AS UUID) AND model_type = :model_type
-                    """
-                ),
-                {"version_id": model_version_id, "model_type": model_type},
-            )
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO ml_model_aliases (model_type, alias, model_version_id, created_by)
-                    VALUES (:model_type, :alias, CAST(:version_id AS UUID), :created_by)
-                    ON CONFLICT ON CONSTRAINT uq_ml_model_aliases_type_alias
-                    DO UPDATE SET model_version_id = EXCLUDED.model_version_id,
-                                  created_by = COALESCE(EXCLUDED.created_by, ml_model_aliases.created_by),
-                                  updated_at = NOW()
-                    """
-                ),
-                {
-                    "model_type": model_type,
-                    "alias": PRODUCTION_ALIAS,
-                    "version_id": model_version_id,
-                    "created_by": created_by,
-                },
-            )
-            return
 
-        conn.execute(
-            text(
-                """
-                UPDATE ml_model_versions
-                SET is_active = FALSE, status = 'archived', deactivated_at = NOW()
-                WHERE model_type = :model_type
-                  AND id != CAST(:version_id AS UUID)
-                  AND (is_active = TRUE OR status = 'production')
-                """
-            ),
-            {"model_type": model_type, "version_id": model_version_id},
+
+# ── Deleting a Model Version ──────────────────────────────────────
+
+
+def _lock_deletable_version(conn: Connection, model_type: str, model_version_id: str) -> dict[str, Any]:
+    """Lock the version row and refuse the production champion."""
+    row = conn.execute(
+        text(
+            """
+            SELECT v.version, v.status, v.is_active, v.artifact_path,
+                   EXISTS (
+                     SELECT 1
+                     FROM ml_model_aliases a
+                     WHERE a.model_type = v.model_type
+                       AND a.alias = :alias
+                       AND a.model_version_id = v.id
+                   ) AS is_production_alias
+            FROM ml_model_versions v
+            WHERE v.id = CAST(:version_id AS UUID) AND v.model_type = :model_type
+            FOR UPDATE OF v
+            """
+        ),
+        {"version_id": model_version_id, "model_type": model_type, "alias": PRODUCTION_ALIAS},
+    ).mappings().first()
+
+    if row is None:
+        raise ValueError(f"No {model_type} model version {model_version_id}")
+    if row["is_active"] or row["status"] == "production" or row["is_production_alias"]:
+        raise ValueError(
+            f"{model_type} version {row['version']} is the production champion — "
+            "switch the production model to another version before deleting it"
         )
-        conn.execute(
-            text(
-                """
-                UPDATE ml_model_versions
-                SET is_active = TRUE, status = 'production',
-                    activated_at = NOW(), deactivated_at = NULL
-                WHERE id = CAST(:version_id AS UUID) AND model_type = :model_type
-                """
-            ),
-            {"version_id": model_version_id, "model_type": model_type},
+    return dict(row)
+
+
+def _ensure_no_prediction_run_uses(
+    conn: Connection, model_type: str, version: str, model_version_id: str
+) -> None:
+    """Prediction runs record the served version string and optional override id."""
+    referencing = conn.execute(
+        text(
+            """
+            SELECT id::text AS id, name
+            FROM ml_prediction_runs
+            WHERE model_versions_json ->> :model_type = :version
+               OR model_overrides_json ->> :model_type = :version_id
+            ORDER BY created_at DESC
+            LIMIT 5
+            """
+        ),
+        {
+            "model_type": model_type,
+            "version": version,
+            "version_id": model_version_id,
+        },
+    ).mappings().all()
+
+    if referencing:
+        names = ", ".join(
+            (r["name"] or r["id"][:8]) for r in referencing
         )
-        conn.execute(
-            text(
-                """
-                INSERT INTO ml_model_aliases (model_type, alias, model_version_id, created_by)
-                VALUES (:model_type, :alias, CAST(:version_id AS UUID), :created_by)
-                ON CONFLICT ON CONSTRAINT uq_ml_model_aliases_type_alias
-                DO UPDATE SET model_version_id = EXCLUDED.model_version_id,
-                              created_by = COALESCE(EXCLUDED.created_by, ml_model_aliases.created_by),
-                              updated_at = NOW()
-                """
-            ),
-            {
-                "model_type": model_type,
-                "alias": PRODUCTION_ALIAS,
-                "version_id": model_version_id,
-                "created_by": created_by,
-            },
+        more = "…" if len(referencing) == 5 else ""
+        raise ValueError(
+            f"Cannot delete {model_type} version {version} — "
+            f"still used by prediction run(s): {names}{more}. "
+            "Delete those prediction results first."
         )
-        conn.execute(
-            text(
-                """
-                INSERT INTO ml_model_activation_history (
-                  model_type, previous_model_version_id, new_model_version_id,
-                  action, reason, created_by
-                ) VALUES (
-                  :model_type, CAST(:previous AS UUID), CAST(:new AS UUID),
-                  :action, :reason, :created_by
-                )
-                """
-            ),
-            {
-                "model_type": model_type,
-                "previous": previous,
-                "new": model_version_id,
-                "action": action,
-                "reason": reason,
-                "created_by": created_by,
-            },
-        )
+
+
+def _auto_promote_sole_remaining(conn: Connection, model_type: str, created_by: str | None) -> bool:
+    """With no production alias left and exactly one version remaining, make it production."""
+    has_alias = conn.execute(
+        text(
+            """
+            SELECT 1
+            FROM ml_model_aliases
+            WHERE model_type = :model_type AND alias = :alias
+            LIMIT 1
+            """
+        ),
+        {"model_type": model_type, "alias": PRODUCTION_ALIAS},
+    ).first()
+    remaining = conn.execute(
+        text(
+            """
+            SELECT id::text AS id, artifact_path
+            FROM ml_model_versions
+            WHERE model_type = :model_type
+            """
+        ),
+        {"model_type": model_type},
+    ).mappings().all()
+    if has_alias or len(remaining) != 1 or not remaining[0]["artifact_path"]:
+        return False
+    replacement_id = remaining[0]["id"]
+    _mark_production(conn, model_type, replacement_id)
+    # no alias exists here, so the upsert is a plain insert
+    _point_production_alias(conn, model_type, replacement_id, created_by)
+    _record_activation(
+        conn, model_type=model_type, previous=None, new=replacement_id, action="auto_promote",
+        reason="Auto-promoted the only remaining model version after deletion", created_by=created_by,
+    )
+    return True
+
+
+def _remove_artifact_dir(artifact_path: str | None) -> bool:
+    import shutil
+
+    from src.training.artifacts import models_dir
+
+    if not artifact_path:
+        return False
+    target = Path(artifact_path)
+    if not target.is_absolute():
+        target = models_dir() / target
+    if not target.exists():
+        return False
+    shutil.rmtree(target, ignore_errors=True)
+    return True
 
 
 def delete_model_version(
@@ -382,180 +505,32 @@ def delete_model_version(
     version references set to NULL (audit trail survives).
     """
 
-    import shutil
-
-    from src.training.artifacts import models_dir
-
     with engine().begin() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT v.version, v.status, v.is_active, v.artifact_path,
-                       EXISTS (
-                         SELECT 1
-                         FROM ml_model_aliases a
-                         WHERE a.model_type = v.model_type
-                           AND a.alias = :alias
-                           AND a.model_version_id = v.id
-                       ) AS is_production_alias
-                FROM ml_model_versions v
-                WHERE v.id = CAST(:version_id AS UUID) AND v.model_type = :model_type
-                FOR UPDATE OF v
-                """
-            ),
-            {"version_id": model_version_id, "model_type": model_type, "alias": PRODUCTION_ALIAS},
-        ).mappings().first()
-
-        if row is None:
-            raise ValueError(f"No {model_type} model version {model_version_id}")
-        if row["is_active"] or row["status"] == "production" or row["is_production_alias"]:
-            raise ValueError(
-                f"{model_type} version {row['version']} is the production champion — "
-                "switch the production model to another version before deleting it"
-            )
-
-        # Prediction runs record the served version string and optional override id.
-        referencing = conn.execute(
-            text(
-                """
-                SELECT id::text AS id, name
-                FROM ml_prediction_runs
-                WHERE model_versions_json ->> :model_type = :version
-                   OR model_overrides_json ->> :model_type = :version_id
-                ORDER BY created_at DESC
-                LIMIT 5
-                """
-            ),
-            {
-                "model_type": model_type,
-                "version": row["version"],
-                "version_id": model_version_id,
-            },
-        ).mappings().all()
-
-        if referencing:
-            names = ", ".join(
-                (r["name"] or r["id"][:8]) for r in referencing
-            )
-            more = "…" if len(referencing) == 5 else ""
-            raise ValueError(
-                f"Cannot delete {model_type} version {row['version']} — "
-                f"still used by prediction run(s): {names}{more}. "
-                "Delete those prediction results first."
-            )
-
+        row = _lock_deletable_version(conn, model_type, model_version_id)
+        _ensure_no_prediction_run_uses(conn, model_type, row["version"], model_version_id)
         # Audit the deletion BEFORE removing the row. The version id is kept in
         # `reason` text (not the FK columns, which ON DELETE SET NULL would clear)
         # so the trail survives the row deletion.
-        conn.execute(
-            text(
-                """
-                INSERT INTO ml_model_activation_history (
-                  model_type, previous_model_version_id, new_model_version_id,
-                  action, reason, created_by
-                ) VALUES (:model_type, NULL, NULL, 'delete', :reason, :created_by)
-                """
+        _record_activation(
+            conn, model_type=model_type, previous=None, new=None, action="delete",
+            reason=(
+                f"Deleted {model_type} version {row['version']} "
+                f"(id={model_version_id}, artifact_path={row['artifact_path']})"
             ),
-            {
-                "model_type": model_type,
-                "reason": (
-                    f"Deleted {model_type} version {row['version']} "
-                    f"(id={model_version_id}, artifact_path={row['artifact_path']})"
-                ),
-                "created_by": created_by,
-            },
+            created_by=created_by,
         )
         conn.execute(
             text("DELETE FROM ml_model_versions WHERE id = CAST(:version_id AS UUID)"),
             {"version_id": model_version_id},
         )
-
-        auto_promoted = False
-        if auto_promote_sole_remaining:
-            has_alias = conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM ml_model_aliases
-                    WHERE model_type = :model_type AND alias = :alias
-                    LIMIT 1
-                    """
-                ),
-                {"model_type": model_type, "alias": PRODUCTION_ALIAS},
-            ).first()
-            remaining = conn.execute(
-                text(
-                    """
-                    SELECT id::text AS id, artifact_path
-                    FROM ml_model_versions
-                    WHERE model_type = :model_type
-                    """
-                ),
-                {"model_type": model_type},
-            ).mappings().all()
-            if not has_alias and len(remaining) == 1 and remaining[0]["artifact_path"]:
-                replacement_id = remaining[0]["id"]
-                conn.execute(
-                    text(
-                        """
-                        UPDATE ml_model_versions
-                        SET is_active = TRUE, status = 'production',
-                            activated_at = NOW(), deactivated_at = NULL
-                        WHERE id = CAST(:version_id AS UUID) AND model_type = :model_type
-                        """
-                    ),
-                    {"version_id": replacement_id, "model_type": model_type},
-                )
-                conn.execute(
-                    text(
-                        """
-                        INSERT INTO ml_model_aliases (model_type, alias, model_version_id, created_by)
-                        VALUES (:model_type, :alias, CAST(:version_id AS UUID), :created_by)
-                        """
-                    ),
-                    {
-                        "model_type": model_type,
-                        "alias": PRODUCTION_ALIAS,
-                        "version_id": replacement_id,
-                        "created_by": created_by,
-                    },
-                )
-                conn.execute(
-                    text(
-                        """
-                        INSERT INTO ml_model_activation_history (
-                          model_type, previous_model_version_id, new_model_version_id,
-                          action, reason, created_by
-                        ) VALUES (
-                          :model_type, NULL, CAST(:version_id AS UUID),
-                          'auto_promote', :reason, :created_by
-                        )
-                        """
-                    ),
-                    {
-                        "model_type": model_type,
-                        "version_id": replacement_id,
-                        "reason": "Auto-promoted the only remaining model version after deletion",
-                        "created_by": created_by,
-                    },
-                )
-                auto_promoted = True
+        auto_promoted = auto_promote_sole_remaining and _auto_promote_sole_remaining(conn, model_type, created_by)
 
     # Only now that the row is gone: a failed delete never leaves a row pointing at nothing.
-    artifact_removed = False
-    if row["artifact_path"]:
-        target = Path(row["artifact_path"])
-        if not target.is_absolute():
-            target = models_dir() / target
-        if target.exists():
-            shutil.rmtree(target, ignore_errors=True)
-            artifact_removed = True
-
     return {
         "model_type": model_type,
         "version": row["version"],
         "model_version_id": model_version_id,
-        "artifact_removed": artifact_removed,
+        "artifact_removed": _remove_artifact_dir(row["artifact_path"]),
         "auto_promoted_sole_remaining": auto_promoted,
     }
 
@@ -575,20 +550,8 @@ def clear_production_champion(
     """
 
     with engine().begin() as conn:
-        conn.execute(
-            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
-            {"lock_key": f"model-promotion:{model_type}"},
-        )
-        previous = conn.execute(
-            text(
-                """
-                SELECT model_version_id::text
-                FROM ml_model_aliases
-                WHERE model_type = :model_type AND alias = :alias
-                """
-            ),
-            {"model_type": model_type, "alias": PRODUCTION_ALIAS},
-        ).scalar()
+        _lock_model_type(conn, model_type)
+        previous = _production_version_id(conn, model_type)
         if previous is None:
             return
         if expected_version_id is not None and previous != expected_version_id:
@@ -616,25 +579,53 @@ def clear_production_champion(
             ),
             {"model_type": model_type, "alias": PRODUCTION_ALIAS},
         )
-        conn.execute(
+        _record_activation(
+            conn, model_type=model_type, previous=previous, new=None, action="clear_production",
+            reason=reason, created_by=created_by,
+        )
+
+
+# ── Deleting a Training Run: move production off its versions first ──────────
+
+
+def _production_versions_of_run(training_run_id: str) -> list[dict[str, Any]]:
+    with engine().connect() as conn:
+        return [
+            dict(r)
+            for r in conn.execute(
+                text(
+                    """
+                    SELECT v.id::text AS id, v.model_type, v.version
+                    FROM ml_model_versions v
+                    JOIN ml_model_aliases a
+                      ON a.model_version_id = v.id
+                     AND a.model_type = v.model_type
+                     AND a.alias = :alias
+                    WHERE v.training_run_id = CAST(:run_id AS UUID)
+                    """
+                ),
+                {"run_id": training_run_id, "alias": PRODUCTION_ALIAS},
+            ).mappings().all()
+        ]
+
+
+def _newest_version_outside_run(model_type: str, training_run_id: str) -> dict[str, Any] | None:
+    with engine().connect() as conn:
+        row = conn.execute(
             text(
                 """
-                INSERT INTO ml_model_activation_history (
-                  model_type, previous_model_version_id, new_model_version_id,
-                  action, reason, created_by
-                ) VALUES (
-                  :model_type, CAST(:previous AS UUID), NULL,
-                  'clear_production', :reason, :created_by
-                )
+                SELECT id::text AS id, version
+                FROM ml_model_versions
+                WHERE model_type = :model_type
+                  AND training_run_id != CAST(:run_id AS UUID)
+                  AND artifact_path IS NOT NULL
+                ORDER BY trained_at DESC NULLS LAST, created_at DESC
+                LIMIT 1
                 """
             ),
-            {
-                "model_type": model_type,
-                "previous": previous,
-                "reason": reason,
-                "created_by": created_by,
-            },
-        )
+            {"model_type": model_type, "run_id": training_run_id},
+        ).mappings().first()
+    return dict(row) if row else None
 
 
 def repoint_production_away_from_training_run(
@@ -653,40 +644,9 @@ def repoint_production_away_from_training_run(
     repointed: list[dict[str, str]] = []
     cleared: list[dict[str, str]] = []
 
-    with engine().connect() as conn:
-        champions = conn.execute(
-            text(
-                """
-                SELECT v.id::text AS id, v.model_type, v.version
-                FROM ml_model_versions v
-                JOIN ml_model_aliases a
-                  ON a.model_version_id = v.id
-                 AND a.model_type = v.model_type
-                 AND a.alias = :alias
-                WHERE v.training_run_id = CAST(:run_id AS UUID)
-                """
-            ),
-            {"run_id": training_run_id, "alias": PRODUCTION_ALIAS},
-        ).mappings().all()
-
-    for champ in champions:
+    for champ in _production_versions_of_run(training_run_id):
         model_type = champ["model_type"]
-        with engine().connect() as conn:
-            replacement = conn.execute(
-                text(
-                    """
-                    SELECT id::text AS id, version
-                    FROM ml_model_versions
-                    WHERE model_type = :model_type
-                      AND training_run_id != CAST(:run_id AS UUID)
-                      AND artifact_path IS NOT NULL
-                    ORDER BY trained_at DESC NULLS LAST, created_at DESC
-                    LIMIT 1
-                    """
-                ),
-                {"model_type": model_type, "run_id": training_run_id},
-            ).mappings().first()
-
+        replacement = _newest_version_outside_run(model_type, training_run_id)
         if replacement:
             promote_model_version(
                 model_type=model_type,
@@ -699,11 +659,7 @@ def repoint_production_away_from_training_run(
                 action="auto_repoint",
             )
             repointed.append(
-                {
-                    "model_type": model_type,
-                    "from_version": champ["version"],
-                    "to_version": replacement["version"],
-                }
+                {"model_type": model_type, "from_version": champ["version"], "to_version": replacement["version"]}
             )
         else:
             clear_production_champion(
@@ -715,13 +671,9 @@ def repoint_production_away_from_training_run(
                 created_by=created_by,
                 expected_version_id=champ["id"],
             )
-            cleared.append(
-                {
-                    "model_type": model_type,
-                    "from_version": champ["version"],
-                }
-            )
+            cleared.append({"model_type": model_type, "from_version": champ["version"]})
 
+    # Archive any of the run's versions still flagged production.
     with engine().begin() as conn:
         conn.execute(
             text(
