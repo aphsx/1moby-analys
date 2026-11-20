@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { fetchPredictionRuns } from "@/lib/ml-api";
+import { getDisplayError } from "@/lib/ui-error";
 
 interface RunState {
   /** The active completed Prediction Run (persisted; the URL's ?run= wins, see run-url-sync). */
@@ -38,7 +39,7 @@ export const useRunStore = create<RunState>()(
             const nextRunId = runs.some((r) => r.id === runId) ? runId : (runs[0]?.id ?? "");
             set({ runs, runId: nextRunId, runsLoading: false });
           } catch (e) {
-            set({ runsLoading: false, runsError: e instanceof Error ? e.message : "โหลด prediction runs ไม่สำเร็จ" });
+            set({ runsLoading: false, runsError: getDisplayError(e, "โหลด prediction runs ไม่สำเร็จ") });
           } finally {
             inFlight = null;
           }
@@ -64,5 +65,5 @@ export function useActiveRun() {
   }, [loadRuns]);
 
   const run = runs.find((r) => r.id === runId) ?? null;
-  return { run, runs, runId: run?.id ?? "", setRunId, loading, error };
+  return { run, runs, runId: run?.id ?? "", setRunId, loading, error, reload: loadRuns };
 }

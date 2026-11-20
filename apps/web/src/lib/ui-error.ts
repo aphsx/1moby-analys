@@ -2,12 +2,10 @@ const HIDDEN_UI_ERROR_MESSAGES = new Set([
   "API returned invalid JSON",
 ]);
 
-export function getDisplayError(
-  error: unknown,
-  fallbackMessage: string
-): string | null {
-  const message = error instanceof Error ? error.message : fallbackMessage;
-  return HIDDEN_UI_ERROR_MESSAGES.has(message) ? null : message;
+/** The message to show for a failure: the error's own message, or the fallback when it has none fit to show. */
+export function getDisplayError(error: unknown, fallbackMessage: string): string {
+  const message = error instanceof Error && error.message ? error.message : fallbackMessage;
+  return HIDDEN_UI_ERROR_MESSAGES.has(message) ? fallbackMessage : message;
 }
 
 export function isImportTimeoutError(error: unknown): boolean {
@@ -25,5 +23,5 @@ export function getImportErrorMessage(error: unknown, fallbackMessage: string): 
   if (isImportTimeoutError(error)) {
     return "นำเข้าข้อมูลหมดเวลา กรุณาลองใหม่อีกครั้ง";
   }
-  return getDisplayError(error, fallbackMessage) ?? fallbackMessage;
+  return getDisplayError(error, fallbackMessage);
 }

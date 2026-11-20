@@ -71,7 +71,7 @@ export function mapRun(row: RunRow): PredictionRun {
     error_message: row.errorMessage,
     progress:
       row.status === "in_progress"
-        ? ((row.progressJson as { step: string; pct: number } | null) ?? null)
+        ? ((row.progressJson as { phase: string; pct: number } | null) ?? null)
         : null,
     warnings: (row.progressJson as { warnings?: string[] } | null)?.warnings ?? [],
   };
@@ -215,5 +215,6 @@ export interface OutputsQueryParams {
   ever_paid?: string;
   segment?: string;
   needs_review?: string;
+  sending_months_max?: number;
 }
 

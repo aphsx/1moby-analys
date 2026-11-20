@@ -7,7 +7,7 @@
  * Full metric breakdowns still live on the read-only /model-performance page.
  */
 
-import { type ModelVersionSummary, type TrainingRun, type TrainingRunResult } from "@moby/types";
+import { MODEL_TYPES, type ModelType, type ModelVersionSummary, type TrainingRun, type TrainingRunResult } from "@moby/types";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -24,9 +24,8 @@ import { SectionCard, StatusPill } from "@/components/ui";
 import { StatusDialog } from "@/components/status-dialog";
 import { activateModelVersion, deleteModelVersion, fetchModelVersions } from "@/lib/ml-api";
 import { MODEL_TYPE_LABELS, beatsBaseline, formatMetric } from "./training-run-utils";
+import { getDisplayError } from "@/lib/ui-error";
 
-const MODEL_TYPES = ["churn", "clv", "credit"] as const;
-type ModelType = (typeof MODEL_TYPES)[number];
 
 const TYPE_ICON: Record<ModelType, typeof UserX> = {
   churn: UserX,
@@ -83,11 +82,10 @@ function ModelStatusCard({
   const reload = () =>
     fetchModelVersions(modelType)
       .then(setVersions)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "โหลดเวอร์ชันไม่สำเร็จ"));
+      .catch((e: unknown) => setError(getDisplayError(e, "โหลดเวอร์ชันไม่สำเร็จ")));
 
   useEffect(() => {
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelType]);
 
   async function activate(id: string) {
@@ -97,7 +95,7 @@ function ModelStatusCard({
       await activateModelVersion(modelType, id);
       await reload();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "เปลี่ยนโมเดลไม่สำเร็จ");
+      setError(getDisplayError(e, "เปลี่ยนโมเดลไม่สำเร็จ"));
     } finally {
       setBusyId(null);
     }
@@ -111,7 +109,7 @@ function ModelStatusCard({
       setPendingDelete(null);
       await reload();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "ลบเวอร์ชันไม่สำเร็จ");
+      setError(getDisplayError(e, "ลบเวอร์ชันไม่สำเร็จ"));
     } finally {
       setDeletingId(null);
     }

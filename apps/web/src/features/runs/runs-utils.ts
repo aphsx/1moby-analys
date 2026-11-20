@@ -1,4 +1,4 @@
-import { type PredictDataSource } from "@moby/types";
+import { type PredictDataSource, type TrainDataSource } from "@moby/types";
 import { formatDate } from "@/lib/format";
 /**
  * Local helpers for the Prediction Runs page (spec §2.5 + §5).
@@ -6,8 +6,6 @@ import { formatDate } from "@/lib/format";
  */
 
 
-// Run status tone/label live in the shared module (single source for runs + training).
-export { runStatusTone, runStatusLabel } from "@/lib/run-status";
 
 // ── clean_manifest.clean row counts (shape-guarded) ─────────────
 
@@ -17,7 +15,8 @@ export interface CleanCounts {
   usage: number;
 }
 
-export function getCleanCounts(source: PredictDataSource): CleanCounts | null {
+/** Row counts Clean produced for a train or predict Data Source; null when there is no manifest. */
+export function getCleanCounts(source: PredictDataSource | TrainDataSource): CleanCounts | null {
   const manifest: unknown = source.clean_manifest;
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return null;
   const clean = (manifest as Record<string, unknown>).clean;
@@ -62,3 +61,7 @@ export function todayISO(): string {
 export function defaultRunName(sourceName: string): string {
   return `${sourceName} — ${formatDate(todayISO())}`;
 }
+
+/** Text input / select styling shared by the create-run card and the import form. */
+export const FIELD_CLASS =
+  "mt-1.5 h-11 w-full rounded-card border border-border bg-surface px-3.5 text-small text-text shadow-[var(--shadow-1)] outline-none transition-colors focus:border-accent disabled:opacity-50";

@@ -6,6 +6,7 @@ import { Activity, CircleHelp } from "lucide-react";
 import { EmptyState, Skeleton } from "@/components/ui";
 import { fetchModelPerformance } from "@/lib/ml-api";
 import { ModelPerformanceCard } from "./model-performance-card";
+import { getDisplayError } from "@/lib/ui-error";
 
 export function ModelPerformanceView() {
   const [entries, setEntries] = useState<ModelPerfEntry[] | null>(null);
@@ -15,7 +16,7 @@ export function ModelPerformanceView() {
     return fetchModelPerformance()
       .then(setEntries)
       .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : "โหลด model performance ไม่สำเร็จ")
+        setError(getDisplayError(e, "โหลด model performance ไม่สำเร็จ"))
       );
   }, []);
 

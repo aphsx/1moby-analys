@@ -25,8 +25,7 @@ import { useAsync } from "@/lib/use-async";
 import { ModelStatusCards } from "./model-status-cards";
 import { TrainPanel } from "./train-panel";
 import { TrainingHistoryTable } from "./training-history-table";
-import { getTimestamp, wait } from "./training-utils";
-import { promotedSummary } from "./training-run-utils";
+import { getTimestamp, promotedSummary, wait } from "./training-run-utils";
 
 /** Sort newest-first and fire completion/failure toasts on status transitions. */
 function applyTrainingRuns(
@@ -95,7 +94,7 @@ export function TrainingView() {
   const loadSources = useCallback(async () => {
     setLoadError(null);
     try {
-      const sources = await fetchTrainDataSources().catch(() => [] as TrainDataSource[]);
+      const sources = await fetchTrainDataSources();
       setTrainSources(Array.isArray(sources) ? sources : []);
     } catch (e) {
       setTrainSources([]);
@@ -220,7 +219,7 @@ export function TrainingView() {
       notifyStatusDialog({
         tone: "error",
         title: "ลบชุดข้อมูลไม่สำเร็จ",
-        message: getDisplayError(e, "ลบชุดข้อมูลไม่สำเร็จ") ?? "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+        message: getDisplayError(e, "ลบชุดข้อมูลไม่สำเร็จ"),
       });
     } finally {
       setDeletingId(null);

@@ -1,8 +1,5 @@
 import { type TrainingRunResult } from "@moby/types";
 
-// Run status tone/label live in the shared module (single source for runs + training).
-export { runStatusTone, runStatusLabel } from "@/lib/run-status";
-
 export const DEFAULT_HORIZON_DAYS = 180;
 
 export const MODEL_TYPE_LABELS: Record<TrainingRunResult["model_type"], string> = {
@@ -34,4 +31,22 @@ export function promotedSummary(results: TrainingRunResult[] | null): string | n
   if (!results || results.length === 0) return null;
   const promoted = results.filter((r) => r.promoted).length;
   return `${promoted}/${results.length} promoted`;
+}
+
+// ── Train Data Sources ──
+
+export function formatFileSize(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+export function getTimestamp(value?: string | null): number {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+export function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

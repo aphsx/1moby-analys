@@ -43,6 +43,37 @@ export const VALUE_TIER_LABEL = {
   none: "ยังประเมินไม่ได้",
 } as const satisfies Record<ValueTier, string>;
 
+/**
+ * Value Tier `none` has two cases (GLOSSARY.md): an Active customer predicted to pay ฿0, or a
+ * Churned/Ghost customer with no CLV at all. Pick the label by stage.
+ */
+export const valueTierLabel = (tier: ValueTier, stage: LifecycleStage) =>
+  tier === "none" && stage.startsWith("Active") ? "คาดว่าไม่จ่าย" : VALUE_TIER_LABEL[tier];
+
+const ROUTINE = "สื่อสารตามรอบปกติ";
+const AUTOMATED = "ใช้อีเมลอัตโนมัติ ไม่คุ้มที่จะใช้คนติดต่อ";
+
+/**
+ * The Playbook (GLOSSARY.md): one fixed action per Value Tier × Churn Risk Level. It is the only
+ * "what to do" in the app: the heat grid and the customer page both read it (DASHBOARD.md §8.1).
+ */
+export const CELL_ACTION = {
+  high: {
+    low: "ลูกค้าหลักที่มั่นคง เหมาะกับการเสนอแพ็กเกจที่ใหญ่ขึ้น",
+    medium: "เฝ้าดูใกล้ชิด และเตรียมข้อเสนอพิเศษเพื่อรักษาไว้",
+    high: "โทรสอบถามความพึงพอใจและปัญหาการใช้งานภายใน 2 สัปดาห์",
+    critical: "ให้ Account Manager ติดต่อภายในสัปดาห์นี้ เริ่มจากรายที่เสี่ยงหายมากที่สุด",
+  },
+  mid: {
+    low: "กลุ่มที่โตได้ แนะนำบริการเสริม เช่น Email หรือ OTP",
+    medium: "สื่อสารตามรอบปกติ พร้อมแนะนำฟีเจอร์ที่ยังไม่ได้ใช้",
+    high: "ส่งแคมเปญรักษาลูกค้าแบบอัตโนมัติ แล้วติดตามผล",
+    critical: "เสนอส่วนลดเติมเครดิต และเช็กว่ามีปัญหาการใช้งานหรือไม่",
+  },
+  low: { low: ROUTINE, medium: ROUTINE, high: AUTOMATED, critical: AUTOMATED },
+  none: { low: ROUTINE, medium: ROUTINE, high: AUTOMATED, critical: AUTOMATED },
+} as const satisfies Record<ValueTier, Record<RiskLevel, string>>;
+
 export const VALUE_TIER_HELP = {
   high: "คาดจ่าย 6 เดือนข้างหน้าตั้งแต่ ฿10,000 ขึ้นไป (กลุ่ม Whale & Core)",
   mid: "คาดจ่าย 6 เดือนข้างหน้า ฿1,000 – ฿10,000 (กลุ่ม Standard)",
@@ -52,9 +83,9 @@ export const VALUE_TIER_HELP = {
 
 // apps/ml/src/constants.py: URGENCY_CRITICAL_DAYS = 14, WARNING = 30, MONITOR = 90
 export const URGENCY_LABEL = {
-  critical: "ต้องเติมใน 14 วัน",
-  warning: "ต้องเติมใน 15–30 วัน",
-  monitor: "ต้องเติมใน 31–90 วัน",
+  critical: "อาจเติมใน 14 วัน",
+  warning: "อาจเติมใน 15–30 วัน",
+  monitor: "อาจเติมใน 31–90 วัน",
   stable: "เกิน 90 วัน",
 } as const satisfies Record<UrgencyLevel, string>;
 

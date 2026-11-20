@@ -16,7 +16,8 @@ import { deletePredictionRun, retryPredictionRun } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { formatCount } from "@/lib/format";
 import { useRunStore } from "@/stores/run-store";
-import { formatRelative, runStatusLabel, runStatusTone } from "./runs-utils";
+import { runStatusLabel, runStatusTone } from "@/lib/run-status";
+import { formatRelative } from "./runs-utils";
 
 /** Auto-created runs are named "Auto — {source} {YYYY-MM-DD}" by the import API. */
 const AUTO_RUN_PREFIX = "Auto — ";
@@ -66,7 +67,7 @@ export function RunsTable({
       await retryPredictionRun(run.id);
       await onRefresh();
     } catch (e) {
-      setError(getDisplayError(e, "Retry ไม่สำเร็จ") ?? "Retry ไม่สำเร็จ");
+      setError(getDisplayError(e, "Retry ไม่สำเร็จ"));
     } finally {
       setRetryingId(null);
     }
@@ -80,7 +81,7 @@ export function RunsTable({
       setPendingDeleteRun(null);
       await onRefresh();
     } catch (e) {
-      setError(getDisplayError(e, "ลบ run ไม่สำเร็จ") ?? "ลบ run ไม่สำเร็จ");
+      setError(getDisplayError(e, "ลบ run ไม่สำเร็จ"));
     } finally {
       setDeletingId(null);
     }
@@ -209,7 +210,7 @@ function RunRow({
           </div>
           {inProgress && run.progress && (
             <div className="max-w-[240px]">
-              <ProgressMeter value={run.progress.pct} label={run.progress.step} />
+              <ProgressMeter value={run.progress.pct} label={run.progress.phase} />
             </div>
           )}
         </div>

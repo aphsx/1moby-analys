@@ -6,11 +6,42 @@
  */
 import Link from "next/link";
 import { Select } from "@/components/select";
+import { BUTTON, EmptyState } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { useActiveRun } from "@/stores/run-store";
 
+/**
+ * What a run-bound page shows without a run: the run list failed to load (with a retry), or there is
+ * no completed run yet.
+ */
+export function NoRunState() {
+  const { error, reload } = useActiveRun();
+  if (error) {
+    return (
+      <EmptyState
+        title="โหลดรายการรอบทำนายไม่สำเร็จ"
+        hint={error}
+        action={
+          <button type="button" onClick={() => void reload()} className={BUTTON.secondary}>
+            ลองอีกครั้ง
+          </button>
+        }
+      />
+    );
+  }
+  return (
+    <EmptyState
+      title="ยังไม่มีผลทำนาย"
+      hint="อัปโหลดข้อมูลแล้วสร้างรอบทำนายแรกได้ที่ “รอบทำนาย”"
+      action={<Link href="/runs" className={BUTTON.primary}>สร้างรอบทำนาย</Link>}
+    />
+  );
+}
+
 export function RunScope() {
-  const { run, runs, runId, setRunId, loading } = useActiveRun();
+  const { run, runs, runId, setRunId, loading, error } = useActiveRun();
+
+  if (error) return <p className="text-small text-negative">โหลดรายการรอบทำนายไม่สำเร็จ</p>;
 
   if (!loading && runs.length === 0) {
     return (

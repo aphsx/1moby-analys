@@ -2,8 +2,8 @@
 import { ReactNode, Suspense, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import Sidebar from "./sidebar";
-import AIChatWidget from "./ai-chat-widget";
+import { Sidebar } from "./sidebar";
+import { AIChatWidget } from "./ai-chat-widget";
 import { MobyIntroSplash } from "./moby-intro-splash";
 import { GlobalStatusDialogHost } from "./global-status-dialog-host";
 import { RunScope } from "./run-selector";
@@ -15,7 +15,7 @@ import { getRouteTitle, isAiChatRoute, isBareRoute, shellRendersPageHeader, shou
  * App frame (docs/ui/DESIGN.md §5): no top bar from 860px up; below that a 48px bar with the page
  * title and a menu button that opens the sidebar as a full-screen sheet.
  */
-export default function Shell({ children }: { children: ReactNode }) {
+export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 

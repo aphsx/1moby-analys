@@ -28,7 +28,6 @@ export function useAsync<T>(load: () => Promise<T>, deps: DependencyList, enable
       current = false;
     };
     // `load` is a new closure every render; the caller's deps say when it really changed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, enabled, reloads]);
 
   const reload = useCallback(() => setReloads((n) => n + 1), []);

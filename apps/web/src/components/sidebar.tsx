@@ -5,7 +5,7 @@ import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { INTRO_ASSETS } from "@/lib/login-brand-colors";
 import { NAV } from "@/lib/nav";
 import { useSidebarStore } from "@/stores/sidebar-store";
-import UserNavProfile from "./user-nav-profile";
+import { UserNavProfile } from "./user-nav-profile";
 
 /** The logo SVG is single-colour white; masking it lets the text token colour it in any theme. */
 function Logo({ collapsed }: { collapsed: boolean }) {
@@ -36,7 +36,7 @@ function Logo({ collapsed }: { collapsed: boolean }) {
  *   Expanded 232px · collapsed icon rail 56px (Theme C rail width in DESIGN.md §5).
  * < 860px: a full-screen sheet opened from the shell's top bar (collapse ignored).
  */
-export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
+export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const collapsed = useSidebarStore((s) => s.collapsed);
   const toggleCollapsed = useSidebarStore((s) => s.toggleCollapsed);

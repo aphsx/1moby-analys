@@ -13,6 +13,7 @@
  */
 
 import type { ChatConversation, ChatEvidence } from "@moby/types";
+import { getDisplayError } from "@/lib/ui-error";
 import { create } from "zustand";
 import {
   createConversation as apiCreateConversation,
@@ -63,6 +64,9 @@ type ChatState = {
   thinkingStep: ThinkingStep | null;
   /** Run id the NEXT new conversation will be bound to (null = global). */
   pendingRunId: string | null;
+  /** Why the conversation list, or the open conversation's messages, failed to load. */
+  conversationsError: string | null;
+  messagesError: string | null;
 
   loadConfig: () => Promise<void>;
   loadConversations: () => Promise<void>;
@@ -98,6 +102,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   sending: false,
   thinkingStep: null,
   pendingRunId: null,
+  conversationsError: null,
+  messagesError: null,
   unread: 0,
   widgetOpen: false,
 
@@ -111,9 +117,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   loadConversations: async () => {
     try {
-      set({ conversations: await fetchConversations() });
-    } catch {
-      /* empty sidebar on failure */
+      set({ conversations: await fetchConversations(), conversationsError: null });
+    } catch (e) {
+      set({ conversationsError: getDisplayError(e, "โหลดรายการแชทไม่สำเร็จ") });
     }
   },
 
@@ -134,7 +140,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (get().activeId === id) return;
     controller?.abort();
     controller = null;
-    set({ activeId: id, messages: [], streaming: null, sending: false, thinkingStep: null });
+    set({ activeId: id, messages: [], streaming: null, sending: false, thinkingStep: null, messagesError: null });
     try {
       const conv = await fetchConversation(id);
       const msgs: ChatMsg[] = conv.messages.map((m) => ({
@@ -147,8 +153,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }));
       // Ignore late responses if the user switched away mid-load.
       if (get().activeId === id) set({ messages: msgs });
-    } catch {
-      if (get().activeId === id) set({ messages: [] });
+    } catch (e) {
+      if (get().activeId === id) set({ messages: [], messagesError: getDisplayError(e, "โหลดข้อความไม่สำเร็จ") });
     }
   },
 

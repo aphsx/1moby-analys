@@ -29,7 +29,7 @@ export function RunsView() {
       setSources(nextSources);
       setRuns(nextRuns);
     } catch (e) {
-      setError(getDisplayError(e, "โหลดรอบทำนายไม่สำเร็จ") ?? "โหลดรอบทำนายไม่สำเร็จ");
+      setError(getDisplayError(e, "โหลดรอบทำนายไม่สำเร็จ"));
     } finally {
       setRunsLoading(false);
     }

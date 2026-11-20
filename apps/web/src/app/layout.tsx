@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans_Thai } from "next/font/google";
 import "./globals.css";
-import Shell from "@/components/shell";
+import { Shell } from "@/components/shell";
 
 // next/font downloads the font at build time and self-hosts it; users never call Google.
 const plex = IBM_Plex_Sans_Thai({
