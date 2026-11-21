@@ -32,11 +32,10 @@ DATABASE_URL="$HOST_URL" bun run apps/api/scripts/seed-import.ts data/sample-1mo
 
 echo "[golden] training and predicting (a few minutes)"
 mkdir -p "apps/ml/$(dirname "$OUT")"
-# ponytail: golden run skips tabicl and XGBoost to stay fast; it guards pipeline structure, not candidate choice.
+# ponytail: golden run skips the Dual-GBDT and CatBoost churn candidates to stay fast; it guards pipeline structure, not candidate choice.
 docker compose run --rm --no-deps -T \
   -v "$ROOT/apps/ml:/app" \
   -e DATABASE_URL="$CONTAINER_URL" \
   -e MODEL_DIR=/tmp/golden-models \
   -e CHURN_CANDIDATES=logistic_regression,lightgbm \
-  -e ENABLE_XGB_CREDIT=0 \
   --entrypoint python ml scripts/golden_run.py dump --out "$OUT"

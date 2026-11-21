@@ -1,5 +1,4 @@
 # GENERATED from requirements.in, do not edit by hand. Regenerate: see apps/ml/AGENTS.md → "Dependencies".
-# torch is not listed: the Dockerfile (and CI) install the pinned CPU build first.
 # Pinned to the environment that trained the current Champions and produced the golden baseline.
 alembic==1.19.1
 annotated-doc==0.0.5
