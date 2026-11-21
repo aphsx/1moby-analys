@@ -21,7 +21,6 @@ against a populated DB after changing the matching pipeline module:
 python scripts/verify_clean_data_access.py     # train_clean_* / predict_clean_* loaders
 python scripts/verify_feature_builder.py       # model-specific feature contracts + feature_code_hash
 python scripts/verify_preprocessing.py         # fit-on-train-only preprocessing artifact
-python scripts/verify_promotion_policy.py      # champion promotion policy (no DB needed)
 python scripts/verify_realized_outcomes.py     # outcome backfill (src/outcomes/)
 python scripts/verify_constants_sync.py        # src/constants.py ↔ packages/types/src/enums.ts enum strings
 python scripts/verify_model_versioning.py      # version numbers / artifact folders never reused (no DB needed)
@@ -31,8 +30,8 @@ python scripts/profile_training_dataset.py     # dataset profiling / label viabi
 ### Golden run (gate for any change under `apps/ml/` or the import pipeline)
 
 End-to-end check: rebuilds a scratch database `moby_golden`, imports `data/sample-1moby-workbook.xlsx`,
-trains (without tabicl and XGBoost, to stay fast), predicts, and dumps the Prediction Outputs. About
-17 minutes; two runs on the same commit match exactly.
+trains (churn limited to `logistic_regression,lightgbm` via `CHURN_CANDIDATES`, to stay fast), predicts,
+and dumps the Prediction Outputs. Two runs on the same commit match exactly.
 
 ```bash
 apps/ml/scripts/golden_run.sh golden/before.csv     # on the base commit (or keep a saved baseline)
@@ -51,9 +50,6 @@ set the image installs. After changing `requirements.in`, build an image that in
 docker run --rm -v "$PWD/apps/ml":/app -w /app --entrypoint python demo-predict-ml \
   scripts/pin_requirements.py requirements.in > apps/ml/requirements.txt
 ```
-
-torch is pinned separately (`TORCH_VERSION` in the Dockerfile and in CI) because the CPU build
-comes from PyTorch's own index.
 
 ## Python style
 

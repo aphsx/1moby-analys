@@ -42,7 +42,9 @@ Running the api outside Docker needs `DATABASE_URL=…@localhost:5433`, `ML_INTE
 contract scripts and the golden run are in `apps/ml/AGENTS.md`.
 
 **Tests.** `bun run test` runs the `*.test.ts` files beside the code: small, pure-logic checks that never
-need a database. Add one beside any new parser, guard, money path or derived number.
+need a database (so a tested file must not import `db/client` at load). One file:
+`cd apps/api && bun test src/lib/ai/sql-guard.test.ts` (same in `apps/web`). Add one beside any new
+parser, guard, money path or derived number.
 
 ## Architecture
 
@@ -68,7 +70,10 @@ ML runners → write results, progress_json and status to the ml_* tables; Elysi
   access goes through `lib/api.ts`, `lib/ml-api.ts` and `lib/http.ts`; loading through `lib/use-async.ts`.
 - **Prediction run**: importing predict data (`POST /predict-data-sources/import`, awaited inline) creates
   and triggers an automatic run at the suggested cutoff (`auto_run: false` opts out); users can also
-  create runs (`POST /prediction-runs`). Train import is the async one; progress lives in-memory and is polled via `GET /import/progress`.
+  create runs (`POST /prediction-runs`). Train import is the async one: its progress lives in the api's
+  memory (`lib/data-import/train-progress/`) and the web polls `GET /train-data-sources/:id/import/progress`.
+- **Training run**: trains churn, CLV and credit in turn and promotes each new Model Version to Champion
+  straight away; there is no promotion gate or backtest ([`docs/ml.md`](docs/ml.md)).
 - **Runs end in `completed` or `failed`**: every exception sets `failed` + `error_message`, and the
   stale-run reaper (`apps/api/src/lib/ml/run-reaper.ts`) fails runs stuck longer than
   `STALE_RUN_TIMEOUT_MINUTES` (120).
@@ -80,7 +85,7 @@ ML runners → write results, progress_json and status to the ml_* tables; Elysi
 | Elysia, not FastAPI, owns REST | The ML code is Python-only; typed API, SSE and Drizzle are TypeScript-native |
 | FastAPI is internal-only | Training, prediction and SHAP need Python; Elysia proxies with `INTERNAL_SERVICE_TOKEN` |
 | ML runs as spawned CLIs | Jobs outlive the HTTP call; results land in the `ml_*` tables |
-| Run progress lives in Postgres | Runners write `progress_json`; the API polls it. (`arq` is in requirements but unused) |
+| Run progress lives in Postgres | Runners write `progress_json`; the API polls it |
 | SSE, not WebSockets | Server pushes only (AI chat tokens); reconnects on its own, works behind any proxy |
 | Drizzle in introspect mode | `db/migrations/` owns the schema ([ADR 0001](docs/adr/0001-plain-sql-migrations.md)) |
 
@@ -135,7 +140,7 @@ Python style is in `apps/ml/AGENTS.md`.
 
 - **A change is structure-only or behaviour-only**, never both in one PR.
 - **ML maths is bug-fix-only.** `features.py`, `churn_trainer.py`, `clv_trainer.py`, `credit_trainer.py`,
-  `metrics.py`, `labels.py`, `leakage.py`, `preprocessing.py`, `promotion.py` and `drift.py` take only bug
+  `metrics.py`, `labels.py`, `preprocessing.py` and `drift.py` take only bug
   fixes, deletion of code nothing calls, and a literal swapped for a constant of the same value. The rest
   of `apps/ml` may be restructured.
 - **Any change under `apps/ml/` or the import pipeline leaves the golden run unchanged**

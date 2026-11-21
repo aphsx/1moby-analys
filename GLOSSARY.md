@@ -68,8 +68,8 @@ The one Model Version of a Model Type that Prediction Runs use.
 _Avoid_: production model, active model, pinned model, live model
 
 **Promotion**:
-Making a Model Version the Champion, either automatically after a Training Run beats the current
-Champion, or by a User choosing it.
+Making a Model Version the Champion, either automatically at the end of every Training Run, or by a User
+choosing it.
 _Avoid_: activate, pin, deploy
 
 **Prediction Run**:
@@ -86,9 +86,9 @@ was predicted.
 _Avoid_: actuals, ground truth, backfill
 
 **Backtest**:
-Measuring at an earlier cutoff in the same data, where what happened next is already known. Training
-backtests each candidate model at older cutoffs; the overview backtests a behaviour (how Sending Months
-relate to churn) six months before the Cutoff Date. Unlike a Realized Outcome, it never waits for new data.
+Measuring at an earlier cutoff in the same data, where what happened next is already known. The overview
+backtests a behaviour (how Sending Months relate to churn) six months before the Cutoff Date. Unlike a
+Realized Outcome, it never waits for new data.
 _Avoid_: holdout, lookback
 
 ## Customer classifications
@@ -109,14 +109,13 @@ The amount a Customer is predicted to pay over the next 6 months.
 _Avoid_: LTV, lifetime value, revenue forecast
 
 **Value Tier**:
-The high / mid / low / none bucket of a Customer's CLV, ranked against the other Active Customers of the
-same Prediction Run whose CLV is above ฿0: high is the top 10%, mid the next 40%, low the bottom half.
-None means there is nothing to rank: the Customer is predicted to pay ฿0, or is not Active.
+The high / mid / low / none bucket of an Active Customer's CLV: high from ฿10,000, mid from ฿1,000, low
+below that. None means the Customer is predicted to pay ฿0, or is not Active.
 _Avoid_: value segment, tier
 
 **Credit Urgency**:
-How soon a Customer is predicted to top up (buy credit) next: critical within 14 days, warning within 30,
-monitor within 90, stable after that. It is a predicted payment date, not the day their credit runs out.
+How soon a Customer's credit is predicted to run out at their forecast usage, and so when they need to top
+up (buy credit): critical within 14 days, warning within 30, monitor within 90, stable after that.
 _Avoid_: top-up risk, credit risk, run-out date
 
 **Segment**:
