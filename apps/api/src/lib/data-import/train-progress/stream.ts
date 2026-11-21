@@ -9,7 +9,6 @@ import {
   type TrainImportStatus,
 } from "@moby/types";
 import { eq } from "drizzle-orm";
-import { db } from "../../../db/client";
 import { trainDataSources } from "../../../db/schema";
 import { READY_STEP } from "./progress";
 
@@ -93,6 +92,8 @@ const ready = (result: DataSourceImportResult): TrainImportStatus => ({
  * A missing row means the import failed and was rolled back (or never existed).
  */
 export async function trainImportStatus(sourceId: string): Promise<TrainImportStatus> {
+  // Lazy: the client throws without DATABASE_URL, and the in-memory tests import this file.
+  const { db } = await import("../../../db/client");
   const [row] = await db
     .select({
       importStatus: trainDataSources.importStatus,
