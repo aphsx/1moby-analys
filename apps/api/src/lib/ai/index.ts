@@ -11,7 +11,7 @@
  */
 
 // Chat assistant
-export { orchestrate, sseError, generateConversationTitle } from "./orchestrator";
+export { orchestrate, sseError } from "./orchestrator";
 
 // Customer insight
 export { createCustomerAiExplanation } from "./customer-ai-service";

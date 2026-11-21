@@ -1,5 +1,5 @@
 "use client";
-/** การใช้งาน tab and the overview's usage chart: 12 months before the cutoff (CUSTOMER-PAGES.md §3.2, §3.4). */
+/** การใช้งาน tab and the overview's usage chart: 12 months before the cutoff. */
 import type { MonthlyUsagePoint, PaymentEvent } from "@moby/types";
 import { Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { EmptyState, KpiStrip, Panel } from "@/components/ui";

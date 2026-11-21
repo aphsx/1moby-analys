@@ -205,54 +205,6 @@ def _assign_split(frame: pd.DataFrame, stratify: pd.Series, seed: int) -> pd.Dat
     return frame
 
 
-def pool_train_rows(primary: SplitFrame, older: list[SplitFrame]) -> SplitFrame:
-    """Pool older-cutoff rows into the primary train split (multi-cutoff training).
-
-    Validation/test stay exclusively at the primary (latest) cutoff so holdout
-    metrics keep their meaning. Older-cutoff rows are added as extra train rows
-    only for acc_ids that are NOT held out in the primary validation/test
-    splits — split contamination by acc_id therefore stays impossible, and
-    `check_split_contamination` still passes on the pooled frame.
-    """
-
-    held_out = set(primary.split(SPLIT_VALIDATION)["acc_id"].astype(int)) | set(
-        primary.split(SPLIT_TEST)["acc_id"].astype(int)
-    )
-    frames = [primary.frame]
-    for older_set in older:
-        extra = older_set.frame[
-            ~older_set.frame["acc_id"].astype(int).isin(held_out)
-        ].copy()
-        extra["split"] = SPLIT_TRAIN
-        frames.append(extra)
-    pooled = pd.concat(frames, ignore_index=True)
-    return SplitFrame(
-        model_type=primary.model_type,
-        frame=pooled,
-        label_columns=list(primary.label_columns),
-        feature_names=list(primary.feature_names),
-    )
-
-
-def check_split_contamination(split_frame: SplitFrame) -> dict[str, object]:
-    """Leakage test: acc_id sets must be disjoint across splits (§5.2)."""
-
-    ids = {
-        name: set(split_frame.split(name)["acc_id"].astype(int))
-        for name in (SPLIT_TRAIN, SPLIT_VALIDATION, SPLIT_TEST)
-    }
-    overlaps = {
-        "train∩validation": len(ids[SPLIT_TRAIN] & ids[SPLIT_VALIDATION]),
-        "train∩test": len(ids[SPLIT_TRAIN] & ids[SPLIT_TEST]),
-        "validation∩test": len(ids[SPLIT_VALIDATION] & ids[SPLIT_TEST]),
-    }
-    return {
-        "passed": all(count == 0 for count in overlaps.values()),
-        "overlaps": overlaps,
-        "sizes": {name: len(values) for name, values in ids.items()},
-    }
-
-
 def month_start(date: pd.Timestamp) -> pd.Timestamp:
     """Snap a date down to the first day of its month.
 
@@ -264,44 +216,3 @@ def month_start(date: pd.Timestamp) -> pd.Timestamp:
     return pd.Timestamp(date).to_period("M").to_timestamp()
 
 
-def backtest_cutoffs(
-    latest_cutoff: pd.Timestamp,
-    step_months: int = 2,
-    n_backtests: int = 2,
-) -> list[pd.Timestamp]:
-    """Older cutoffs C2, C3, … for multi-cutoff backtesting (§3).
-
-    Steps are calendar months (not days) — see `month_start`.
-    """
-
-    latest = pd.Timestamp(latest_cutoff)
-    return [
-        (latest.to_period("M") - step_months * i).to_timestamp()
-        for i in range(1, n_backtests + 1)
-    ]
-
-
-def adaptive_backtest_cutoffs(
-    latest_cutoff: pd.Timestamp,
-    min_activity: pd.Timestamp,
-    max_activity: pd.Timestamp,
-    label_window_days: int,
-    step_months: int = 2,
-    max_backtests: int = 6,
-    min_history_days: int = 365,
-) -> list[pd.Timestamp]:
-    """Backtest cutoffs scaled to the uploaded data span (§3).
-
-    Instead of a fixed count, walk back `step_months` at a time and keep every
-    cutoff that still has `min_history_days` of history before it and a full
-    `label_window_days` of data after it — a 2-year upload yields more
-    backtests than a 1-year upload, capped at `max_backtests` for runtime.
-    """
-
-    candidates = backtest_cutoffs(latest_cutoff, step_months, max_backtests)
-    return [
-        cutoff
-        for cutoff in candidates
-        if (cutoff - pd.Timestamp(min_activity)).days >= min_history_days
-        and cutoff + pd.Timedelta(days=label_window_days) <= pd.Timestamp(max_activity)
-    ]

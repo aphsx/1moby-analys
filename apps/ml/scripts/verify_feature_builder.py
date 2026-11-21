@@ -77,26 +77,6 @@ def latest_ready_source(source_kind: SourceKind) -> str:
     return str(row[0])
 
 
-def verify_feature_builder(
-    source_kind: SourceKind,
-    source_id: str,
-    cutoff_date: pd.Timestamp,
-    *,
-    feature_set_name: str,
-    feature_set_version: str,
-    model_type: str,
-) -> dict[str, Any]:
-    report, _, _ = build_feature_builder_artifacts(
-        source_kind,
-        source_id,
-        cutoff_date,
-        feature_set_name=feature_set_name,
-        feature_set_version=feature_set_version,
-        model_type=model_type,
-    )
-    return report
-
-
 def build_feature_builder_artifacts(
     source_kind: SourceKind,
     source_id: str,

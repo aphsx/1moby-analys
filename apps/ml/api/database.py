@@ -4,7 +4,7 @@ Async database connection — SQLAlchemy + asyncpg
 import os
 from typing import Optional
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncEngine
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncEngine
 
 
 def get_database_url() -> str:

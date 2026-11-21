@@ -7,7 +7,7 @@ import { formatBaht, formatCredits, formatDate, formatPercent } from "@/lib/form
 import { RISK_LABEL } from "@/lib/labels";
 
 const DAY_MS = 86_400_000;
-/** The last top-up counts as overdue past this multiple of the usual cycle (CUSTOMER-PAGES.md §3.1). */
+/** The last top-up counts as overdue past this multiple of the usual cycle. */
 const OVERDUE_RATIO = 1.5;
 
 /** 3.24 → "เลยรอบปกติ 3.2 เท่า"; from 10x up a decimal only adds noise. */

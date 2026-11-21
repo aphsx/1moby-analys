@@ -41,25 +41,6 @@ CREDIT_TIER_A_FEATURES = [
 ]
 # Additional columns retained on the feature dataframe for UI display snapshots
 # and legacy diagnostics without polluting the core ML training matrices.
-DISPLAY_COLUMNS = [
-    "sms_usage_share",
-    "email_usage_share",
-    "bc_usage_share",
-    "api_usage_share",
-    "otp_usage_share",
-    "usage_change_90d_pct",
-    "channel_hhi",
-    "multichannel_flag",
-    "payment_interval_mean_days",
-    "payment_overdue_ratio",
-    "payment_amount_cv",
-    "usage_prev_90d",
-    "usage_decay_ratio",
-    "usage_slope_6m",
-    "usage_consistency_ratio",
-    "credit_runway_months",
-    "credit_usage_decel",
-]
 # Churn/CLV intentionally keep the clean 15-feature intuitive contract. Credit
 # adds point-in-time balance and usage anchor.
 MINIMUM_TIER_A_FEATURES = BASE_TIER_A_FEATURES

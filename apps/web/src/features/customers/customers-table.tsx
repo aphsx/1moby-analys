@@ -1,6 +1,6 @@
 "use client";
 /**
- * Customer list (CUSTOMER-PAGES.md §2). Answers "who needs attention first, and why": one tab per
+ * Customer list. Answers "who needs attention first, and why": one tab per
  * lifecycle stage, each with its own columns, presets and sorts from TABS, and from 1280px up a side
  * panel that summarises the selected row.
  */

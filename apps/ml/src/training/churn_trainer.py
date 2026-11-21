@@ -21,19 +21,13 @@ import numpy as np
 import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import average_precision_score, brier_score_loss
+from sklearn.metrics import average_precision_score
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 
-from src.training.baselines import ChurnLogisticBaseline, churn_recency_rule_scores, churn_rfm_quartile_scores
 from src.training.datasets import SplitFrame
 from src.training.metrics import (
     bootstrap_ci,
-    calibration_curve_points,
     churn_metrics,
-    confusion_at_threshold,
-    expected_calibration_error,
-    hosmer_lemeshow_test,
-    lift_table,
     risk_thresholds_from_high,
     select_threshold_max_fbeta,
 )
@@ -388,33 +382,3 @@ def finalize_churn_candidate(
     )
 
 
-def refit_for_backtest(
-    champion: ChurnCandidate,
-    dataset: SplitFrame,
-    preprocessor: PreprocessorConfig,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
-    """Refit champion at an older cutoff for backtest."""
-    x_train = transform_features(dataset.features("train"), preprocessor)
-    x_val = transform_features(dataset.features("validation"), preprocessor)
-    x_test = transform_features(dataset.features("test"), preprocessor)
-    y_train = np.asarray(dataset.labels("train", "churn_label"), dtype=int)
-    y_val = np.asarray(dataset.labels("validation", "churn_label"), dtype=int)
-    y_test = np.asarray(dataset.labels("test", "churn_label"), dtype=int)
-
-    x_trval = pd.concat([x_train, x_val], ignore_index=True)
-    y_trval = np.concatenate([y_train, y_val])
-    acc_trval = pd.concat(
-        [dataset.split("train")["acc_id"], dataset.split("validation")["acc_id"]],
-        ignore_index=True,
-    ).to_numpy()
-
-    _, oof, _ = _cv_oof(champion, x_trval, y_trval, groups=acc_trval)
-    calibrator = _fit_calibrator(oof, y_trval)
-    f2_threshold = select_threshold_max_fbeta(y_trval, calibrator.transform(oof), beta=2.0)
-    high_threshold = float(np.clip(f2_threshold, *HIGH_THRESHOLD_BAND))
-
-    model = clone_candidate_model(champion, y_trval)
-    model.fit(x_trval, y_trval)
-    raw_scores = model.predict_proba(x_test)[:, 1]
-    probs = calibrator.transform(raw_scores)
-    return y_test, probs, raw_scores, high_threshold

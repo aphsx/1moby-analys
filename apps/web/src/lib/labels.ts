@@ -2,7 +2,7 @@
  * Thai labels for every enum value shown on screen (docs/ui/CONTENT.md §4). `satisfies` makes a new
  * enum value in @moby/types a type error here until it gets a label.
  */
-import type { LifecycleStage, PredictionOutput, RiskLevel, Segment, UrgencyLevel, ValueTier } from "@moby/types";
+import type { LifecycleStage, RiskLevel, UrgencyLevel, ValueTier } from "@moby/types";
 
 export const LIFECYCLE_LABEL = {
   "Active Paid": "ใช้งาน · จ่ายเงิน",
@@ -88,25 +88,5 @@ export const URGENCY_LABEL = {
   monitor: "อาจเติมใน 31–90 วัน",
   stable: "เกิน 90 วัน",
 } as const satisfies Record<UrgencyLevel, string>;
-
-export const USAGE_TREND_LABEL = {
-  increasing: "ใช้งานเพิ่มขึ้น",
-  stable: "ใช้งานคงที่",
-  declining: "ใช้งานลดลง",
-  no_usage: "ไม่มีการใช้งาน",
-} as const satisfies Record<PredictionOutput["usage_trend"], string>;
-
-export const SEGMENT_LABEL = {
-  "High-Value At-Risk": "มูลค่าสูง · เสี่ยง",
-  "Mid-Value At-Risk": "มูลค่ากลาง · เสี่ยง",
-  "High-Value Stable": "มูลค่าสูง · มั่นคง",
-  Emerging: "กำลังโต",
-  Stable: "มั่นคง",
-  "Low-Value Watch": "มูลค่าต่ำ · เฝ้าดู",
-  "Low-Value At-Risk": "มูลค่าต่ำ · เสี่ยง",
-  Lapsed: "หยุดใช้ · ชวนกลับได้",
-  Dormant: "ไม่เคลื่อนไหว",
-  Ghost: "ไม่มีกิจกรรม",
-} as const satisfies Record<Segment, string>;
 
 export const CHANNEL_LABEL = { bc: "SMS ส่งเอง", api: "SMS API", otp: "OTP", email: "Email" } as const;

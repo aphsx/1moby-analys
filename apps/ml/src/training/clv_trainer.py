@@ -215,25 +215,3 @@ def train_clv(
     )
 
 
-def backtest_clv(
-    dataset: SplitFrame,
-    preprocessor: PreprocessorConfig,
-) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
-    """Evaluate clean CLV model on backtest cutoff."""
-    y_tr = pd.to_numeric(dataset.labels("train", "future_revenue_6m"), errors="coerce").fillna(0.0)
-    y_va = pd.to_numeric(dataset.labels("validation", "future_revenue_6m"), errors="coerce").fillna(0.0)
-    y_te = pd.to_numeric(dataset.labels("test", "future_revenue_6m"), errors="coerce").fillna(0.0)
-
-    x_tr = transform_features(dataset.features("train"), preprocessor)
-    x_va = transform_features(dataset.features("validation"), preprocessor)
-    x_te = transform_features(dataset.features("test"), preprocessor)
-
-    bundle, _ = _fit_twopart_quantile(x_tr, y_tr, x_va, y_va)
-    champion_metrics = clv_metrics(y_te.to_numpy(), bundle.predict(x_te))
-
-    segment = ClvSegmentMeanBaseline().fit(dataset.features("train"), y_tr)
-    baseline_metrics = {
-        "segment_mean": clv_metrics(y_te.to_numpy(), segment.predict(dataset.features("test"))),
-        "revenue_180d_carryover": clv_metrics(y_te.to_numpy(), clv_carryover_scores(dataset.features("test"))),
-    }
-    return champion_metrics, baseline_metrics

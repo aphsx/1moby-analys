@@ -3,7 +3,7 @@
 Rebuilt cleanly to mirror notebooks/03_credit_forecast.ipynb:
   1. LightGBM Quantile models (p10, p50, p90) trained in log-space on future usage.
   2. Monotonic constraint (p10 <= p50 <= p90) to prevent quantile crossing.
-  3. 20% Blend of median p50 with 30-day carryover anchor.
+  3. 60:40 blend of median p50 with the carryover anchor.
   4. Depletion Runway & Urgent Alert (days_left <= 14 days).
 All legacy Optuna multi-trial searches, XGBoost AFT grids, and CQR margin loops are pruned.
 """
@@ -22,17 +22,15 @@ from sklearn.metrics import f1_score, mean_absolute_error, precision_score, reca
 from src.training.baselines import (
     credit_last_30d_carryover,
     credit_moving_avg_90d,
-    credit_runway_depletion,
 )
 from src.training.datasets import SplitFrame
 from src.training.labels import CREDIT_HORIZONS
-from src.training.metrics import bootstrap_ci_credit, credit_metrics, pinball_loss
+from src.training.metrics import credit_metrics
 from src.training.preprocessing import PreprocessorConfig, transform_features
 
 logger = logging.getLogger(__name__)
 
 RANDOM_SEED = 42
-QUANTILES = [0.10, 0.50, 0.90]
 HORIZONS = CREDIT_HORIZONS  # {30: "future_usage_30d", 90: "future_usage_90d"}
 URGENT_TOPUP_DAYS = 14
 
@@ -122,18 +120,6 @@ class TopupDepletionModel:
     scale: float = 1.0
     day_scale: float = 1.0
     urgent_day_threshold_raw: float = 14.0
-
-    def predict_days(
-        self,
-        x: pd.DataFrame,
-        predicted_usage_30d: np.ndarray | None = None,
-    ) -> np.ndarray:
-        balance = pd.to_numeric(x.get("current_sms_balance", 0.0), errors="coerce").fillna(0.0).to_numpy()
-        if predicted_usage_30d is not None:
-            usage_30d = np.asarray(predicted_usage_30d, dtype=float)
-        else:
-            usage_30d = pd.to_numeric(x.get("anchor_30d", 0.0), errors="coerce").fillna(0.0).to_numpy()
-        return calculate_runway(balance, usage_30d, max_days=self.censor_days)
 
 
 def _urgent_topup_metrics(
@@ -312,34 +298,3 @@ def train_credit(
     )
 
 
-def backtest_credit(
-    result: CreditTrainResult,
-    dataset: SplitFrame,
-    preprocessor: PreprocessorConfig,
-) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
-    """Evaluate clean credit models on backtest cutoff."""
-    x_test = transform_features(dataset.features("test"), preprocessor)
-    y_30 = pd.to_numeric(dataset.labels("test", "future_usage_30d"), errors="coerce").fillna(0.0).to_numpy()
-    y_90 = pd.to_numeric(dataset.labels("test", "future_usage_90d"), errors="coerce").fillna(0.0).to_numpy()
-    anchor_30 = credit_anchor_log(dataset.features("test"), 30)
-    anchor_90 = credit_anchor_log(dataset.features("test"), 90)
-
-    q30 = result.horizons[30].predict_quantiles(x_test, anchor_30)
-    q90 = result.horizons[90].predict_quantiles(x_test, anchor_90)
-    for q in [0.10, 0.50, 0.90]:
-        q90[q] = np.maximum(q90[q], q30[q])
-
-    champion_metrics = credit_metrics(y_30, q30, y_90, q90)
-    test_bal = pd.to_numeric(dataset.features("test").get("current_sms_balance", 0.0), errors="coerce").fillna(0.0).to_numpy()
-    champion_metrics.update(_urgent_topup_metrics(test_bal, q30[0.50], y_30))
-    baseline_metrics = {
-        "moving_avg_90d": {
-            "mae_30d": float(mean_absolute_error(y_30, credit_moving_avg_90d(dataset.features("test"), 30))),
-            "mae_90d": float(mean_absolute_error(y_90, credit_moving_avg_90d(dataset.features("test"), 90))),
-        },
-        "last_30d_carryover": {
-            "mae_30d": float(mean_absolute_error(y_30, credit_last_30d_carryover(dataset.features("test"), 30))),
-            "mae_90d": float(mean_absolute_error(y_90, credit_last_30d_carryover(dataset.features("test"), 90))),
-        },
-    }
-    return champion_metrics, baseline_metrics

@@ -39,25 +39,6 @@ class PreprocessingReport:
     stats: dict[str, Any]
 
 
-def build_preprocessor(
-    feature_schema: FeatureSchema,
-    *,
-    scale_numeric: bool = True,
-) -> PreprocessorConfig:
-    """Build an unfitted preprocessor contract from a feature schema."""
-
-    return PreprocessorConfig(
-        feature_names=list(feature_schema.keys()),
-        feature_schema=feature_schema,
-        imputation_values={},
-        center_values={},
-        scale_values={},
-        fitted_row_count=0,
-        scale_numeric=scale_numeric,
-        fitted=False,
-    )
-
-
 def fit_preprocessor(
     feature_df_train: pd.DataFrame,
     feature_schema: FeatureSchema | None = None,

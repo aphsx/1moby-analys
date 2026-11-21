@@ -12,7 +12,6 @@ Gold-standard extensions (additive — no existing key is removed):
   recall_at_top{5,20}pct / lift_at_top{5,20}pct   Additional decile coverage.
 
 Separate statistical functions (not stored in metrics_json):
-  hosmer_lemeshow_test  Chi-squared goodness-of-fit for calibration.
   bootstrap_ci          Percentile bootstrap 95% CI for all churn_metrics keys.
 """
 
@@ -21,8 +20,6 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-import pandas as pd
-from scipy.stats import chi2 as chi2_dist
 from scipy.stats import spearmanr
 from sklearn.metrics import (
     average_precision_score,
@@ -159,52 +156,6 @@ def maximum_calibration_error(
     return float(mce)
 
 
-def hosmer_lemeshow_test(
-    y_true: np.ndarray,
-    y_prob: np.ndarray,
-    n_groups: int = 10,
-) -> dict[str, float]:
-    """Hosmer-Lemeshow chi-squared goodness-of-fit test for calibration.
-
-    Null hypothesis: predicted probabilities match observed event rates.
-
-    Returns:
-        statistic  Chi-squared HL statistic (lower = better fit)
-        p_value    Probability under chi-sq(df=n_groups-2).
-                   p > 0.05 → fail to reject H0 (calibration adequate)
-                   p ≤ 0.05 → reject H0 (significant miscalibration)
-        df         Degrees of freedom (n_groups - 2)
-
-    Caution: with n > 10,000 the test has very high power and rejects even
-    trivially small miscalibrations. Interpret p_value as a continuous
-    diagnostic rather than a binary gate at large sample sizes.
-    """
-    y_true = np.asarray(y_true, dtype=float)
-    y_prob = np.clip(np.asarray(y_prob, dtype=float), 1e-10, 1 - 1e-10)
-
-    order = np.argsort(y_prob)
-    y_true_s = y_true[order]
-    y_prob_s = y_prob[order]
-    groups = np.array_split(np.arange(len(y_true)), n_groups)
-
-    hl_stat = 0.0
-    for idx in groups:
-        if len(idx) == 0:
-            continue
-        n_g = len(idx)
-        o_g = float(y_true_s[idx].sum())
-        e_g = float(y_prob_s[idx].sum())
-        pi_g = e_g / n_g
-        denom = n_g * pi_g * (1.0 - pi_g)
-        if denom < 1e-10:
-            continue
-        hl_stat += (o_g - e_g) ** 2 / denom
-
-    df = n_groups - 2
-    p_value = float(1.0 - chi2_dist.cdf(hl_stat, df))
-    return {"statistic": round(float(hl_stat), 4), "p_value": round(p_value, 4), "df": df}
-
-
 def bootstrap_ci(
     y_true: np.ndarray,
     y_prob: np.ndarray,
@@ -297,55 +248,6 @@ def bootstrap_ci_regression(
                 continue
             if isinstance(v, float) and not np.isnan(v):
                 boot_dist.setdefault(k, []).append(v)
-    lo_pct = alpha / 2 * 100
-    hi_pct = (1.0 - alpha / 2) * 100
-    return {
-        k: {
-            "ci_lower": round(float(np.percentile(vals, lo_pct)), 4),
-            "ci_upper": round(float(np.percentile(vals, hi_pct)), 4),
-            "n_boot_valid": len(vals),
-        }
-        for k, vals in boot_dist.items()
-        if len(vals) >= 10
-    }
-
-
-def bootstrap_ci_credit(
-    y_true_30d: np.ndarray,
-    pred_30d: dict[float, np.ndarray],
-    y_true_90d: np.ndarray,
-    pred_90d: dict[float, np.ndarray],
-    *,
-    n_boot: int = 500,
-    alpha: float = 0.05,
-    seed: int = 42,
-) -> dict[str, dict[str, float]]:
-    """Percentile bootstrap 95% CI for all credit_metrics keys (coverage, pinball, etc.).
-
-    30d and 90d horizons are resampled with the SAME indices per iteration (joint
-    resampling) to preserve the natural per-customer correlation between horizons and
-    obtain accurate — rather than overconfident — CIs.
-    Key excluded: n.
-
-    Returns:
-        {metric: {"ci_lower": float, "ci_upper": float, "n_boot_valid": int}}
-    """
-    y30 = np.asarray(y_true_30d, dtype=float)
-    y90 = np.asarray(y_true_90d, dtype=float)
-    n = len(y30)
-    rng = np.random.default_rng(seed)
-    SKIP = {"n"}
-    boot_dist: dict[str, list[float]] = {}
-    for _ in range(n_boot):
-        idx = rng.integers(0, n, size=n)
-        bt_pred30 = {q: arr[idx] for q, arr in pred_30d.items()}
-        bt_pred90 = {q: arr[idx] for q, arr in pred_90d.items()}
-        m = credit_metrics(y30[idx], bt_pred30, y90[idx], bt_pred90)
-        for k, v in m.items():
-            if k in SKIP:
-                continue
-            if isinstance(v, (int, float)) and not (isinstance(v, float) and np.isnan(v)):
-                boot_dist.setdefault(k, []).append(float(v))
     lo_pct = alpha / 2 * 100
     hi_pct = (1.0 - alpha / 2) * 100
     return {

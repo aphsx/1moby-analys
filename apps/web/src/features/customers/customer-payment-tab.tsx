@@ -1,5 +1,5 @@
 "use client";
-/** การชำระเงิน: how much, how regularly, and when next (CUSTOMER-PAGES.md §3.5). */
+/** การชำระเงิน: how much, how regularly, and when next. */
 import type { PaymentEvent, PredictionOutput } from "@moby/types";
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
