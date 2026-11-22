@@ -4,18 +4,7 @@
 อ่าน `DESIGN.md` (หน้าตา) และ `CONTENT.md` (คำและตัวเลข) ก่อนเริ่ม
 
 **สิ่งที่ไม่เปลี่ยน:** routes, auth (`better-auth`), การดึงข้อมูล (`lib/api.ts`, `lib/ml-api.ts`), zustand stores, หน้า login, logic ของ ML และ API นอกเหนือจาก §3
-
-แผนนี้แทนข้อ 5.2–5.4 และ 5.12 ของแผนหลัก [`docs/REFACTOR-PLAN.md`](../REFACTOR-PLAN.md) (ตัดสินใจ 2026-10-26: คง Tailwind 3 + React 18 ไม่ใช้ shadcn, คำบนจอเป็นไทยตาม `CONTENT.md`) ข้ออื่นของ Phase 5 ในแผนหลักยังใช้อยู่ ติ๊กเมื่อ merge แล้ว:
-
-- [x] เฟส 0 — Foundation
-- [x] เฟส 1 — Shell
-- [x] §3 Contract / API (ก่อนหรือคู่กับเฟส 2)
-- [x] เฟส 2 — หน้าภาพรวม
-- [x] เฟส 3 — รายชื่อลูกค้า
-- [x] เฟส 4 — หน้าลูกค้า
-- [x] เฟส 5 — หน้าที่เหลือ
-- [x] เฟส 6 — เก็บงาน
-
+  <!---->
 ---
 
 ## 1. สภาพปัจจุบันที่ต้องแก้
@@ -54,7 +43,7 @@
 
 1. `components/sidebar.tsx`: พื้น `--ground`, เส้นขวา 1px, โลโก้ SVG บนพื้นเรียบ (ไม่มี gradient/รูป), เมนูไทยจาก `lib/nav.ts`, nav active = `--accent-soft` + `--accent-ink`, กลุ่ม "การทำนาย" สำหรับ รอบทำนาย/เทรนโมเดล/ความแม่นยำโมเดล, บัญชีอยู่ล่าง
 2. `components/shell.tsx`: เลิกใช้ top bar ใหญ่ ย้ายตัวเลือกรอบทำนาย (`run-selector.tsx`) ไปแถว scope ใต้ชื่อหน้า (`DESIGN.md` §6.1) มือถือ < 860px ใช้ top bar 48px + เมนู sheet เต็มจอ
-3. `lib/nav.ts`: label และ title เป็นไทย (`CONTENT.md` §7), `getRouteTitle` สำหรับหน้าลูกค้าคืน "บัญชี #{id}", ไอคอนเทรนโมเดลกับความแม่นยำโมเดลต้องไม่ซ้ำกัน
+3. `lib/nav.ts`: label และ title เป็นไทย (`CONTENT.md` §7), `getRouteTitle` สำหรับหน้าลูกค้าคืน "บัญชี #{id}"
 4. ตัวสลับธีม (ถ้าต้องการธีมมืดตอนนี้): ตั้ง `data-theme` บน `<html>` เก็บค่าใน localStorage พร้อม try/catch
 
 **Done เมื่อ:** sidebar พับเป็นเมนูบนมือถือ, ไม่มี gradient ในกรอบ, ทุกเมนูภาษาไทย
@@ -78,12 +67,6 @@
 
 **Done เมื่อ:** ไม่มีการ์ดเดิมในตาราง "แทนที่" ถูก import อยู่, ฿ ใน KPI = ผลรวมในบล็อกหลัก (assert ใน dev), ทุกบล็อกมี loading/empty/error
 
-ที่ทำจริง (2026-10-26) ต่างจากตารางข้างบน:
-- กราฟรายได้รายเดือนอยู่ใน rail ไม่ใช่ main เพื่อให้ main กับ rail จบใกล้กัน (`DESIGN.md` §5)
-- KPI ช่อง 3 แสดงเฉพาะ "ไม่มีการใช้งาน" ของลูกค้าที่จ่ายเงิน และยังไม่มี rail แนวโน้มการใช้งาน จนกว่าจะแก้ §4.2
-- ข้อค้นพบพูดถึงกลุ่มมูลค่าสูงทั้งกลุ่มก่อน แล้วตามด้วยจำนวนที่เสี่ยงสูงขึ้นไป (ปุ่มเปิดรายชื่อกลุ่มหลังนี้) เพราะในข้อมูลตัวอย่าง กลุ่ม high × high/critical ถือแค่ 11% ของรายได้ที่เสี่ยงหาย
-- ถ้ารอบทำนายไม่มี SHAP (`churn_factors` เป็น null ทั้งรอบ) รายการ "ต้องโทรก่อน" ใช้ "เติมครั้งถัดไป" เป็นบรรทัดเหตุผลแทน
-
 ### เฟส 3 — รายชื่อลูกค้า (`/customers`)
 
 อ้างอิง canvas v5 "รายชื่อลูกค้า"
@@ -96,13 +79,6 @@
 6. Pagination แบบ "1–50 จาก N ราย", หัวตาราง sticky
 7. มือถือ: ตารางเป็นแถว 2 บรรทัด ไม่ทิ้ง field
 
-ที่ทำจริง (2026-10-26):
-- คอลัมน์ "แนวโน้มการใช้งาน" เปลี่ยนเป็น "ใช้งานล่าสุด" (`days_since_last_activity`) จนกว่าจะแก้ §4.2
-- บรรทัดเหตุผลใต้เลขบัญชีคือกลุ่มมูลค่า ตามด้วยปัจจัยแรกจาก `churn_factors` ถ้ารอบนั้นมี SHAP
-- ยังคงปุ่ม "สรุป AI" ในตาราง เพราะตอนนี้เป็นที่เดียวที่สร้างคำอธิบาย AI รายลูกค้าได้ ย้ายไปหน้าลูกค้าในเฟส 4
-- ไม่ทำแผงขวา (ข้อ 5 เป็นทางเลือก)
-- `/outputs` คืน `revenue_at_risk_sum` สำหรับประโยคสรุปของกลุ่ม
-
 ### เฟส 4 — หน้าลูกค้า (`/customers/[id]`)
 
 อ้างอิง canvas v5 "หน้าลูกค้า"
@@ -114,28 +90,13 @@
 5. คำอธิบาย AI (`ai_explanation`) อยู่ในการ์ดของตัวเอง ติดป้าย "สรุปจาก AI"
 6. Label ทั้งหมดตาม `CONTENT.md` §3, §7
 
-ที่ทำจริง (2026-10-26):
-- ไม่มีปุ่มอีเมล/โทร เพราะ `profile_snapshot` ไม่มีข้อมูลติดต่อ เพิ่มเมื่อ API ส่งข้อมูลนี้
-- ปุ่มสร้างสรุปจาก AI ย้ายจากตารางรายชื่อมาอยู่ในการ์ด "สรุปจาก AI" ของหน้านี้
-- กราฟการใช้งาน/การชำระเงินเปลี่ยนสีเป็น token และคำเป็นไทย แต่ยังคงการลากเลื่อน/ซูมเดิม (รวมโค้ดสองกราฟเป็นงานข้อ 5.9 ของแผนหลัก)
-- ต่ำกว่า 1180px แผงข้อมูลลูกค้าย้ายไปอยู่ใต้แท็บ
-
 ### เฟส 5 — หน้าที่เหลือ (ปรับ token อย่างเดียว ไม่ redesign)
 
 `/runs`, `/training`, `/model-performance`, `/ai-chat`, `/profile`: ใช้ `Panel`, ตาราง, pill, ปุ่ม, ตัวเลขตาม format ใหม่ ข้อความใน `features/model-performance/metric-info.ts` ตรวจคำตาม `CONTENT.md`
 
-ที่ทำจริง (2026-10-26): แทน class สีเดิมทั้งหมดด้วย token (`git grep "\[color:var(--"` ว่างแล้ว ซึ่งเป็นเกณฑ์ข้อหนึ่งของเฟส 6), สี Tailwind เดิม (gray/red/amber…) เป็น token, ขนาดตัวอักษรเข้า scale 12/13/14, ตัด gradient/glow/pulse ในหน้าเหล่านี้ และแปลคำที่เหลือเป็นไทย ชื่อ metric (Precision, Recall, Brier, Spearman ฯลฯ) ในหน้าความแม่นยำโมเดลยังเป็นอังกฤษ เพราะเป็นหน้าของทีม Data/ML และมีคำอธิบายไทยใน ⓘ อยู่แล้ว gradient ที่เหลือมีแค่ใน `intro.module.css` (splash ของหน้า login ซึ่งไม่อยู่ในขอบเขตแผนนี้)
-
 ### เฟส 6 — เก็บงาน
 
-ลบ alias token เดิม, ลบ `palette.ts` gradients และรวม `lib/login-brand-colors.ts` เข้า token, ลบ primitives เก่าที่ไม่มีใครใช้, ตรวจมือถือ 390px ทุกหน้า, ตรวจ contrast ธีมมืด
-
-**Done เมื่อ:** `git grep "\[color:var(--"` ว่าง (ใช้ชื่อ token ของ Tailwind แทน), ชื่อหน้าตรงกันทั้ง sidebar, หัวหน้า และ tab ของเบราว์เซอร์ (`lib/nav.ts`, metadata ใน `app/*/page.tsx`)
-
-ที่ทำจริง (2026-10-26): ลบ alias token เดิมและ class `.type-*` / `.surface-elev` / `.surface-soft` แล้ว (คง `.surface` ไว้เป็นหน้าตาของ Panel), `palette.ts` ลบไปตั้งแต่เฟส 3, primitive ทุกตัวใน `components/ui.tsx` ยังมีคนใช้ ตรวจที่ 390px ทุกหน้า (ไม่มีแนวนอนล้น) และตรวจธีมมืดบนหน้าภาพรวมและหน้าลูกค้า ยังเหลือ:
-- `lib/login-brand-colors.ts` ใช้เฉพาะหน้า login และ splash ซึ่งอยู่นอกขอบเขตแผนนี้ จึงยังไม่รวมเข้า token
-- ยังไม่มีปุ่มสลับธีม (เฟส 1 ข้อ 4 เป็นทางเลือก) token ธีมมืดพร้อมแล้ว ใส่ `data-theme="dark"` บน `<html>` ก็ใช้ได้
-- `SectionCard` ยังใช้ในหน้ารอบทำนาย/เทรนโมเดล (หน้าตาตาม token แล้ว) เปลี่ยนเป็น `Panel` เมื่อจะ redesign หน้าเหล่านั้น
+ลบ alias token เดิม, ลบ `palette.ts` gradients, ลบ primitives เก่าที่ไม่มีใครใช้, ตรวจมือถือ 390px ทุกหน้า, ตรวจ contrast ธีมมืด
 
 ---
 
@@ -158,7 +119,6 @@
 
 1. **Preset "มูลค่าสูง + เสี่ยงสูง" ตัดลูกค้าระดับวิกฤตทิ้ง** — `customers-view.tsx` ตั้ง `churn_risk_level: "high"` และ API ใช้ `eq` คอมเมนต์บอกว่ากลุ่มวิกฤตจะขึ้นมาจากการเรียง แต่จริง ๆ ถูกกรองออกไปก่อนเรียง ลูกค้าที่เร่งด่วนที่สุดจึงไม่อยู่ในลิสต์ แก้ด้วย `inArray` ตาม §3
 2. **`usage_trend` อาจนับ "ลดลง" เกินจริง** — ใน `features.py` ถ้าวันตัดข้อมูลเป็นต้นเดือน หน้าต่าง 90 วันล่าสุดครอบคลุม 2 เดือนเต็ม แต่หน้าต่างก่อนหน้าครอบคลุม 3 เดือน ลูกค้าที่ใช้คงที่จะถูกนับว่าลดลง ก่อนโชว์ KPI "การใช้งานลดลง" ให้แก้การนับ (เทียบเป็นรายเดือนเต็มเท่ากันสองช่วง) หรือแสดงเฉพาะ `no_usage`
-   - **สถานะ (2026-10-26):** ยืนยันบนรอบตัวอย่าง (cutoff 1 ม.ค. 2569) ลูกค้า Active Paid 2,572 ราย: ลดลง 1,418 / คงที่ 108 / เพิ่มขึ้น 589 / ไม่ใช้ 457 ตอนนี้หน้าภาพรวมแสดงเฉพาะ `no_usage` ของลูกค้าที่จ่ายเงิน (`RunSummary.usage_trend` กรอง Active Paid แล้ว) และยังไม่มี rail แนวโน้มการใช้งาน รอ PR แก้บั๊กใน `features.py` (ต้องผ่าน golden run)
 3. **ตัวเลขเดียวกันต้องใช้ตัวกรองเดียวกัน** — `revenue.expected_at_risk` กรอง `lifecycle_stage = 'Active Paid'` แต่ `value_risk_matrix` ไม่ได้กรอง lifecycle ถ้าโชว์ทั้งสองบนหน้าเดียว ผลรวมอาจไม่ตรงกัน ให้ใช้ตัวกรองเดียวกันใน SQL และ assert ใน dev ว่า `sum(matrix.revenue_at_risk) ≈ expected_at_risk`
 4. **ลูกค้าใช้งานไม่ถึง 90 วันไม่มีคะแนน** (`CHURN_ABSTAIN_MIN_TENURE_DAYS = 90`) — แสดงเป็น "ยังไม่มีคะแนน" และบอกจำนวนใต้บล็อกหลัก อย่าใส่เป็น 0%
 5. **ข้อมูล mock ของบริษัท** มีจุดแปลก (ชีต SMS API = OTP ซ้ำกัน, บัญชี Ghost 63%) ออกแบบให้รองรับข้อมูลจริงที่สะอาดกว่า แต่อย่าใช้ช่องทาง API vs OTP เป็นข้อค้นพบจนกว่าข้อมูลจริงจะมา
@@ -187,6 +147,21 @@ node .agents/skills/design-taste-frontend/scripts/inspect.mjs --app http://local
 ข้อจำกัด: หน้าในระบบต้อง login (`proxy.ts`) inspector เข้าเองไม่ได้ ถ้าจะใช้ ให้ทำ dev-only route ที่ render หน้าจากข้อมูลตัวอย่างโดยไม่ต้อง login (ห้ามเปิดใน production) หรือดูภาพหน้าจอเองตาม checklist
 เพิ่ม `.taste-skill/` ใน `.gitignore`
 
-## 7. กติกาสำหรับ AI ที่ช่วยเขียนโค้ด
+## 7. ข้อความสำหรับใส่ใน `CLAUDE.md` (ให้ AI ที่ช่วยเขียนโค้ดทำตามกติกาเดียวกัน)
 
-อยู่ใน `AGENTS.md` หัวข้อ "UI rules" แล้ว (`CLAUDE.md` import ไฟล์นั้น)
+```md
+## UI rules
+- Follow docs/ui/DESIGN.md (tokens, components, charts) and docs/ui/CONTENT.md (Thai copy, number formats, ⓘ texts).
+- Use tokens via Tailwind theme names (bg-surface, text-muted, border-border); never hardcode hex colours in components.
+- Format every number with src/lib/format.ts; every enum label with src/lib/labels.ts.
+- No gradients, glows, uppercase labels, icon tiles on KPIs, sparklines, zebra rows or shimmer skeletons.
+- Each page answers one question: the largest block answers it, every KPI and chart title has an InfoTip.
+- Work through docs/ui/REFACTOR-PLAN.md phase by phase; one phase per PR.
+```
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Select IDE
+   Connect to an IDE for integrated development features.
+
+   No available IDEs detected. Make sure your IDE has the Claude Code extension or plugin installed and is running.
+
+   Enter to confirm · Esc to cancel
