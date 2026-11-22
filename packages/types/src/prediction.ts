@@ -211,6 +211,11 @@ export interface OutputsQuery {
   needs_review?: "true" | "false" | "";
   /** At most this many months with messages sent in the window before the cutoff. */
   sending_months_max?: string | "";
+  /** Number ranges: "min-max", either side optional ("50000-100000", "50000-"). Bounds are inclusive. */
+  predicted_clv_6m?: string;
+  total_revenue?: string;
+  revenue_at_risk?: string;
+  days_since_last_activity?: string;
 }
 
 export interface OutputsPage {

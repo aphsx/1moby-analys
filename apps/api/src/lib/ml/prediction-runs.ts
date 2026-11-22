@@ -24,6 +24,7 @@ import {
 } from "../../db/schema";
 import { notFound } from "../http/errors";
 import { EMPTY_MODEL_VERSIONS, num } from "../ml-contract";
+import type { RangeKey } from "./range-filter";
 
 // ── Run select + row mapping ───────────────────────────────────
 
@@ -203,7 +204,8 @@ export const SORT_COLUMNS = {
   acc_id: mlPredictionOutputs.accId,
 } as const;
 
-export interface OutputsQueryParams {
+/** Range keys carry "min-max" strings (lib/ml/range-filter.ts). */
+export interface OutputsQueryParams extends Partial<Record<RangeKey, string>> {
   page?: number;
   page_size?: number;
   sort?: string;

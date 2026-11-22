@@ -8,7 +8,7 @@ import type { LifecycleStage, OutputsPage, OutputsQuery, PredictionOutput, Profi
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Building2, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Building2, ChevronLeft, ChevronRight, Download, SlidersHorizontal, X } from "lucide-react";
 import { notifyStatusDialog } from "@/components/global-status-dialog-host";
 import { RunScope } from "@/components/run-selector";
 import { Select } from "@/components/select";
@@ -17,7 +17,20 @@ import { formatBaht, formatBahtCompact, formatCount, formatDate, formatDaysAgo, 
 import { CHANNEL_LABEL, LIFECYCLE_HELP, LIFECYCLE_LABEL, RISK_LABEL, URGENCY_LABEL, VALUE_TIER_HELP, VALUE_TIER_LABEL, valueTierLabel } from "@/lib/labels";
 import { EXPORT_ROW_CAP, exportOutputsCsv } from "./export-csv";
 import { pageItems } from "./page-items";
-import { EMPTY_FILTERS, FILTER_KEYS, TAB_KEYS, type FilterKey, type ListFilters, type ListState, type TabKey } from "./customers-filters";
+import {
+  EMPTY_FILTERS,
+  FILTER_KEYS,
+  isRangeKey,
+  RANGE_FIELDS,
+  RANGE_KEYS,
+  TAB_KEYS,
+  type FilterKey,
+  type ListFilters,
+  type ListState,
+  type RangeKey,
+  type TabKey,
+} from "./customers-filters";
+import { RangeFilters } from "./range-filters";
 import { humanizeFeature } from "./reasoning";
 import { getDisplayError } from "@/lib/ui-error";
 
@@ -52,6 +65,8 @@ interface TabConfig {
   /** the first is the default */
   sorts: { value: string; label: string }[];
   presets: Preset[];
+  /** number ranges this tab offers; empty hides the control */
+  ranges: RangeKey[];
   columns: Column[];
 }
 
@@ -87,6 +102,7 @@ export const TABS: Record<TabKey, TabConfig> = {
   paid: {
     stage: "Active Paid",
     count: (s) => s.lifecycle.active_paid,
+    ranges: ["predicted_clv_6m", "total_revenue", "revenue_at_risk"],
     sorts: [
       { value: "revenue_at_risk:desc", label: "รายได้เสี่ยงหาย" },
       { value: "churn_probability:desc", label: "โอกาสเลิกใช้" },
@@ -135,6 +151,7 @@ export const TABS: Record<TabKey, TabConfig> = {
   free: {
     stage: "Active Free",
     count: (s) => s.lifecycle.active_free,
+    ranges: ["days_since_last_activity"],
     sorts: [
       { value: "days_since_last_activity:asc", label: "ใช้งานล่าสุด" },
       { value: "estimated_days_until_topup:asc", label: "เติมครั้งถัดไป" },
@@ -185,6 +202,7 @@ export const TABS: Record<TabKey, TabConfig> = {
   churned: {
     stage: "Churned",
     count: (s) => s.lifecycle.churned,
+    ranges: ["total_revenue", "days_since_last_activity"],
     sorts: [
       { value: "total_revenue:desc", label: "ยอดชำระรวม" },
       { value: "days_since_last_activity:asc", label: "เพิ่งหยุดใช้" },
@@ -209,6 +227,8 @@ export const TABS: Record<TabKey, TabConfig> = {
   ghost: {
     stage: "Ghost",
     count: (s) => s.lifecycle.ghost,
+    // every number is 0 for Ghost accounts, so no ranges
+    ranges: [],
     note: "ไม่มีการใช้งานหรือชำระเงินเลยในช่วงข้อมูล ส่วนใหญ่เป็นบัญชีเก่า ใช้สำหรับแคมเปญอัตโนมัติ ไม่ใช่งานรักษาลูกค้า",
     sorts: [
       { value: "acc_id:desc", label: "บัญชีใหม่สุด" },
@@ -227,8 +247,14 @@ export function toOutputsQuery(s: ListState): Omit<OutputsQuery, "page" | "page_
   return { sort: effectiveSort(s), search: s.search.trim() || undefined, lifecycle_stage: TABS[s.tab].stage, ...filters };
 }
 
-export const presetFilters = (p: Preset): ListFilters => ({ ...EMPTY_FILTERS, ...p.filters });
-const sameFilters = (a: ListFilters, b: ListFilters) => FILTER_KEYS.every((k) => a[k] === b[k]);
+/** A preset's filters; with `current`, its number ranges are kept, so ranges stack on presets. */
+export const presetFilters = (p: Preset, current?: ListFilters): ListFilters => ({
+  ...EMPTY_FILTERS,
+  ...(current ? Object.fromEntries(RANGE_KEYS.map((k) => [k, current[k]])) : {}),
+  ...p.filters,
+});
+/** Ranges don't decide which preset is active. */
+const sameFilters = (a: ListFilters, b: ListFilters) => FILTER_KEYS.every((k) => isRangeKey(k) || a[k] === b[k]);
 
 interface CustomersTableProps {
   state: ListState;
@@ -255,6 +281,7 @@ export function CustomersTable({ state, summary, presetCounts, runId, cutoff, da
   const rowH = state.tab === "paid" ? "!h-[68px]" : "!h-[52px]";
   const total = data?.total ?? 0;
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [rangesOpen, setRangesOpen] = useState(false);
   const selected = rows.find((r) => r.acc_id === selectedId) ?? rows[0] ?? null;
 
   useEffect(() => {
@@ -262,14 +289,15 @@ export function CustomersTable({ state, summary, presetCounts, runId, cutoff, da
   }, [data]);
 
   const activePreset = tab.presets.find((p) => sameFilters(presetFilters(p), state.filters));
-  const chips = activePreset ? [] : filterChips(state.filters, tab.stage);
+  const activeRanges = RANGE_KEYS.filter((k) => state.filters[k]).length;
+  const chips = [...(activePreset ? [] : filterChips(state.filters, tab.stage)), ...rangeChips(state.filters)];
   const title = activePreset?.title ?? "ลูกค้าที่ตรงตัวกรอง";
   const help = activePreset?.help ?? LIFECYCLE_HELP[tab.stage];
   const unscored = summary ? summary.lifecycle.active_paid - summary.churn.eligible_count : 0;
   const summaryLine = [
     `${formatCount(total)} ราย`,
     state.tab === "paid" ? `รายได้ที่เสี่ยงหายรวม ${formatBahtCompact(data?.revenue_at_risk_sum ?? 0)}` : null,
-    state.tab === "paid" && activePreset?.key === "all" && unscored > 0 ? `${formatCount(unscored)} รายยังไม่มีคะแนน` : null,
+    state.tab === "paid" && activePreset?.key === "all" && activeRanges === 0 && unscored > 0 ? `${formatCount(unscored)} รายยังไม่มีคะแนน` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -352,7 +380,7 @@ export function CustomersTable({ state, summary, presetCounts, runId, cutoff, da
                     key={p.key}
                     type="button"
                     aria-pressed={active}
-                    onClick={() => onChange({ filters: presetFilters(p), sort: p.sort ?? "" })}
+                    onClick={() => onChange({ filters: presetFilters(p, state.filters), sort: p.sort ?? "" })}
                     className={`flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3.5 text-body transition-colors duration-150 max-[859px]:h-11 ${
                       active ? "bg-accent-soft font-semibold text-accent-ink" : "text-text hover:bg-surface"
                     }`}
@@ -391,6 +419,19 @@ export function CustomersTable({ state, summary, presetCounts, runId, cutoff, da
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {tab.ranges.length > 0 ? (
+                <button
+                  type="button"
+                  aria-expanded={rangesOpen}
+                  aria-controls="range-filters"
+                  onClick={() => setRangesOpen((open) => !open)}
+                  className={`${BUTTON.secondary} h-9`}
+                >
+                  <SlidersHorizontal size={14} aria-hidden />
+                  ช่วงตัวเลข
+                  {activeRanges > 0 ? <span className="tabular-nums text-micro font-normal text-muted">{activeRanges}</span> : null}
+                </button>
+              ) : null}
               <Select
                 value={effectiveSort(state)}
                 onChange={(sort) => onChange({ sort })}
@@ -403,6 +444,18 @@ export function CustomersTable({ state, summary, presetCounts, runId, cutoff, da
             </div>
           </div>
 
+          {rangesOpen && tab.ranges.length > 0 ? (
+            <div id="range-filters">
+              {/* keyed on the applied values so a cleared chip or a tab switch resets the inputs */}
+              <RangeFilters
+                key={`${state.tab}:${tab.ranges.map((k) => state.filters[k]).join("|")}`}
+                keys={tab.ranges}
+                filters={state.filters}
+                onApply={(ranges) => onChange({ filters: { ...state.filters, ...ranges } })}
+              />
+            </div>
+          ) : null}
+
           <div className="surface mt-4 overflow-hidden">
             {error ? (
               <p role="alert" className="flex flex-wrap items-center gap-x-3 px-5 py-6 text-body text-text">
@@ -414,7 +467,7 @@ export function CustomersTable({ state, summary, presetCounts, runId, cutoff, da
             ) : data && rows.length === 0 ? (
               <p className="px-5 py-6 text-body text-text">
                 ไม่พบลูกค้าที่ตรงเงื่อนไข{" "}
-                {state.search || !activePreset || activePreset.key !== "all" ? (
+                {state.search || activeRanges > 0 || !activePreset || activePreset.key !== "all" ? (
                   <button
                     type="button"
                     onClick={() => onChange({ search: "", filters: EMPTY_FILTERS, sort: "" })}
@@ -731,6 +784,18 @@ function TopUp({ days }: { days: number | null }) {
 
 function Dash() {
   return <span className="text-faint">—</span>;
+}
+
+/** One chip per applied range: "ยอดชำระรวม ฿50K–฿100K", "มูลค่า 6 เดือน ≥ ฿50K", "ไม่ได้ใช้งานมา 30–180 วัน". */
+function rangeChips(filters: ListFilters): { key: FilterKey; label: string }[] {
+  return RANGE_KEYS.flatMap((k) => {
+    const [min = "", max = ""] = filters[k].split("-");
+    if (!min && !max) return [];
+    const { label, unit } = RANGE_FIELDS[k];
+    const fmt = (v: string) => (unit === "baht" ? formatBahtCompact(Number(v)) : formatCount(Number(v)));
+    const span = min && max ? `${fmt(min)}–${fmt(max)}` : min ? `≥ ${fmt(min)}` : `≤ ${fmt(max)}`;
+    return [{ key: k, label: `${label} ${span}${unit === "days" ? " วัน" : ""}` }];
+  });
 }
 
 function filterChips(filters: ListFilters, stage: LifecycleStage): { key: FilterKey; label: string }[] {

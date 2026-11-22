@@ -11,6 +11,7 @@ import {
   type RunRow,
   SORT_COLUMNS,
 } from "../../lib/ml/prediction-runs";
+import { parseRange, RANGE_KEYS, RANGE_PATTERN } from "../../lib/ml/range-filter";
 import { sendingMonthsOf } from "../../lib/ml/summary-facts";
 
 function parseSort(sort: string | undefined): SQL {
@@ -41,6 +42,12 @@ function outputFilters(run: RunRow, q: OutputsQueryParams): SQL | undefined {
   }
   if (q.sending_months_max != null) {
     conds.push(sql`${sendingMonthsOf(o.accId, run.predictSourceId, run.cutoffDate)} <= ${q.sending_months_max}`);
+  }
+  // Inclusive bounds; a row whose value is NULL drops out once a range is set
+  for (const key of RANGE_KEYS) {
+    const range = parseRange(q[key]);
+    if (range?.min !== undefined) conds.push(sql`${SORT_COLUMNS[key]} >= ${range.min}`);
+    if (range?.max !== undefined) conds.push(sql`${SORT_COLUMNS[key]} <= ${range.max}`);
   }
   return and(...conds);
 }
@@ -90,6 +97,11 @@ export const outputsRoutes = new Elysia()
         segment: t.Optional(t.String()),
         needs_review: t.Optional(t.String()),
         sending_months_max: t.Optional(t.Numeric({ minimum: 0 })),
+        // "min-max", either side optional (lib/ml/range-filter.ts)
+        predicted_clv_6m: t.Optional(t.String({ pattern: RANGE_PATTERN })),
+        total_revenue: t.Optional(t.String({ pattern: RANGE_PATTERN })),
+        revenue_at_risk: t.Optional(t.String({ pattern: RANGE_PATTERN })),
+        days_since_last_activity: t.Optional(t.String({ pattern: RANGE_PATTERN })),
       }),
     }
   )

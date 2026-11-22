@@ -13,7 +13,7 @@ import { useActiveRun } from "@/stores/run-store";
 import { fetchRunOutputs, fetchRunSummary } from "@/lib/ml-api";
 import { getDisplayError } from "@/lib/ui-error";
 import { useAsync } from "@/lib/use-async";
-import { FILTER_KEYS, TAB_KEYS, type ListState, type TabKey } from "./customers-filters";
+import { FILTER_KEYS, RANGE_KEYS, TAB_KEYS, type ListState, type TabKey } from "./customers-filters";
 import { CustomersTable, PAGE_SIZE, presetFilters, TABS, toOutputsQuery } from "./customers-table";
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -61,19 +61,21 @@ export function CustomersView() {
   const [reload, setReload] = useState(0);
   // Tab and preset counts; the list still renders if this fails
   const summary = useAsync(() => fetchRunSummary(effectiveRunId), [effectiveRunId], Boolean(effectiveRunId)).data ?? null;
-  // One count per preset pill, from the server with the pill's own filters (page_size 1: only `total` is read)
+  // One count per preset pill, from the server with the pill's own filters plus the current ranges
+  // (page_size 1: only `total` is read)
   const presets = TABS[state.tab].presets;
+  const rangesKey = RANGE_KEYS.map((k) => state.filters[k]).join("|");
   const presetCounts =
     useAsync(
       async () => {
         const totals = await Promise.all(
           presets.map((p) =>
-            fetchRunOutputs(effectiveRunId, { ...toOutputsQuery({ ...state, search: "", filters: presetFilters(p) }), page_size: 1 }).then((r) => r.total)
+            fetchRunOutputs(effectiveRunId, { ...toOutputsQuery({ ...state, search: "", filters: presetFilters(p, state.filters) }), page_size: 1 }).then((r) => r.total)
           )
         );
         return Object.fromEntries(presets.map((p, i) => [p.key, totals[i]]));
       },
-      [effectiveRunId, state.tab],
+      [effectiveRunId, state.tab, rangesKey],
       Boolean(effectiveRunId) && presets.length > 1
     ).data ?? null;
 
